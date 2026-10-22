@@ -1,0 +1,96 @@
+"""Choose what goes on the web, and bake every kept mesh into world space."""
+import bpy
+from mathutils import Matrix
+
+from . import config
+
+
+def visible_collections(view_layer):
+    out = {view_layer.layer_collection.collection}
+
+    def walk(lc):
+        for ch in lc.children:
+            if ch.exclude or ch.collection.hide_render:
+                continue
+            out.add(ch.collection)
+            walk(ch)
+
+    walk(view_layer.layer_collection)
+    return out
+
+
+def is_render_visible(obj, visible):
+    return (not obj.hide_render) and any(c in visible for c in obj.users_collection)
+
+
+def _forced(obj):
+    return any(c.name.startswith(config.FORCE_INCLUDE_COLLECTION_PREFIXES) for c in obj.users_collection)
+
+
+def _placeholder_material():
+    mat = bpy.data.materials.get("Web default")
+    if mat is None:
+        mat = bpy.data.materials.new("Web default")
+        if mat.node_tree is None:
+            mat.use_nodes = True
+    return mat
+
+
+def realize(objs):
+    """Apply modifiers and world transforms into each object's own mesh; clear parents."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    matrices = {o.name: o.matrix_world.copy() for o in objs}
+    slots = {o.name: [s.material for s in o.material_slots] for o in objs}
+    meshes = {}
+    for o in objs:
+        me = bpy.data.meshes.new_from_object(o.evaluated_get(dg), preserve_all_data_layers=True, depsgraph=dg)
+        me.transform(matrices[o.name])
+        if matrices[o.name].determinant() < 0:
+            me.flip_normals()
+        meshes[o.name] = me
+    for o in objs:
+        o.modifiers.clear()
+        o.parent = None
+        o.data = meshes[o.name]
+        o.matrix_world = Matrix.Identity(4)
+        mats = slots[o.name] or [None]
+        o.data.materials.clear()
+        for m in mats:
+            o.data.materials.append(m or _placeholder_material())
+        for s in o.material_slots:
+            s.link = "DATA"
+
+
+def _move_to(objs, name):
+    col = bpy.data.collections.get(name) or bpy.data.collections.new(name)
+    if col.name not in bpy.context.scene.collection.children:
+        bpy.context.scene.collection.children.link(col)
+    for o in objs:
+        for c in list(o.users_collection):
+            c.objects.unlink(o)
+        col.objects.link(o)
+        o.hide_viewport = False
+        o.hide_set(False)
+    return col
+
+
+def prepare_scene(scene, view_layer):
+    """Returns (kept meshes, names of lights that are on in the current render)."""
+    visible = visible_collections(view_layer)
+    lights = [o for o in scene.objects if o.type == "LIGHT"]
+    day_lights = sorted(o.name for o in lights if is_render_visible(o, visible))
+    keep = [
+        o for o in scene.objects
+        if o.type == "MESH" and o.name not in config.DROP_OBJECT_NAMES
+        and (is_render_visible(o, visible) or _forced(o))
+    ]
+    keep_set = set(keep)
+    for o in [o for o in scene.objects if o.type == "MESH" and o not in keep_set]:
+        bpy.data.objects.remove(o, do_unlink=True)
+    realize(keep)
+    _move_to(keep, "WEB")
+    _move_to(lights, "WEB_LIGHTS")
+    for o in lights:
+        o.hide_render = o.name not in day_lights
+    view_layer.update()
+    return keep, day_lights
