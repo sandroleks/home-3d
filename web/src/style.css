@@ -1,0 +1,42 @@
+:root {
+  --ink: #f4f1ea;
+  --muted: #b9b4aa;
+  --veil: rgba(18, 17, 15, 0.82);
+  --accent: #e8c27a;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--ink);
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: #121110; }
+#view { display: block; width: 100vw; height: 100vh; }
+[hidden] { display: none !important; }
+.overlay {
+  position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 18px; background: var(--veil); text-align: center; padding: 16px;
+}
+h1 { font-weight: 500; letter-spacing: 0.02em; margin: 0; }
+.progress { width: min(320px, 80vw); height: 4px; background: rgba(255, 255, 255, 0.15); border-radius: 2px; }
+#progress-bar { width: 0; height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.2s; }
+button {
+  font: inherit; color: #121110; background: var(--accent); border: 0; border-radius: 999px;
+  padding: 10px 26px; cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+.controls { list-style: none; padding: 0; margin: 0; color: var(--muted); line-height: 1.9; }
+kbd {
+  font: inherit; font-size: 0.85em; color: var(--ink); border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px; padding: 1px 6px; margin-right: 6px;
+}
+#error { color: #f2a19a; max-width: 420px; }
+.hint { color: var(--muted); }
+#crosshair {
+  position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px;
+  border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+}
+#room-name {
+  position: fixed; left: 20px; bottom: 18px; font-size: 15px; letter-spacing: 0.04em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+#prompt {
+  position: fixed; left: 50%; top: calc(50% + 22px); transform: translateX(-50%); font-size: 14px;
+  background: rgba(18, 17, 15, 0.6); padding: 4px 10px; border-radius: 6px;
+}
