@@ -10,6 +10,7 @@
 
 ## Global Constraints
 
+- Never launch Blender directly on files in this project (it lives in `~/Documents`). Always go through the Makefile targets (`test-blender`, `export-preview`, `export-final`, `render-refs`), which run Blender on a staged copy in `/private/tmp/apartment-walkthrough-blender` with `HOME` redirected. When a Blender launched from Claude touches `~/Documents`, macOS blocks the whole session's file access.
 - Never modify the source file `Untitled.blend` (project root). The pipeline's first action is `save_as_mainfile` to `build/web-export.blend`. The pipeline reads the project-root copy so the project is self-contained. Re-copy it after editing the original in Blender. `*.blend` files are git-ignored.
 - The exported variant is exactly the current render state (open kitchen, existing WCs, sofa bed closed), plus the `Ceiling*` collections.
 - Desktop only. Phones and tablets with only a touch pointer see: "Best viewed on desktop. This walkthrough needs a keyboard and mouse."
@@ -148,17 +149,28 @@ BLENDER ?= /Applications/Blender.app/Contents/MacOS/Blender
 SOURCE ?= Untitled.blend
 OUT := web/public/assets
 BUILD := build
+# Blender must never touch ~/Documents: when a Blender launched from Claude reaches into it,
+# macOS blocks the whole session's file access. Code and the .blend are copied to STAGE,
+# Blender runs there with HOME redirected, and outputs are copied back.
+STAGE := /private/tmp/apartment-walkthrough-blender
+SYNC = mkdir -p $(STAGE)/home && rsync -a --delete blender $(wildcard shared) $(STAGE)/
+IN_STAGE = cd $(STAGE) && HOME=$(STAGE)/home "$(BLENDER)"
 
-.PHONY: test-blender export-preview export-final web-test
+.PHONY: test-blender export-preview export-final render-refs web-test
 
 test-blender:
-	"$(BLENDER)" -b --factory-startup --python-exit-code 1 --python blender/tests/run.py -- $(TESTS)
+	$(SYNC)
+	$(IN_STAGE) -b --factory-startup --python-exit-code 1 --python blender/tests/run.py -- $(TESTS)
 
-export-preview:
-	"$(BLENDER)" -b "$(SOURCE)" --python-exit-code 1 --python blender/export_web.py -- --quality preview --out $(OUT) --build $(BUILD)
+export-preview export-final: export-%:
+	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && rm -rf $(STAGE)/out
+	$(IN_STAGE) -b source.blend --python-exit-code 1 --python blender/export_web.py -- --quality $* --out out/assets --build out/build
+	mkdir -p $(OUT) $(BUILD) && rsync -a --delete $(STAGE)/out/assets/ $(OUT)/ && rsync -a $(STAGE)/out/build/ $(BUILD)/
 
-export-final:
-	"$(BLENDER)" -b "$(SOURCE)" --python-exit-code 1 --python blender/export_web.py -- --quality final --out $(OUT) --build $(BUILD)
+render-refs:
+	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && mkdir -p $(STAGE)/ref
+	for cam in Cam_Sala Cam_Kitchen Cam_Bedroom; do $(IN_STAGE) -b source.blend --python-expr "import bpy; s=bpy.context.scene; s.camera=bpy.data.objects['$$cam']; s.render.resolution_percentage=50; s.render.filepath='$(STAGE)/ref/$$cam'" -f 1 || exit 1; done
+	mkdir -p $(BUILD)/ref && rsync -a $(STAGE)/ref/ $(BUILD)/ref/
 
 web-test:
 	cd web && npm test
@@ -3240,7 +3252,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Run the preview export**
 
-Run in the background (it takes several minutes): `make export-preview 2>&1 | tee build/export-preview.log`
+Run in the background (it takes several minutes): `mkdir -p build && make export-preview 2>&1 | tee build/export-preview.log`
 Expected: the log ends with `Export OK → …/web/public/assets`. If it ends with `EXPORT CHECKS FAILED`, fix each listed problem (missing switch → add a `SWITCH_OVERRIDES` entry; door count ≠ 10 → inspect the `[doors]` lines) and re-run.
 
 - [ ] **Step 2: Check the source file was not modified**
@@ -5261,15 +5273,15 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Run the final export**
 
-Run in the background with a long timeout: `make export-final 2>&1 | tee build/export-final.log`
+Run in the background with a long timeout: `mkdir -p build && make export-final 2>&1 | tee build/export-final.log`
 Expected: `Export OK`. If the budget check fails, lower `lightmap_texels_per_m` in `QUALITY["final"]` from 100 to 80 (or `albedo_max` from 2048 to 1024) and re-run. Record the reported size.
 
 - [ ] **Step 2: Render Cycles reference images from the original file**
 
-These are read-only renders of the source file:
+These are read-only renders of a staged copy of the source file:
 
 ```bash
-mkdir -p build/ref && for cam in Cam_Sala Cam_Kitchen Cam_Bedroom; do /Applications/Blender.app/Contents/MacOS/Blender -b Untitled.blend --python-expr "import bpy; s=bpy.context.scene; s.camera=bpy.data.objects['$cam']; s.render.resolution_percentage=50; s.render.filepath='$(pwd)/build/ref/$cam'" -f 1; done
+make render-refs
 ```
 
 Expected: `build/ref/Cam_Sala0001.png` and the other two cameras' renders (800×500).
