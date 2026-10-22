@@ -46,9 +46,19 @@ PASSABLE_NAME_PATTERN = r"^Glazed Door .* (glass|mullion|rail)(\.\d+)?$"
 
 # {"Door leaf 3": {"hinge": "b", "sign": -1}}: hinge end "a" is the end with the smaller (x, z).
 DOOR_OVERRIDES = {}
-# {"cozinha": {"door": 24, "side": -1}}: door number from the lintel name, side along the wall.
+# {"cozinha": {"door": 24, "side": -1}}: door number from the lintel name, side along the wall
+# (an explicit side skips the furniture-clearance test); "face": "outside" uses the other room's face.
 SWITCH_OVERRIDES = {
     # Door 20 (Cozinha / Entrada) is infilled; the only other opening is Glazed Door 24, whose
     # east side runs into the Sala wall. West side: on the wall above the worktop (0.9 m).
     "cozinha": {"door": 24, "side": -1},
+    # No free wall inside these doorways (closet shelving; broom cupboard, washer/dryer), so the
+    # switch goes on the other room's face: in the Entrada east of opening 18 (west of it the open
+    # front door stands in front), and on the Marquise side of glazed door 26 east of it, above a
+    # bistro chair (0.94 m), since the Marquise's own switch takes the clear west side.
+    "closet": {"door": 18, "face": "outside", "side": 1},
+    "lavandaria": {"door": 26, "face": "outside", "side": 1},
+    # Latch side: the default (+1) spot is on the hinge side, between the open leaf and the wall.
+    "quarto-01": {"door": 6, "side": -1},
+    "quarto-02": {"door": 9, "side": -1},
 }
