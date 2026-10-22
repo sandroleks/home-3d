@@ -44,7 +44,7 @@ def export_glb(objs, path):
         export_image_format="WEBP", export_image_quality=90,
         export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=6,
         export_draco_texcoord_quantization=14, export_cameras=False, export_lights=False,
-        export_extras=False, export_yup=True,
+        export_extras=False, export_yup=True, export_animations=False,
     )
 
 

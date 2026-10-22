@@ -84,6 +84,13 @@ def _camera(name, location, rotation, collection):
     return obj
 
 
+def _build_up(obj, last_frame):
+    """Scale 0.001 -> 1 like the real file's build-up animation."""
+    for frame, v in ((1, 0.001), (last_frame, 1.0)):
+        obj.scale = (v, v, v)
+        obj.keyframe_insert("scale", frame=frame)
+
+
 def build():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
@@ -151,4 +158,9 @@ def build():
     _camera("Cam_Entrada", (1.0, 0.8, 1.6), (math.pi / 2, 0, -math.pi / 2), cams)
     _camera("Cam_Sala", (4.5, 1.5, 1.6), (math.pi / 2, 0, math.pi / 2), cams)
     scene.camera = scene.objects["Cam_Entrada"]
+    _build_up(scene.objects["Walls"], 10)
+    _build_up(scene.objects["Door leaf 1"], 10)
+    scene.frame_start = 1
+    scene.frame_end = 10
+    scene.frame_set(1)
     bpy.context.view_layer.update()

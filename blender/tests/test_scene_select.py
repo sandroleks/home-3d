@@ -12,6 +12,18 @@ class SceneSelectTests(unittest.TestCase):
         self.meshes, self.day_lights = scene_select.prepare_scene(bpy.context.scene, bpy.context.view_layer)
         self.names = {o.name for o in self.meshes}
 
+    def test_animation_is_finished_before_baking(self):
+        self.assertEqual(bpy.context.scene.frame_current, 10)
+        walls = bpy.data.objects["Walls"]
+        xs = [v.co.x for v in walls.data.vertices]
+        self.assertAlmostEqual(min(xs), -0.2, places=3)
+        self.assertAlmostEqual(max(xs), 6.2, places=3)
+
+    def test_no_animation_left_on_kept_meshes_or_lights(self):
+        for o in list(self.meshes) + [o for o in bpy.data.objects if o.type == "LIGHT"]:
+            ad = o.animation_data
+            self.assertTrue(ad is None or ad.action is None, o.name)
+
     def test_keeps_render_visible_meshes_and_ceiling(self):
         for name in ("Walls", "Floor - Alpha", "Floor - Beta", "Ceiling", "Door leaf 1", "Table",
                      "Door 1 (Alpha / Beta) lintel", "Lamp", "Shelf"):

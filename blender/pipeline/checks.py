@@ -50,6 +50,10 @@ def check_outputs(out_dir, m, budget_bytes, expected_doors):
         if node is None or "mesh" not in node:
             errors.append(f"glb has no mesh node {name}")
             continue
+        scale, rot = node.get("scale"), node.get("rotation")
+        if (scale is not None and any(abs(a - 1.0) > 1e-4 for a in scale)) or (
+                rot is not None and any(abs(a - b) > 1e-4 for a, b in zip(rot, (0.0, 0.0, 0.0, 1.0)))):
+            errors.append(f"glb node {name} has a non-identity scale/rotation")
         for p in gltf["meshes"][node["mesh"]]["primitives"]:
             if "TEXCOORD_1" not in p["attributes"]:
                 errors.append(f"glb node {name}: a primitive lacks TEXCOORD_1 (lightmap UVs)")

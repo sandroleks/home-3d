@@ -81,6 +81,19 @@ class CheckOutputsTests(unittest.TestCase):
         errors = checks.check_outputs(out, m, 1, 1)
         self.assertTrue(any("first-view download" in e for e in errors), errors)
 
+    def test_scaled_or_rotated_node(self):
+        for key, value in (("scale", [0.001, 0.001, 0.001]), ("rotation", [0, 0.7071, 0, 0.7071])):
+            g = good_gltf()
+            g["nodes"][0][key] = value
+            out, m = write_set(g)
+            self.assertIn("glb node Room_alpha has a non-identity scale/rotation",
+                          checks.check_outputs(out, m, BUDGET, 1), key)
+        g = good_gltf()
+        g["nodes"][1]["scale"] = [1, 1, 1]
+        g["nodes"][1]["rotation"] = [0, 0, 0, 1]
+        out, m = write_set(g)
+        self.assertEqual(checks.check_outputs(out, m, BUDGET, 1), [])
+
     def test_unsafe_node_name(self):
         state = dict(STATE, chunks=[dict(STATE["chunks"][0], node="Room_alpha.001")])
         g = good_gltf()

@@ -1,4 +1,6 @@
 """Choose what goes on the web, and bake every kept mesh into world space."""
+import math
+
 import bpy
 from mathutils import Matrix
 
@@ -84,8 +86,38 @@ def _move_to(objs, name):
     return col
 
 
+def _action_end_frame(action):
+    """Last keyframe of a Blender 5 layered action (layers > strips > channelbags > fcurves)."""
+    last = None
+    for layer in getattr(action, "layers", ()):
+        for strip in layer.strips:
+            for bag in getattr(strip, "channelbags", ()):
+                for fc in bag.fcurves:
+                    for kp in fc.keyframe_points:
+                        f = kp.co[0]
+                        last = f if last is None else max(last, f)
+    return last
+
+
+def finished_frame(scene):
+    """The frame at which every animation (build-up included) has finished."""
+    frame = scene.frame_end
+    for action in bpy.data.actions:
+        end = _action_end_frame(action)
+        if end is not None:
+            frame = max(frame, int(math.ceil(end)))
+    return frame
+
+
+def _strip_animation(objs):
+    for o in objs:
+        if o.animation_data is not None:
+            o.animation_data_clear()
+
+
 def prepare_scene(scene, view_layer):
     """Returns (kept meshes, names of lights that are on in the current render)."""
+    scene.frame_set(finished_frame(scene))  # bake the finished apartment, not a build-up mid-way
     visible = visible_collections(view_layer)
     lights = [o for o in scene.objects if o.type == "LIGHT"]
     day_lights = sorted(o.name for o in lights if is_render_visible(o, visible))
@@ -99,6 +131,8 @@ def prepare_scene(scene, view_layer):
     realize(keep)  # before deleting: a dropped mesh may be the parent of a kept one
     for o in [o for o in scene.objects if o.type == "MESH" and o not in keep_set]:
         bpy.data.objects.remove(o, do_unlink=True)
+    _strip_animation(keep)  # a joined chunk would inherit the action and export it as its rest scale
+    _strip_animation(lights)
     _move_to(keep, "WEB")
     for o in keep:
         o.hide_render = False  # a joined chunk inherits the active object's flags

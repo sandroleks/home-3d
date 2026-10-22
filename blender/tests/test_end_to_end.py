@@ -35,6 +35,14 @@ class EndToEndTests(unittest.TestCase):
         self.assertAlmostEqual(m["spawn"]["yaw"], -1.5708, places=3)  # Cam_Entrada looks +X
         self.assertEqual([v["name"] for v in m["viewpoints"]], ["Cam_Sala"])
 
+    def test_glb_nodes_have_identity_transforms(self):
+        gltf = checks.read_glb_json(os.path.join(self.out, "apartment.glb"))
+        for n in gltf["nodes"]:
+            if n["name"].startswith(("Room_", "Door_")):
+                for v, ident in ((n.get("scale"), [1, 1, 1]), (n.get("rotation"), [0, 0, 0, 1])):
+                    if v is not None:
+                        self.assertTrue(all(abs(a - b) < 1e-4 for a, b in zip(v, ident)), n)
+
     def test_glb_has_lightmap_uvs(self):
         gltf = checks.read_glb_json(os.path.join(self.out, "apartment.glb"))
         names = {n["name"] for n in gltf["nodes"]}
