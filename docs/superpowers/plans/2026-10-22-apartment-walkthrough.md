@@ -14,7 +14,7 @@
 - Never modify the source file `Untitled.blend` (project root). The pipeline's first action is `save_as_mainfile` to `build/web-export.blend`. The pipeline reads the project-root copy so the project is self-contained. Re-copy it after editing the original in Blender. `*.blend` files are git-ignored.
 - The exported variant is exactly the current render state (open kitchen, existing WCs, sofa bed closed), plus the `Ceiling*` collections.
 - Desktop only. Phones and tablets with only a touch pointer see: "Best viewed on desktop. This walkthrough needs a keyboard and mouse."
-- Visitors can only open/close the 10 interior doors and switch the 12 rooms' ceiling lights. No hotspots, minimap or variant toggles.
+- Visitors can only open/close the 9 interior doors and switch the 12 rooms' ceiling lights. (Door leaf 5 sits in the infilled doorway 20 and is removed.) No hotspots, minimap or variant toggles.
 - Coordinates: every value in `manifest.json` and `collision.json` is three.js space (Y up, metres). A Blender point `(x, y, z)` maps to `(x, z, -y)`. A rotation about Blender +Z by φ equals a rotation about three.js +Y by φ.
 - First-view download (glb + collision.json + manifest.json + all `*_day.webp`) must be ≤ 30 MB (`30 * 1024 * 1024` bytes).
 - Eye height is 1.6 m. Door swing takes 0.6 s (ease-in-out). Light fade takes 0.4 s.
@@ -38,6 +38,16 @@ These came out of probing the real file and Blender 5.1. Task 1 records them in 
 9. **Reflections** come from three.js `RoomEnvironment` at intensity 0.2, not a sky-derived map.
 10. **Manifest:** the room floor is a flat triangle list `[x0,z0,x1,z1,x2,z2,…]`, and there's no "light colour" field because colour is already in the bake.
 11. **Chunking** first cuts large faces (ceiling, slab, walls) on a 25 cm grid, and assigns faces over interior walls to the nearest room within 0.2 m. Otherwise one big ceiling face could land in a single room's chunk and light up with the wrong switch.
+
+
+## Amendments from the first real export (Task 12, 2026-10-22)
+
+The first run on the real file found that the model differs from the plan's assumptions. The user decided points 2 and 3.
+
+12. **Doors are modelled open.** All 10 leaves stand at 90° in the room they open into, not closed in their doorway. `doors.prepare_doors` now matches each leaf to the opening whose jamb end is nearest one of the leaf's ends (within 0.25 m). That leaf end is the hinge, and the closed direction runs from the hinge along the opening toward its other jamb. `openAngle` is the signed `rot_y` angle from the closed direction to the modelled (open) direction, so the user's own open pose is the open state. The leaf mesh is rotated about the hinge into the closed pose before the bake, so doors are baked closed and visitors start with closed doors. `geom.choose_door_swing` and `DOOR_OVERRIDES` remain only as a fallback for a leaf that matches no opening.
+13. **Door leaf 5 is removed.** It belongs to opening 20 (Cozinha / Entrada), which the open-kitchen layout fills in ("Door 20 infill"). A leaf whose matched opening is infilled is deleted from the export. `EXPECTED_DOOR_COUNT` is 9.
+14. **Switches may sit outside the room.** The Closet and Lavandaria have no free wall inside their doorways, so `SWITCH_OVERRIDES` gains `"face": "outside"`, which puts the switch on the other room's face of that opening. Closet: in the Entrada beside opening 18. Lavandaria: on the Marquise side of glazed door 26.
+15. **Exports run with `--factory-startup`.** The user's own add-ons (e.g. BlenderGIS, which downloaded a library during a run) must not load during exports or reference renders. Cycles is enabled in factory settings.
 
 ---
 
@@ -164,12 +174,12 @@ test-blender:
 
 export-preview export-final: export-%:
 	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && rm -rf $(STAGE)/out
-	$(IN_STAGE) -b source.blend --python-exit-code 1 --python blender/export_web.py -- --quality $* --out out/assets --build out/build
+	$(IN_STAGE) -b --factory-startup source.blend --python-exit-code 1 --python blender/export_web.py -- --quality $* --out out/assets --build out/build
 	mkdir -p $(OUT) $(BUILD) && rsync -a --delete $(STAGE)/out/assets/ $(OUT)/ && rsync -a $(STAGE)/out/build/ $(BUILD)/
 
 render-refs:
 	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && mkdir -p $(STAGE)/ref
-	for cam in Cam_Sala Cam_Kitchen Cam_Bedroom; do $(IN_STAGE) -b source.blend --python-expr "import bpy; s=bpy.context.scene; s.camera=bpy.data.objects['$$cam']; s.render.resolution_percentage=50; s.render.filepath='$(STAGE)/ref/$$cam'" -f 1 || exit 1; done
+	for cam in Cam_Sala Cam_Kitchen Cam_Bedroom; do $(IN_STAGE) -b --factory-startup source.blend --python-expr "import bpy; s=bpy.context.scene; s.camera=bpy.data.objects['$$cam']; s.render.resolution_percentage=50; s.render.filepath='$(STAGE)/ref/$$cam'" -f 1 || exit 1; done
 	mkdir -p $(BUILD)/ref && rsync -a $(STAGE)/ref/ $(BUILD)/ref/
 
 web-test:
@@ -1025,7 +1035,7 @@ SWITCH_SIZE = (0.08, 0.01, 0.08)
 SPAWN_CAMERA = "Cam_Entrada"
 VIEWPOINT_CAMERAS = ("Cam_Sala", "Cam_Kitchen", "Cam_Bedroom")
 FIRST_VIEW_BUDGET_BYTES = 30 * 1024 * 1024
-EXPECTED_DOOR_COUNT = 10
+EXPECTED_DOOR_COUNT = 9
 # Chunking: faces over a wall (no floor below) join the nearest room within this distance;
 # meshes with faces larger than DICE_MAX_FACE_AREA m² are first cut on a DICE_CELL grid.
 ROOM_ASSIGN_MAX_DIST = 0.2
@@ -3281,7 +3291,7 @@ Expected: identical modification time and size.
 
 Open `build/debug_map.png` (Read tool). Check that:
 - Blocked areas (dark grey for walls and furniture, light grey for the inflated margin) outline 13 rooms, and every doorway is a white gap.
-- Each of the 10 doors has a red line (closed, inside its doorway) and a green line (open), and the green line ends up alongside a wall, not across a corridor or into furniture.
+- Each of the 9 doors has a red line (closed, inside its doorway) and a green line (open), and the green line ends up alongside a wall, not across a corridor or into furniture.
 - 12 blue dots (switches) sit on a wall next to a doorway, one per lit room, and none are in the Varanda.
 - The yellow spawn dot is in the Entrada, and its tick points into the flat.
 
@@ -5315,7 +5325,7 @@ Keep the values that match best.
 
 At `?autostart`:
 1. Walk into each of the 13 rooms, and check the room label for each.
-2. Open and close all 10 doors.
+2. Open and close all 9 doors.
 3. Toggle all 12 lights, using both the switch and the L key.
 4. Confirm the glazed doorways into the Lavandaria, Marquise and Varanda can be walked through.
 5. Confirm you can't leave the apartment or walk through furniture.

@@ -102,3 +102,10 @@ docs/superpowers/specs/    # this document
 9. Reflections come from three.js `RoomEnvironment` at intensity 0.2.
 10. In the manifest, the room floor is a triangle list and there is no light colour field.
 11. Before splitting into room chunks, meshes with large faces (ceiling, slab, walls) are cut on a 25 cm grid, and faces over interior walls join the nearest room within 0.2 m. That way no ceiling face lights up with the wrong room's switch.
+
+## Amendments from the first real export (2026-10-22)
+
+12. The model's door leaves stand open at 90°. The pipeline matches each leaf to its doorway, rotates it closed for the bake, and uses the modelled pose as the open state, so visitors start with closed doors and open them the way they were modelled.
+13. Door leaf 5 (in the walled-up doorway 20 of the open-kitchen layout) is removed: the walkthrough has 9 interactive doors.
+14. The Closet and Lavandaria switches sit outside their doorways: in the Entrada beside the Closet door, and on the Marquise side of the Lavandaria's glazed door.
+15. Exports run with Blender's factory settings, so the user's own add-ons never load.
