@@ -4791,7 +4791,8 @@ export async function loadAssets(onProgress: (fraction: number) => void): Promis
 `web/src/world.ts`:
 
 ```ts
-import { BufferGeometry, Mesh, MeshStandardMaterial, Object3D, Quaternion, Scene, Vector3 } from 'three';
+import { Mesh, MeshStandardMaterial, Object3D, Quaternion, Scene, Vector3 } from 'three';
+import type {} from 'three-mesh-bvh';
 import { Collision } from './collision';
 import { DoorState } from './doors';
 import type { Target } from './interactions';
@@ -4880,15 +4881,9 @@ export function buildWorld(assets: LoadedAssets, scene: Scene): World {
   return { lights, doors, targets, pickables, rooms: new RoomLocator(manifest.rooms), collision, lightmapped };
 }
 
-declare module 'three' {
-  interface BufferGeometry {
-    computeBoundsTree?: () => void;
-  }
-}
-export type { BufferGeometry };
 ```
 
-Leave out the `declare module` block if three-mesh-bvh's own type augmentation already provides `computeBoundsTree` (`npx tsc --noEmit` would report a duplicate). Keep it only if TypeScript reports `computeBoundsTree` as missing.
+`world.ts` also starts with `import type {} from 'three-mesh-bvh';`. That pulls in three-mesh-bvh's own `declare module 'three'` augmentation, which types `computeBoundsTree`. Don't declare it locally: a local optional declaration conflicts with the library's (TS2687) as soon as `main.ts` imports three-mesh-bvh.
 
 - [ ] **Step 6: Run the tests and type-check**
 
