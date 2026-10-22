@@ -23,7 +23,7 @@ def add_lightmap_uvs(obj, texels_per_m, lo, hi):
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.uv.smart_project(angle_limit=math.radians(66), margin_method="FRACTION",
-                             island_margin=8 / size, area_weight=1.0, correct_aspect=True,
+                             island_margin=2 / size, area_weight=1.0, correct_aspect=True,
                              scale_to_bounds=True)
     bpy.ops.object.mode_set(mode="OBJECT")
     return size
