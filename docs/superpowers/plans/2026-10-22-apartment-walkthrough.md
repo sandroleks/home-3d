@@ -2757,6 +2757,14 @@ class ManifestTests(unittest.TestCase):
         m2 = manifest.build_manifest(STATE, {k: v for k, v in RANGES.items() if k != "porch_day"}, 1.6)
         self.assertIn("chunks[1] (Room_porch): missing day lightmap", manifest.validate_manifest(m2))
 
+    def test_validate_reports_lit_room_without_switch_and_room_without_chunk(self):
+        state = dict(STATE, switches={})
+        self.assertIn("room alpha: has a light layer but no switch",
+                      manifest.validate_manifest(manifest.build_manifest(state, RANGES, 1.6)))
+        state = dict(STATE, chunks=[c for c in STATE["chunks"] if c["room"] != "porch"])
+        self.assertIn("room porch: no chunk",
+                      manifest.validate_manifest(manifest.build_manifest(state, RANGES, 1.6)))
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -2864,6 +2872,13 @@ def validate_manifest(m):
     for i, d in enumerate(m["doors"]):
         if d["lightmap"] is None:
             errors.append(f"doors[{i}] ({d['node']}): missing lightmap")
+    chunk_rooms = {c["room"] for c in m["chunks"]}
+    lit_rooms = {c["room"] for c in m["chunks"] if c["light"]}
+    for r in m["rooms"]:
+        if r["id"] not in chunk_rooms:
+            errors.append(f"room {r['id']}: no chunk")
+        if r["id"] in lit_rooms and not r["switch"]:
+            errors.append(f"room {r['id']}: has a light layer but no switch")
     for k in ("x", "z", "yaw"):
         if not isinstance(m["spawn"].get(k), (int, float)):
             errors.append(f"spawn.{k} must be a number")
@@ -3225,7 +3240,7 @@ if __name__ == "__main__":
 - [ ] **Step 7: Run the tests to verify they pass**
 
 Run: `make test-blender TESTS=test_manifest.py`, then `make test-blender TESTS=test_end_to_end.py`
-Expected: PASS (2 tests) and PASS (4 tests)
+Expected: PASS (3 tests) and PASS (4 tests)
 
 - [ ] **Step 8: Run the whole Blender suite**
 
