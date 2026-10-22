@@ -1,4 +1,6 @@
 """Small bpy helpers used across stages."""
+import os
+
 import bmesh
 import bpy
 import numpy as np
@@ -39,7 +41,7 @@ def polygon_ints(me, attr):
 
 
 def set_cycles(scene, samples):
-    """Switch to Cycles on the best available GPU. Returns the device type used."""
+    """Switch to Cycles on the best available GPU (WEB_BAKE_DEVICE=CPU forces the CPU). Returns the device type."""
     try:
         scene.render.engine = "CYCLES"
     except TypeError as e:
@@ -47,7 +49,8 @@ def set_cycles(scene, samples):
     scene.cycles.samples = samples
     scene.cycles.use_denoising = False
     prefs = bpy.context.preferences.addons["cycles"].preferences
-    for kind in ("METAL", "OPTIX", "CUDA", "HIP", "ONEAPI"):
+    kinds = () if os.environ.get("WEB_BAKE_DEVICE", "").upper() == "CPU" else ("METAL", "OPTIX", "CUDA", "HIP", "ONEAPI")
+    for kind in kinds:
         try:
             prefs.compute_device_type = kind
         except TypeError:
