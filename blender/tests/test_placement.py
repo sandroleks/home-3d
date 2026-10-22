@@ -47,6 +47,16 @@ class SwitchSpotTests(unittest.TestCase):
         wall_ends = lambda x, z: 3.0 <= x <= 3.2 and -1.9 <= z <= -0.9  # noqa: E731
         self.assertIsNone(choose_switch_spot("beta", "Beta", [OP], set(), locate, wall_ends, {"side": 1}))
 
+    def test_face_outside_uses_the_other_rooms_face(self):
+        # Alpha's switch on Beta's face: side +1 has the shelf in front, so side -1 is used.
+        s = choose_switch_spot("alpha", "Alpha", [OP], set(), locate, blocked, {"door": 1, "face": "outside"})
+        self.assertAlmostEqual(s["pos"][0], 3.206)
+        self.assertAlmostEqual(s["pos"][1], -1.95)
+        self.assertEqual(s["n"], (1.0, 0.0))
+        s = choose_switch_spot("alpha", "Alpha", [OP], set(), locate, blocked, {"face": "outside", "side": 1})
+        self.assertAlmostEqual(s["pos"][0], 3.206)
+        self.assertAlmostEqual(s["pos"][1], -0.85)
+
     def test_infilled_or_unrelated_doors_give_none(self):
         self.assertIsNone(choose_switch_spot("alpha", "Alpha", [OP], {1}, locate, blocked))
         self.assertIsNone(choose_switch_spot("gamma", "Gamma", [OP], set(), locate, blocked))

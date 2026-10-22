@@ -16,17 +16,19 @@ def choose_switch_spot(room_id, room_name, openings, infilled, locate, is_blocke
         )
         if inward is None:
             continue
+        # "face": "outside" puts the switch on the other room's face of the same opening.
+        facing = -inward if override.get("face") == "outside" else inward
         for side in sides:
             along = c + u * side * (op.width / 2 + offset)
-            front = along + n * inward * (op.thickness / 2 + 0.25)
+            front = along + n * facing * (op.thickness / 2 + 0.25)
             # An explicit side is a reviewed choice: keep it even with furniture in front (e.g. a worktop).
             if not is_blocked_raw(*along) or ("side" not in override and is_blocked_raw(*front)):
                 continue
-            pos = along + n * inward * (op.thickness / 2 + 0.006)
+            pos = along + n * facing * (op.thickness / 2 + 0.006)
             return {
                 "pos": (round(float(pos[0]), 4), round(float(pos[1]), 4)),
                 "u": (float(u[0]), float(u[1])),
-                "n": (float(n[0] * inward), float(n[1] * inward)),
+                "n": (float(n[0] * facing), float(n[1] * facing)),
                 "door": op.num,
             }
     return None
