@@ -9,7 +9,7 @@ A personal/portfolio website where visitors freely walk through the T2 apartment
 
 ## Source
 
-- Blender file: `/Users/sandrolek/Documents/Untitled.blend` (never modified by this project).
+- Blender file: `Untitled.blend` in the project root, a copy of `/Users/sandrolek/Documents/Untitled.blend` (never modified by this project). The project keeps its own copy so it is self-contained.
 - About 6.95 × 18.2 m, ~129k visible triangles, 836 render-visible meshes, 150 materials in use.
 - Rooms: Sala, Cozinha, Lavandaria, Marquise, Entrada, Closet, Hall, Quarto 01, Quarto 02, Quarto 03, WC 01, WC 02, Varanda. Each has a `Floor - <room>` mesh.
 - Doors: `Door leaf 1`–`Door leaf 10` in collection `Doors.001`. They are separate meshes, 0.75 × 2.05 m.
