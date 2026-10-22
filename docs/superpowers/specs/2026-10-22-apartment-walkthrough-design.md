@@ -88,3 +88,17 @@ web/src/                   # modules above
 web/tests/                 # Vitest unit tests
 docs/superpowers/specs/    # this document
 ```
+
+## Amendments from implementation planning (2026-10-22)
+
+1. Procedural materials are baked per object (non-tiling, 256 px/m, max 2048²) because their patterns are world-position driven and non-repeating.
+2. Collision is a 2D occupancy grid (5 cm cells, player radius 0.2 m) exported as `collision.json`, plus door leaf segments at runtime. `collision.glb` and the capsule are dropped; three-mesh-bvh is used only for interaction raycasts. A player in a blocked cell is moved to the nearest free cell.
+3. Glazed doors are fixed glass, so their glass, mullions and rails don't block movement. This keeps Lavandaria, Marquise and Varanda reachable.
+4. Light switches are separate emissive meshes, not part of the room bake.
+5. Door leaves get a daylight lightmap only, baked closed.
+6. Emissive materials are muted during room-light bakes.
+7. Denoising uses 512 samples plus a masked Gaussian blur (σ = 1 px) instead of OIDN.
+8. Hover highlighting is an emissive tint, not an outline.
+9. Reflections come from three.js `RoomEnvironment` at intensity 0.2.
+10. In the manifest, the room floor is a triangle list and there is no light colour field.
+11. Before splitting into room chunks, meshes with large faces (ceiling, slab, walls) are cut on a 25 cm grid, and faces over interior walls join the nearest room within 0.2 m. That way no ceiling face lights up with the wrong room's switch.

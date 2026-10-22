@@ -1,0 +1,113 @@
+import math
+import unittest
+
+from pipeline import geom
+
+
+class CoordinateTests(unittest.TestCase):
+    def test_to_three_maps_blender_z_up_to_y_up(self):
+        self.assertEqual(geom.to_three((1.0, 2.0, 3.0)), (1.0, 3.0, -2.0))
+
+    def test_ground_plane_round_trip(self):
+        self.assertEqual(geom.from_three_xz(*geom.to_three_xz(4.0, -5.0)), (4.0, -5.0))
+
+    def test_slugify(self):
+        self.assertEqual(geom.slugify("Quarto 01"), "quarto-01")
+        self.assertEqual(geom.slugify("WC 02"), "wc-02")
+
+    def test_rot_y_matches_blender_z_rotation(self):
+        # Blender (1, 0) rotated +90° about Z is (0, 1); in three.js xz that is (0, -1).
+        x, z = geom.rot_y((1.0, 0.0), math.pi / 2)
+        self.assertAlmostEqual(x, 0.0)
+        self.assertAlmostEqual(z, -1.0)
+
+
+class FloorIndexTests(unittest.TestCase):
+    def setUp(self):
+        square = lambda x0, z0, x1, z1: [x0, z0, x1, z0, x1, z1, x0, z0, x1, z1, x0, z1]
+        self.index = geom.FloorIndex({"a": square(0, 0, 1, 1), "b": square(2, 0, 3, 1)})
+
+    def test_locate(self):
+        self.assertEqual(self.index.locate(0.5, 0.5), "a")
+        self.assertEqual(self.index.locate(2.5, 0.2), "b")
+        self.assertIsNone(self.index.locate(1.5, 0.5))
+
+    def test_locate_many(self):
+        self.assertEqual(self.index.locate_many([(0.5, 0.5), (2.5, 0.5), (9, 9)]).tolist(), [0, 1, -1])
+
+    def test_nearest_floor_within_max_dist(self):
+        pts = [(1.1, 0.5), (1.5, 0.5), (1.85, 0.5)]
+        self.assertEqual(self.index.locate_many(pts).tolist(), [-1, -1, -1])
+        self.assertEqual(self.index.locate_many(pts, max_dist=0.2).tolist(), [0, -1, 1])
+
+    def test_degenerate_triangles_are_ignored(self):
+        index = geom.FloorIndex({"flat": [0, 0, 1, 1, 2, 2]})
+        self.assertIsNone(index.locate(5.0, -3.0))
+
+    def test_bounds(self):
+        self.assertEqual(self.index.bounds(), (0.0, 0.0, 3.0, 1.0))
+
+
+class PrincipalFrameTests(unittest.TestCase):
+    def test_rotated_rectangle(self):
+        a = math.radians(30)
+        u = (math.cos(a), math.sin(a))
+        n = (-u[1], u[0])
+        pts = [(2 + su * 0.385 * u[0] + sn * 0.06 * n[0], 1 + su * 0.385 * u[1] + sn * 0.06 * n[1])
+               for su in (-1, 1) for sn in (-1, 1)]
+        c, uu, nn, wu, wn = geom.principal_frame(pts)
+        self.assertAlmostEqual(c[0], 2.0)
+        self.assertAlmostEqual(c[1], 1.0)
+        self.assertAlmostEqual(wu, 0.77)
+        self.assertAlmostEqual(wn, 0.12)
+        self.assertAlmostEqual(abs(uu[0] * u[0] + uu[1] * u[1]), 1.0)
+        self.assertGreater(uu[0], 0)
+
+    def test_vertical_axis_points_plus_z(self):
+        pts = [(0, 0), (0.1, 0), (0, 2), (0.1, 2)]
+        _, u, n, wu, wn = geom.principal_frame(pts)
+        self.assertAlmostEqual(u[0], 0.0)
+        self.assertAlmostEqual(u[1], 1.0)
+        self.assertAlmostEqual(n[0], -1.0)
+
+
+def corner_room(x, z):
+    """Wall along x with a doorway at x 0..0.8, a side wall at x≈-0.1 on +z, a wardrobe on -z."""
+    if -0.05 <= z <= 0.05 and not (0.0 <= x <= 0.8):
+        return True
+    if -0.15 <= x <= -0.05 and 0.0 <= z <= 3.0:
+        return True
+    if 0.0 <= x <= 1.0 and -1.0 <= z <= -0.1:
+        return True
+    return False
+
+
+class DoorSwingTests(unittest.TestCase):
+    def test_swings_away_from_furniture_and_rests_against_side_wall(self):
+        c = geom.choose_door_swing((0.0, 0.0), (0.8, 0.0), corner_room)
+        self.assertEqual(c["hinge_end"], "a")
+        self.assertEqual(c["sign"], -1)
+        self.assertAlmostEqual(c["width"], 0.8)
+        self.assertEqual(c["dir"], (1.0, 0.0))
+
+    def test_override_forces_hinge(self):
+        c = geom.choose_door_swing((0.0, 0.0), (0.8, 0.0), corner_room, {"hinge": "b"})
+        self.assertEqual(c["hinge"], (0.8, 0.0))
+        self.assertEqual(c["sign"], 1)
+
+    def test_impossible_override_raises(self):
+        with self.assertRaises(ValueError):
+            geom.choose_door_swing((0.0, 0.0), (0.8, 0.0), corner_room, {"hinge": "c"})
+
+
+class CameraTests(unittest.TestCase):
+    def test_yaw_pitch(self):
+        self.assertEqual(geom.yaw_pitch_from_forward((0.0, 0.0, -1.0)), (0.0, 0.0))
+        yaw, pitch = geom.yaw_pitch_from_forward((-1.0, 0.0, 0.0))
+        self.assertAlmostEqual(yaw, math.pi / 2)
+        yaw, pitch = geom.yaw_pitch_from_forward((0.0, 1.0, 0.0))
+        self.assertAlmostEqual(pitch, math.pi / 2)
+
+
+if __name__ == "__main__":
+    unittest.main()
