@@ -1,6 +1,7 @@
 """Self-checks that run after every export; any message means the export is not usable."""
 import json
 import os
+import re
 import struct
 
 from . import geom, manifest as manifest_mod
@@ -18,6 +19,11 @@ def read_glb_json(path):
     return json.loads(data[20:20 + length])
 
 
+def sanitized_node_name(name):
+    """Mirror three.js PropertyBinding.sanitizeNodeName (what GLTFLoader does to node names)."""
+    return re.sub(r"[\[\]\\.:/]", "", re.sub(r"\s", "_", name))
+
+
 def check_outputs(out_dir, m, budget_bytes, expected_doors):
     errors = list(manifest_mod.validate_manifest(m))
     refs = [c["day"] for c in m["chunks"]] + [c["light"] for c in m["chunks"]] + [d["lightmap"] for d in m["doors"]]
@@ -29,6 +35,12 @@ def check_outputs(out_dir, m, budget_bytes, expected_doors):
             errors.append(f"missing file {name}")
     if errors:
         return errors
+    all_names = [c["node"] for c in m["chunks"]] + [d["node"] for d in m["doors"]] + [
+        r["switch"] for r in m["rooms"] if r["switch"]]
+    for name in all_names:
+        clean = sanitized_node_name(name)
+        if clean != name:
+            errors.append(f"node name {name!r} changes to {clean!r} in three.js")
     if len(m["doors"]) != expected_doors:
         errors.append(f"expected {expected_doors} doors, found {len(m['doors'])}")
     gltf = read_glb_json(os.path.join(out_dir, "apartment.glb"))

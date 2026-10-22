@@ -39,6 +39,12 @@ class EndToEndTests(unittest.TestCase):
         gltf = checks.read_glb_json(os.path.join(self.out, "apartment.glb"))
         names = {n["name"] for n in gltf["nodes"]}
         self.assertTrue({"Room_alpha", "Door_1", "Switch_alpha"} <= names)
+        for name in ("Room_alpha", "Room_beta", "Room_exterior", "Door_1"):
+            node = next(n for n in gltf["nodes"] if n["name"] == name)
+            prims = gltf["meshes"][node["mesh"]]["primitives"]
+            self.assertTrue(prims, name)
+            for p in prims:
+                self.assertIn("TEXCOORD_1", p["attributes"], name)
 
 
 if __name__ == "__main__":
