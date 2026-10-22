@@ -2307,7 +2307,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `raster.texture_size_for_area`, `bpyutil.select_only`, `bpyutil.polygon_scalars`.
-- Produces: `uvs.add_lightmap_uvs(obj, texels_per_m, lo, hi) -> int` (lightmap size). After it runs, `obj.data.uv_layers` is exactly `["UVMap", "UVLightmap"]`, `UVMap` is the render-active map, and `UVLightmap` is smart-projected into [0, 1] with an 8-texel margin.
+- Produces: `uvs.add_lightmap_uvs(obj, texels_per_m, lo, hi) -> int` (lightmap size). After it runs, `obj.data.uv_layers` is exactly `["UVMap", "UVLightmap"]`, `UVMap` is the render-active map, and `UVLightmap` is smart-projected into [0, 1] with a 2-texel island margin (8 texels collapsed islands on small maps and wastes space on chunks with thousands of islands; the bake's 4-px margin only fills empty texels).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2392,7 +2392,7 @@ def add_lightmap_uvs(obj, texels_per_m, lo, hi):
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.uv.smart_project(angle_limit=math.radians(66), margin_method="FRACTION",
-                             island_margin=8 / size, area_weight=1.0, correct_aspect=True,
+                             island_margin=2 / size, area_weight=1.0, correct_aspect=True,
                              scale_to_bounds=True)
     bpy.ops.object.mode_set(mode="OBJECT")
     return size
