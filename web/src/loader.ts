@@ -67,7 +67,7 @@ export async function loadAssets(onProgress: (fraction: number) => void): Promis
       report();
     }
   });
-  const dayEntries = await Promise.all(
+  const dayMapsPromise = Promise.all(
     dayRefs.map(async (ref) => {
       const m = await loadMap(ref);
       mapsDone++;
@@ -75,7 +75,7 @@ export async function loadAssets(onProgress: (fraction: number) => void): Promis
       return [ref.file, m] as const;
     }),
   );
-  const gltf = await gltfPromise;
+  const [gltf, dayEntries] = await Promise.all([gltfPromise, dayMapsPromise]);
   glbFraction = 1;
   report();
 

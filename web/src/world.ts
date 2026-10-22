@@ -1,3 +1,4 @@
+import type {} from 'three-mesh-bvh';
 import { Mesh, MeshStandardMaterial, Object3D, Quaternion, Scene, Vector3 } from 'three';
 import { Collision } from './collision';
 import { DoorState } from './doors';
@@ -62,7 +63,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene): World {
       const m = maps.get(file);
       if (m) for (const mat of mats) setLightTexture(mat, m.texture, m.range);
     }
-  });
+  }).catch((err) => console.warn('Room light maps failed to bind; lights will stay dark.', err));
 
   const targets = new Map<Object3D, Target>();
   const doors: DoorRuntime[] = manifest.doors.map((info) => {
@@ -85,10 +86,4 @@ export function buildWorld(assets: LoadedAssets, scene: Scene): World {
 
   const collision = new Collision(assets.collision, () => doors.map((d) => d.state.segment()));
   return { lights, doors, targets, pickables, rooms: new RoomLocator(manifest.rooms), collision, lightmapped };
-}
-
-declare module 'three' {
-  interface BufferGeometry {
-    computeBoundsTree?: () => void;
-  }
 }
