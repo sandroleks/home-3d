@@ -90,14 +90,19 @@ async function boot(): Promise<void> {
   ui.onStart(start);
   ui.onResume(() => canvas.requestPointerLock());
   if (autostart) start();
+  let paused = false;
   document.addEventListener('pointerlockchange', () => {
-    ui.setPaused(started && !autostart && document.pointerLockElement !== canvas);
+    paused = started && !autostart && document.pointerLockElement !== canvas;
+    ui.setPaused(paused);
+    if (paused) {
+      for (const k of Object.keys(player.keys) as (keyof typeof player.keys)[]) player.keys[k] = false;
+    }
   });
   window.addEventListener('mousedown', (e) => {
     if (e.button === 0 && (autostart || document.pointerLockElement === canvas)) interactions.click();
   });
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyL' && started && currentRoom && world.lights.has(currentRoom)) world.lights.toggle(currentRoom);
+    if (e.code === 'KeyL' && !e.repeat && started && !paused && currentRoom && world.lights.has(currentRoom)) world.lights.toggle(currentRoom);
   });
 
   let last = performance.now();
@@ -108,7 +113,7 @@ async function boot(): Promise<void> {
       d.state.update(dt);
       applyDoorRotation(d);
     }
-    if (started) player.update(dt);
+    if (started && !paused) player.update(dt);
     if (!player.frozen && world.collision.isBlocked(player.x, player.z)) player.resolve();
     currentRoom = world.rooms.locate(player.x, player.z, currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');
