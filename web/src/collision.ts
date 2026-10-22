@@ -50,18 +50,12 @@ export class Collision {
       for (let dj = -r; dj <= r; dj++) {
         for (let di = -r; di <= r; di++) {
           if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
-          // Quarter-points rather than the centre only: a centre can be up to
-          // hypot(cell, cell/2) away from the nearest free space next to a wall.
-          for (const ox of [0.25, 0.75]) {
-            for (const oz of [0.25, 0.75]) {
-              const cx = g.x0 + (i0 + di + ox) * g.cell;
-              const cz = g.z0 + (j0 + dj + oz) * g.cell;
-              const d = Math.hypot(cx - x, cz - z);
-              if (d < bestDist && !this.isBlocked(cx, cz)) {
-                best = [cx, cz];
-                bestDist = d;
-              }
-            }
+          const cx = g.x0 + (i0 + di + 0.5) * g.cell;
+          const cz = g.z0 + (j0 + dj + 0.5) * g.cell;
+          const d = Math.hypot(cx - x, cz - z);
+          if (d < bestDist && !this.isBlocked(cx, cz)) {
+            best = [cx, cz];
+            bestDist = d;
           }
         }
       }
