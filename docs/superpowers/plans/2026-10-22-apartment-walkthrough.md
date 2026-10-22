@@ -556,14 +556,16 @@ class TextureSizeTests(unittest.TestCase):
 
 
 class RgbmTests(unittest.TestCase):
-    def test_round_trip_relative_error(self):
+    def test_round_trip_error_relative_to_pixel_peak(self):
+        # RGBM shares one multiplier per pixel, so every channel's error scales with the
+        # pixel's brightest channel, not with the channel itself.
         rng = np.random.default_rng(3)
         rgb = rng.uniform(0.05, 6.0, (32, 32, 3))
         rgba, r = raster.rgbm_encode(rgb)
         self.assertGreaterEqual(r, 6.0)
         back = raster.rgbm_decode(rgba, r)
-        rel = np.abs(back - rgb) / np.maximum(rgb, 0.05 * r)
-        self.assertLess(rel.max(), 0.02)
+        peak = np.maximum(rgb.max(axis=-1, keepdims=True), 0.05 * r)
+        self.assertLess((np.abs(back - rgb) / peak).max(), 0.01)
 
     def test_masked_pixels_are_zero_and_range_ignores_them(self):
         rgb = np.full((4, 4, 3), 2.0)
@@ -738,7 +740,7 @@ def rle_decode(runs, n):
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `make test-blender TESTS=test_raster.py`
-Expected: PASS, 10 tests, `OK`
+Expected: PASS, 9 tests, `OK`
 
 - [ ] **Step 6: Commit**
 
