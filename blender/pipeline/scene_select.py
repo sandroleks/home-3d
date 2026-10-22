@@ -85,10 +85,12 @@ def prepare_scene(scene, view_layer):
         and (is_render_visible(o, visible) or _forced(o))
     ]
     keep_set = set(keep)
+    realize(keep)  # before deleting: a dropped mesh may be the parent of a kept one
     for o in [o for o in scene.objects if o.type == "MESH" and o not in keep_set]:
         bpy.data.objects.remove(o, do_unlink=True)
-    realize(keep)
     _move_to(keep, "WEB")
+    for o in keep:
+        o.hide_render = False  # a joined chunk inherits the active object's flags
     _move_to(lights, "WEB_LIGHTS")
     for o in lights:
         o.hide_render = o.name not in day_lights

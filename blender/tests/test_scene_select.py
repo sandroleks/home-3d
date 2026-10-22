@@ -17,6 +17,20 @@ class SceneSelectTests(unittest.TestCase):
                      "Door 1 (Alpha / Beta) lintel", "Lamp", "Shelf"):
             self.assertIn(name, self.names)
 
+    def test_kept_meshes_are_render_visible(self):
+        self.assertIn("Ceiling", self.names)
+        for o in self.meshes:
+            self.assertFalse(o.hide_render, o.name)
+
+    def test_child_of_dropped_parent_keeps_world_position(self):
+        self.assertIn("Sofa cushion", self.names)
+        c = bpy.data.objects["Sofa cushion"]
+        self.assertIsNone(c.parent)
+        self.assertTrue(c.matrix_world.is_identity)
+        for axis, expected in enumerate((2.0, 2.4, 0.85)):
+            vals = [v.co[axis] for v in c.data.vertices]
+            self.assertAlmostEqual((min(vals) + max(vals)) / 2, expected, places=3)
+
     def test_deletes_hidden_variants(self):
         self.assertNotIn("Hidden sofa", self.names)
         self.assertNotIn("Hidden sofa", bpy.data.objects)

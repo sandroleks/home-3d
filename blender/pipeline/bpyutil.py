@@ -52,7 +52,7 @@ def set_cycles(scene, samples):
             prefs.compute_device_type = kind
         except TypeError:
             continue
-        getattr(prefs, "refresh_devices", prefs.get_devices)()
+        (getattr(prefs, "refresh_devices", None) or prefs.get_devices)()
         if any(d.type == kind for d in prefs.devices):
             for d in prefs.devices:
                 d.use = d.type == kind

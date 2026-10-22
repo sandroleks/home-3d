@@ -119,11 +119,16 @@ def build():
         (3.0, 1.8, 0, 3.2, 3.0, 2.6),
     ], plaster, structure)
     box_object("Door 1 (Alpha / Beta) lintel", [(3.0, 1.0, 2.05, 3.2, 1.8, 2.6)], plaster, structure)
-    box_object("Ceiling", [(-0.2, -0.2, 2.6, 6.2, 3.2, 2.7)], plaster, ceiling)
+    box_object("Ceiling", [(-0.2, -0.2, 2.6, 6.2, 3.2, 2.7)], plaster, ceiling).hide_render = True
     box_object("Door leaf 1", [(3.08, 1.02, 0, 3.12, 1.78, 2.0)], wood, doors)
     box_object("Shelf", [(3.4, 0.5, 0, 3.9, 1.3, 1.2)], wood, furniture)
     box_object("Lamp", [(5.5, 2.5, 0, 5.8, 2.8, 0.5)], glow, furniture)
-    box_object("Hidden sofa", [(1.0, 2.0, 0, 2.5, 2.8, 0.8)], wood, variant)
+    sofa = box_object("Hidden sofa", [(1.0, 2.0, 0, 2.5, 2.8, 0.8)], wood, variant)
+    sofa.location = (0.5, 0, 0)
+    # Kept child of a dropped parent: world centre is (0.5 + 1.5, 2.4, 0.85) = (2.0, 2.4, 0.85).
+    cushion = box_object("Sofa cushion", [(-0.1, -0.1, -0.1, 0.1, 0.1, 0.1)], wood, furniture)
+    cushion.parent = sofa
+    cushion.location = (1.5, 2.4, 0.85)
 
     rig = bpy.data.objects.new("Table rig", None)
     furniture.objects.link(rig)
