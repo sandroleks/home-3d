@@ -5,7 +5,7 @@ import unittest
 import bpy
 import numpy as np
 
-from pipeline import bake, chunks, config, rooms, scene_select, uvs
+from pipeline import bake, bpyutil, chunks, config, rooms, scene_select, uvs
 from tests import fixture_scene
 
 
@@ -70,11 +70,59 @@ class BakeAllTests(unittest.TestCase):
         lit = _load_decoded(os.path.join(self.out, "lightmaps", "alpha_light.webp"), self.ranges["alpha_light"])
         self.assertGreater(lit.max(), 0.01)
 
+    def test_day_layers_have_light(self):
+        for key in ("alpha", "beta", "exterior", "door-1"):
+            name = f"{key}_day"
+            day = _load_decoded(os.path.join(self.out, "lightmaps", f"{name}.webp"), self.ranges[name])
+            self.assertGreater(day.max(), 0.01, name)
+
+    def test_light_layer_differs_from_day(self):
+        day = _load_decoded(os.path.join(self.out, "lightmaps", "alpha_day.webp"), self.ranges["alpha_day"])
+        lit = _load_decoded(os.path.join(self.out, "lightmaps", "alpha_light.webp"), self.ranges["alpha_light"])
+        self.assertGreater(np.abs(day - lit).max(), 0.01)
+
     def test_cleanup(self):
+        self.assertTrue(bpy.data.objects["Ceiling light Alpha"].hide_render)
+        self.assertTrue(bpy.data.objects["Ceiling light Beta"].hide_render)
+        glow = next(n for n in bpy.data.materials["Lamp glow"].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        self.assertEqual(glow.inputs["Emission Strength"].default_value, 2.0)
+        bg = next(n for n in bpy.context.scene.world.node_tree.nodes if n.type == "BACKGROUND")
+        self.assertEqual(bg.inputs["Strength"].default_value, 1.0)
         for mat in bpy.data.materials:
             if mat.node_tree:
                 self.assertNotIn(bake.BAKE_NODE, mat.node_tree.nodes)
         self.assertFalse(bpy.data.objects["Sun"].hide_render)
+
+
+class RoomIsolationTests(unittest.TestCase):
+    def test_room_state_without_ceiling_light_is_black(self):
+        fixture_scene.build()
+        scene = bpy.context.scene
+        meshes, day = scene_select.prepare_scene(scene, bpy.context.view_layer)
+        index, room_list = rooms.collect_rooms(meshes, scene)
+        leaf = bpy.data.objects["Door leaf 1"]
+        chunk_list = chunks.build_chunks([o for o in meshes if o != leaf], index)
+        q = config.QUALITY["test"]
+        for c in chunk_list:
+            c["size"] = uvs.add_lightmap_uvs(bpy.data.objects[c["node"]], q.lightmap_texels_per_m, q.lightmap_min, q.lightmap_max)
+        chunk = next(c for c in chunk_list if c["room"] == "alpha")
+        bpyutil.set_cycles(scene, q.bake_samples)
+        lighting = bake.Lighting(scene, day, {"alpha": "Ceiling light Alpha", "beta": "Ceiling light Beta"})
+        lamp = bpy.data.objects["Ceiling light Alpha"]
+        saved = lamp.data.energy
+        try:
+            lighting.room("alpha")
+            lamp.data.energy = 0.0
+            img = bake.bake_lighting(bpy.data.objects[chunk["node"]], chunk["size"], "iso")
+            px = np.empty(img.size[0] * img.size[1] * 4, dtype=np.float32)
+            img.pixels.foreach_get(px)
+            rgb = px.reshape(-1, 4)[:, :3]
+            bpy.data.images.remove(img)
+            self.assertLess(rgb.max(), 1e-3)
+        finally:
+            lamp.data.energy = saved
+            lighting.restore()
+            bake.remove_bake_nodes()
 
 
 if __name__ == "__main__":

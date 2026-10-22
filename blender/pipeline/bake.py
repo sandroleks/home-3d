@@ -30,7 +30,11 @@ class Lighting:
         self.room_lights = dict(room_lights)
         self.lights = [o for o in scene.objects if o.type == "LIGHT"]
         self.saved_hide = {o.name: o.hide_render for o in self.lights}
-        self.background = next(n for n in scene.world.node_tree.nodes if n.type == "BACKGROUND")
+        world = scene.world
+        nodes = world.node_tree.nodes if world is not None and world.node_tree is not None else []
+        self.background = next((n for n in nodes if n.type == "BACKGROUND"), None)
+        if self.background is None:
+            raise RuntimeError("scene world has no Background node")
         self.saved_strength = self.background.inputs["Strength"].default_value
         self.emitters = _emission_sockets()
 
@@ -76,9 +80,14 @@ def bake_lighting(obj, size, name):
         node.image = img
         slot.material.node_tree.nodes.active = node
     bpyutil.select_only([obj], obj)
-    bpy.ops.object.bake(type="DIFFUSE", pass_filter={"DIRECT", "INDIRECT"}, margin=4,
-                        margin_type="EXTEND", use_clear=True, uv_layer="UVLightmap",
-                        target="IMAGE_TEXTURES")
+    try:
+        bpy.ops.object.bake(type="DIFFUSE", pass_filter={"DIRECT", "INDIRECT"}, margin=4,
+                            margin_type="EXTEND", use_clear=True, uv_layer="UVLightmap",
+                            target="IMAGE_TEXTURES")
+    except BaseException:
+        remove_bake_nodes()
+        bpy.data.images.remove(img)
+        raise
     return img
 
 
