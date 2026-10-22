@@ -1,0 +1,45 @@
+import { Color, Mesh, MeshStandardMaterial, Object3D, BoxGeometry } from 'three';
+import { describe, expect, it } from 'vitest';
+import { DoorState } from '../src/doors';
+import { activate, findTarget, promptFor, setHighlight, type Target } from '../src/interactions';
+import { RoomLights } from '../src/lightmaps';
+
+const doorInfo = { node: 'Door_1', hinge: [0, 0] as [number, number], dir: [1, 0] as [number, number], width: 0.8, openAngle: 1.5, lightmap: { file: 'x', range: 1 } };
+
+describe('interactions', () => {
+  it('prompts and activates doors', () => {
+    const lights = new RoomLights([]);
+    const t: Target = { kind: 'door', door: new DoorState(doorInfo), node: new Object3D() };
+    expect(promptFor(t, lights)).toBe('Click: open door');
+    activate(t, lights);
+    expect(promptFor(t, lights)).toBe('Click: close door');
+  });
+
+  it('prompts and activates switches', () => {
+    const lights = new RoomLights(['sala']);
+    const t: Target = { kind: 'switch', room: 'sala', node: new Object3D() };
+    expect(promptFor(t, lights)).toBe('Click: turn light on');
+    activate(t, lights);
+    expect(promptFor(t, lights)).toBe('Click: turn light off');
+  });
+
+  it('finds the target through parent nodes', () => {
+    const node = new Object3D();
+    const child = new Object3D();
+    node.add(child);
+    const t: Target = { kind: 'switch', room: 'sala', node };
+    const targets = new Map<Object3D, Target>([[node, t]]);
+    expect(findTarget(child, targets)).toBe(t);
+    expect(findTarget(new Object3D(), targets)).toBeNull();
+    expect(findTarget(null, targets)).toBeNull();
+  });
+
+  it('highlights by tinting emissive and restores it', () => {
+    const mat = new MeshStandardMaterial({ emissive: new Color(0.1, 0.1, 0.1) });
+    const mesh = new Mesh(new BoxGeometry(), mat);
+    setHighlight(mesh, true);
+    expect(mat.emissive.r).toBeGreaterThan(0.1);
+    setHighlight(mesh, false);
+    expect(mat.emissive.r).toBeCloseTo(0.1);
+  });
+});
