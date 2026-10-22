@@ -4015,7 +4015,8 @@ describe('Collision', () => {
     const c = new Collision(wallGrid());
     const [x, z] = c.nearestFree(0.55, 0.5);
     expect(c.isBlocked(x, z)).toBe(false);
-    expect(Math.hypot(x - 0.55, z - 0.5)).toBeLessThanOrEqual(0.11);
+    // Lands on an adjacent free cell centre: at most ~1.5 cells away.
+    expect(Math.hypot(x - 0.55, z - 0.5)).toBeLessThanOrEqual(0.15);
     expect(c.nearestFree(0.25, 0.25)).toEqual([0.25, 0.25]);
   });
 });
