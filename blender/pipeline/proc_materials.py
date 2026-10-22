@@ -24,7 +24,9 @@ def _dummy_image():
 
 def _rewire_to_image(mat, img):
     nt = mat.node_tree
-    old = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    old = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    if old is None:
+        raise RuntimeError(f"{mat.name}: no Principled BSDF to take roughness/metallic from")
     keep = {k: old.inputs[k].default_value for k in ("Roughness", "Metallic")}
     for n in list(nt.nodes):
         nt.nodes.remove(n)
@@ -52,33 +54,41 @@ def _bake_object(obj, quality):
     uv = me.uv_layers.get("UVMap") or me.uv_layers.new(name="UVMap")
     me.uv_layers.active = uv
     bpyutil.select_only([obj], obj)
-    bpy.ops.object.mode_set(mode="EDIT")
-    bpyutil.select_faces_in_edit(obj, mask)
-    bpy.ops.uv.smart_project(angle_limit=math.radians(66), margin_method="FRACTION",
-                             island_margin=4 / size, scale_to_bounds=False)
-    bpy.ops.object.mode_set(mode="OBJECT")
+    try:
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpyutil.select_faces_in_edit(obj, mask)
+        bpy.ops.uv.smart_project(angle_limit=math.radians(66), margin_method="FRACTION",
+                                 island_margin=4 / size, scale_to_bounds=False)
+    finally:
+        if obj.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
 
     img = bpy.data.images.new(f"albedo_{geom.slugify(obj.name)}", size, size, alpha=False)
     img.colorspace_settings.name = "sRGB"
     copies = {}
-    for i, slot in enumerate(obj.material_slots):
-        if i in proc_slots:
-            copies[i] = slot.material.copy()
-            copies[i].name = f"{slot.material.name} [{obj.name}]"
-            slot.material = copies[i]
-        node = slot.material.node_tree.nodes.new("ShaderNodeTexImage")
-        node.name = BAKE_NODE
-        node.image = img if i in proc_slots else _dummy_image()
-        slot.material.node_tree.nodes.active = node
+    try:
+        for i, slot in enumerate(obj.material_slots):
+            if i in proc_slots:
+                copies[i] = slot.material.copy()
+                copies[i].name = f"{slot.material.name} [{obj.name}]"
+                slot.material = copies[i]
+            if slot.material is None or slot.material.node_tree is None:
+                continue
+            node = slot.material.node_tree.nodes.new("ShaderNodeTexImage")
+            node.name = BAKE_NODE
+            node.image = img if i in proc_slots else _dummy_image()
+            slot.material.node_tree.nodes.active = node
 
-    bpyutil.select_only([obj], obj)
-    bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"}, margin=4, margin_type="EXTEND",
-                        use_clear=True, uv_layer="UVMap", target="IMAGE_TEXTURES")
-
-    for slot in obj.material_slots:
-        nodes = slot.material.node_tree.nodes
-        if BAKE_NODE in nodes:
-            nodes.remove(nodes[BAKE_NODE])
+        bpyutil.select_only([obj], obj)
+        bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"}, margin=4, margin_type="EXTEND",
+                            use_clear=True, uv_layer="UVMap", target="IMAGE_TEXTURES")
+    finally:
+        for slot in obj.material_slots:
+            if slot.material is None or slot.material.node_tree is None:
+                continue
+            nodes = slot.material.node_tree.nodes
+            if BAKE_NODE in nodes:
+                nodes.remove(nodes[BAKE_NODE])
     img.pack()
     for mat in copies.values():
         _rewire_to_image(mat, img)
