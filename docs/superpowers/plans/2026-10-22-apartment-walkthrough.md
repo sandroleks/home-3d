@@ -6,7 +6,7 @@
 
 **Architecture:** A headless Blender Python pipeline (`blender/`) copies the file, merges geometry into one chunk per room, bakes procedural materials and two lighting layers (daylight plus each room's ceiling light) with Cycles, builds a 2D collision grid, and exports `apartment.glb` + RGBM WebP lightmaps + `manifest.json` + `collision.json`. A Vite + TypeScript + three.js site (`web/`) loads those assets, patches `MeshStandardMaterial` to add `day + intensity × roomLight`, and runs a pointer-lock first-person controller with door and light interactions.
 
-**Tech Stack:** Blender 5.1.1 (Cycles on Metal, bundled Python + numpy, `unittest`), three.js 0.170.0, three-mesh-bvh 0.8.3, Vite 5.4.21, TypeScript 5.6.3, Vitest 2.1.9, Node 22.
+**Tech Stack:** Blender 5.1.1 (Cycles on Metal, bundled Python + numpy, `unittest`), three.js 0.170.0, three-mesh-bvh 0.8.3, Vite 8.3.4, TypeScript 5.6.3, Vitest 5.0.3, Node 22.
 
 ## Global Constraints
 
@@ -3349,8 +3349,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   "devDependencies": {
     "@types/three": "0.170.0",
     "typescript": "5.6.3",
-    "vite": "5.4.21",
-    "vitest": "2.1.9"
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
   }
 }
 ```
@@ -3380,7 +3380,7 @@ Also add `"@types/node": "22.9.0"` to `devDependencies` (the tests read the shar
 `web/vite.config.ts`:
 
 ```ts
-/// <reference types="vitest" />
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 
 export default defineConfig({
