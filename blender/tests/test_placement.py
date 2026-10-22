@@ -38,6 +38,15 @@ class SwitchSpotTests(unittest.TestCase):
         s = choose_switch_spot("alpha", "Alpha", [OP], set(), locate, blocked, {"side": -1})
         self.assertAlmostEqual(s["pos"][1], -1.95)
 
+    def test_override_side_keeps_spot_with_furniture_in_front(self):
+        s = choose_switch_spot("beta", "Beta", [OP], set(), locate, blocked, {"door": 1, "side": 1})
+        self.assertAlmostEqual(s["pos"][0], 3.206)
+        self.assertAlmostEqual(s["pos"][1], -0.85)
+
+    def test_override_side_still_needs_a_wall(self):
+        wall_ends = lambda x, z: 3.0 <= x <= 3.2 and -1.9 <= z <= -0.9  # noqa: E731
+        self.assertIsNone(choose_switch_spot("beta", "Beta", [OP], set(), locate, wall_ends, {"side": 1}))
+
     def test_infilled_or_unrelated_doors_give_none(self):
         self.assertIsNone(choose_switch_spot("alpha", "Alpha", [OP], {1}, locate, blocked))
         self.assertIsNone(choose_switch_spot("gamma", "Gamma", [OP], set(), locate, blocked))

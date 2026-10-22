@@ -66,5 +66,20 @@ class SceneSelectTests(unittest.TestCase):
         self.assertIsNone(index.locate(3.1, -0.5))  # inside the middle wall
 
 
+class EditModeTests(unittest.TestCase):
+    def test_object_saved_in_edit_mode_is_still_realized(self):
+        fixture_scene.build()
+        vl = bpy.context.view_layer
+        table = bpy.data.objects["Table"]
+        vl.objects.active = table
+        bpy.ops.object.mode_set(mode="EDIT")
+        self.assertEqual(table.mode, "EDIT")
+        scene_select.prepare_scene(bpy.context.scene, vl)
+        self.assertEqual(table.mode, "OBJECT")
+        self.assertTrue(table.matrix_world.is_identity)
+        xs = [v.co.x for v in table.data.vertices]
+        self.assertAlmostEqual((min(xs) + max(xs)) / 2, 1.5, places=3)
+
+
 if __name__ == "__main__":
     unittest.main()

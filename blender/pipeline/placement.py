@@ -19,7 +19,8 @@ def choose_switch_spot(room_id, room_name, openings, infilled, locate, is_blocke
         for side in sides:
             along = c + u * side * (op.width / 2 + offset)
             front = along + n * inward * (op.thickness / 2 + 0.25)
-            if not is_blocked_raw(*along) or is_blocked_raw(*front):
+            # An explicit side is a reviewed choice: keep it even with furniture in front (e.g. a worktop).
+            if not is_blocked_raw(*along) or ("side" not in override and is_blocked_raw(*front)):
                 continue
             pos = along + n * inward * (op.thickness / 2 + 0.006)
             return {

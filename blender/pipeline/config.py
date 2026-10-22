@@ -47,4 +47,8 @@ PASSABLE_NAME_PATTERN = r"^Glazed Door .* (glass|mullion|rail)(\.\d+)?$"
 # {"Door leaf 3": {"hinge": "b", "sign": -1}}: hinge end "a" is the end with the smaller (x, z).
 DOOR_OVERRIDES = {}
 # {"cozinha": {"door": 24, "side": -1}}: door number from the lintel name, side along the wall.
-SWITCH_OVERRIDES = {}
+SWITCH_OVERRIDES = {
+    # Door 20 (Cozinha / Entrada) is infilled; the only other opening is Glazed Door 24, whose
+    # east side runs into the Sala wall. West side: on the wall above the worktop (0.9 m).
+    "cozinha": {"door": 24, "side": -1},
+}

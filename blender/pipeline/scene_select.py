@@ -36,6 +36,14 @@ def _placeholder_material():
     return mat
 
 
+def leave_edit_modes(view_layer):
+    """A .blend saved in Edit Mode reloads that way, and Blender then silently ignores obj.data = ..."""
+    for o in [o for o in view_layer.objects if o.mode != "OBJECT"]:
+        if o.mode != "OBJECT":  # one mode_set call can leave several objects' Edit Mode at once
+            view_layer.objects.active = o
+            bpy.ops.object.mode_set(mode="OBJECT")
+
+
 def realize(objs):
     """Apply modifiers and world transforms into each object's own mesh; clear parents."""
     dg = bpy.context.evaluated_depsgraph_get()
@@ -52,6 +60,8 @@ def realize(objs):
         o.modifiers.clear()
         o.parent = None
         o.data = meshes[o.name]
+        if o.data != meshes[o.name]:
+            raise RuntimeError(f"could not replace the mesh of {o.name!r} (mode {o.mode})")
         o.matrix_world = Matrix.Identity(4)
         mats = slots[o.name] or [None]
         o.data.materials.clear()
@@ -85,6 +95,7 @@ def prepare_scene(scene, view_layer):
         and (is_render_visible(o, visible) or _forced(o))
     ]
     keep_set = set(keep)
+    leave_edit_modes(view_layer)
     realize(keep)  # before deleting: a dropped mesh may be the parent of a kept one
     for o in [o for o in scene.objects if o.type == "MESH" and o not in keep_set]:
         bpy.data.objects.remove(o, do_unlink=True)
