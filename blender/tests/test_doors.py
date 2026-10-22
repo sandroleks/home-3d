@@ -39,7 +39,38 @@ class RotYAngleTests(unittest.TestCase):
         self.assertEqual(m["hinge"], (0.42, 0.05))
         self.assertEqual(m["dir"], (-1.0, -0.0))
         self.assertAlmostEqual(m["width"], 0.75)
+        self.assertAlmostEqual(m["open"][0], 0.0)
+        self.assertAlmostEqual(m["open"][1], 1.0)
+        self.assertAlmostEqual(m["angle"], math.pi / 2, places=6)  # rot_y((-1, 0), pi/2) == (0, 1)
         self.assertEqual(geom.door_from_opening((3.0, 3.0), (3.0, 3.75), [op], 0.25), None)
+
+
+class DoorPoseTests(unittest.TestCase):
+    OP = Opening(7, False, ("A", "B"), (0.0, 0.0), (1.0, 0.0), (0.0, 1.0), 0.8, 0.1)
+
+    def test_modelled_open_is_rotated_closed(self):
+        m = geom.door_from_opening((0.42, 0.05), (0.42, 0.8), [self.OP], 0.25)
+        p = geom.door_pose(m, (0.42, 0.05), (0.42, 0.8), lambda x, z: False)
+        self.assertFalse(p["closed"])
+        self.assertAlmostEqual(p["angle"], math.pi / 2, places=6)
+        self.assertAlmostEqual(p["to_closed"], math.pi / 2, places=6)
+
+    def test_modelled_closed_keeps_hinge_and_swings_away_from_blocked_side(self):
+        a, b = (-0.38, 0.0), (0.38, 0.0)
+        m = geom.door_from_opening(a, b, [self.OP], 0.25)
+        self.assertLess(abs(m["angle"]), 1e-6)
+        p = geom.door_pose(m, a, b, lambda x, z: z > 0.05)
+        self.assertTrue(p["closed"])
+        self.assertEqual(p["to_closed"], 0.0)
+        self.assertEqual(tuple(p["hinge"]), tuple(m["hinge"]))
+        self.assertAlmostEqual(abs(p["angle"]), math.pi / 2, places=6)
+        self.assertLess(geom.rot_y(p["dir"], p["angle"])[1], -0.99)  # swings into z < 0
+
+    def test_implausible_angles_raise(self):
+        for free in ((0.42 - 0.53, 0.05 + 0.53), (0.42 + 0.65, 0.05 + 0.375)):  # 45° and 150°
+            m = geom.door_from_opening((0.42, 0.05), free, [self.OP], 0.25)
+            with self.assertRaisesRegex(RuntimeError, "leaf X: modelled"):
+                geom.door_pose(m, (0.42, 0.05), free, lambda x, z: False, "leaf X")
 
 
 class DoorTests(unittest.TestCase):
@@ -82,12 +113,38 @@ class DoorTests(unittest.TestCase):
         self.assertNotIn("door-2", [d["key"] for d in self.specs])
 
 
+def _add_leaf(name, box):
+    def add():
+        fixture_scene.box_object(name, [box], bpy.data.materials["Wood"], bpy.data.collections["Doors.001"])
+    return add
+
+
+class ClosedLeafTests(unittest.TestCase):
+    def test_leaf_modelled_closed_in_its_doorway(self):
+        def closed_leaf_1():
+            bpy.data.objects.remove(bpy.data.objects["Door leaf 1"], do_unlink=True)
+            _add_leaf("Door leaf 1", (3.08, 1.02, 0, 3.12, 1.78, 2.0))()
+
+        d = _prepare(closed_leaf_1)[0]
+        self.assertAlmostEqual(abs(d["openAngle"]), math.pi / 2, places=4)
+        self.assertAlmostEqual(d["hinge"][0], 3.1, places=3)
+        self.assertIn(round(d["hinge"][1], 2), (-1.78, -1.02))
+        # Not rotated: still along Blender y from the hinge, 4 cm thick in x.
+        obj = bpy.data.objects["Door_1"]
+        xs = [v.co.x for v in obj.data.vertices]
+        ys = [abs(v.co.y) for v in obj.data.vertices]
+        self.assertAlmostEqual(min(xs), -0.02, places=3)
+        self.assertAlmostEqual(max(xs), 0.02, places=3)
+        self.assertAlmostEqual(max(ys), 0.76, places=3)
+
+    def test_two_leaves_at_one_opening_fail(self):
+        with self.assertRaisesRegex(RuntimeError, "Door leaf 1.*Door leaf 3.*opening 1"):
+            _prepare(_add_leaf("Door leaf 3", (3.08, 1.02, 0, 3.12, 1.78, 2.0)))
+
+
 class FallbackTests(unittest.TestCase):
     def test_leaf_far_from_openings_uses_swing_heuristic_and_override(self):
-        def add_leaf():
-            fixture_scene.box_object("Door leaf 3", [(0.3, 0.3, 0, 1.06, 0.34, 2.0)],
-                                     bpy.data.materials["Wood"], bpy.data.collections["Doors.001"])
-
+        add_leaf = _add_leaf("Door leaf 3", (0.3, 0.3, 0, 1.06, 0.34, 2.0))
         spec = next(d for d in _prepare(add_leaf, {"Door leaf 3": {"hinge": "b"}}) if d["key"] == "door-3")
         # Ends (0.3, -0.32) = "a" and (1.06, -0.32) = "b"; not rotated, only re-origined.
         self.assertAlmostEqual(spec["hinge"][0], 1.06, places=3)

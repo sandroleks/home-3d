@@ -183,6 +183,27 @@ def door_from_opening(end_a, end_b, openings, max_dist):
     return {"opening": op, "hinge": tuple(hinge), "dir": d, "open": t, "width": w, "angle": rot_y_angle(d, t)}
 
 
+def door_pose(match, end_a, end_b, is_blocked, label="leaf"):
+    """Closed pose and opening angle for a leaf matched by door_from_opening.
+
+    Modelled open (60°..120°): the modelled pose is the open state and the mesh must be
+    rotated by -angle into the doorway (to_closed = angle). Modelled closed (< 30°): keep
+    the matched hinge, pick the swing with choose_door_swing, no rotation. Anything else
+    is an implausible pose and raises.
+    """
+    deg = abs(math.degrees(match["angle"]))
+    if deg < 30:
+        hinge_end = "a" if tuple(match["hinge"]) == tuple(end_a) else "b"
+        c = choose_door_swing(end_a, end_b, is_blocked, {"hinge": hinge_end})
+        return {"hinge": c["hinge"], "dir": c["dir"], "width": c["width"],
+                "angle": c["sign"] * math.pi / 2, "to_closed": 0.0, "closed": True}
+    if deg < 60 or deg > 120:
+        raise RuntimeError(f"{label}: modelled {deg:.0f}° open at opening {match['opening'].num}; "
+                           "expected closed (<30°) or open (60°..120°)")
+    return {"hinge": match["hinge"], "dir": match["dir"], "width": match["width"],
+            "angle": match["angle"], "to_closed": match["angle"], "closed": False}
+
+
 def yaw_pitch_from_forward(f):
     """three.js camera yaw/pitch (rotation order YXZ) for a forward vector."""
     fx, fy, fz = f

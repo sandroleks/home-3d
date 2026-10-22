@@ -2,8 +2,9 @@
 
 The real file models leaves open (90° into the room). A leaf is matched to the opening whose
 jamb end is nearest one of its ends; that end is the hinge, the modelled pose becomes the open
-state, and the mesh is rotated into the doorway so it is baked closed. A leaf that matches no
-opening falls back to the swing heuristic (geom.choose_door_swing, DOOR_OVERRIDES).
+state, and the mesh is rotated into the doorway so it is baked closed. A matched leaf modelled
+closed keeps its hinge and gets its swing from geom.choose_door_swing (see geom.door_pose). A leaf
+that matches no opening falls back to the swing heuristic (DOOR_OVERRIDES applies there).
 """
 import math
 import re
@@ -24,7 +25,7 @@ def _number(name):
 
 
 def prepare_doors(door_objs, grid, overrides, openings, infilled):
-    specs = []
+    specs, used = [], {}
     for obj in sorted(door_objs, key=lambda o: _number(o.name)):
         n = _number(obj.name)
         co = bpyutil.world_coords(obj)
@@ -41,11 +42,13 @@ def prepare_doors(door_objs, grid, overrides, openings, infilled):
             bpy.data.objects.remove(obj, do_unlink=True)
             continue
         if match:
-            choice = {"hinge": match["hinge"], "dir": match["dir"], "width": match["width"]}
-            angle = to_closed = match["angle"]
-            if abs(abs(angle) - math.pi / 2) > math.radians(30):
-                print(f"[doors] WARNING {obj.name}: modelled {math.degrees(angle):.0f}° open", flush=True)
-            how = f"opening {match['opening'].num}"
+            num = match["opening"].num
+            if num in used:
+                raise RuntimeError(f"door leaves {used[num]!r} and {obj.name!r} both match opening {num}")
+            used[num] = obj.name
+            choice = geom.door_pose(match, ends[0], ends[1], lambda x, z: grid.is_blocked(x, z, raw=True), obj.name)
+            angle, to_closed = choice["angle"], choice["to_closed"]
+            how = f"opening {num}" + (" (modelled closed; swing heuristic)" if choice["closed"] else "")
         else:
             choice = geom.choose_door_swing(
                 ends[0], ends[1], lambda x, z: grid.is_blocked(x, z, raw=True), overrides.get(obj.name)

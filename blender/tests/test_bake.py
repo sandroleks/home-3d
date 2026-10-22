@@ -48,7 +48,7 @@ class BakeAllTests(unittest.TestCase):
         meshes, day = scene_select.prepare_scene(scene, bpy.context.view_layer)
         index, room_list = rooms.collect_rooms(meshes, scene)
         leaf = bpy.data.objects["Door leaf 1"]
-        static = [o for o in meshes if o != leaf]
+        static = [o for o in meshes if not o.name.startswith("Door leaf")]
         chunk_list = chunks.build_chunks(static, index)
         q = config.QUALITY["test"]
         for c in chunk_list:
@@ -100,8 +100,7 @@ class RoomIsolationTests(unittest.TestCase):
         scene = bpy.context.scene
         meshes, day = scene_select.prepare_scene(scene, bpy.context.view_layer)
         index, room_list = rooms.collect_rooms(meshes, scene)
-        leaf = bpy.data.objects["Door leaf 1"]
-        chunk_list = chunks.build_chunks([o for o in meshes if o != leaf], index)
+        chunk_list = chunks.build_chunks([o for o in meshes if not o.name.startswith("Door leaf")], index)
         q = config.QUALITY["test"]
         for c in chunk_list:
             c["size"] = uvs.add_lightmap_uvs(bpy.data.objects[c["node"]], q.lightmap_texels_per_m, q.lightmap_min, q.lightmap_max)
