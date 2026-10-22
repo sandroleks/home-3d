@@ -1,0 +1,23 @@
+{
+  "name": "apartment-walkthrough",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "postinstall": "node scripts/copy-draco.mjs"
+  },
+  "dependencies": {
+    "three": "0.170.0",
+    "three-mesh-bvh": "0.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.9.0",
+    "@types/three": "0.170.0",
+    "typescript": "5.6.3",
+    "vite": "5.4.11",
+    "vitest": "2.1.8"
+  }
+}
