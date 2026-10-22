@@ -1,7 +1,8 @@
 """A tiny two-room apartment that follows the real file's naming conventions.
 
 Blender coordinates (Z up). Alpha: x 0..3, y 0..3. Beta: x 3.2..6, y 0..3.
-A 0.2 m wall at x 3.0..3.2 has an opening at y 1.0..1.8 with a door leaf.
+A 0.2 m wall at x 3.0..3.2 has an opening at y 1.0..1.8 whose door leaf is modelled open into
+Alpha (hinge at (3.1, 1.78)), and an infilled opening at y 2.2..2.8 with a leftover leaf open in Beta.
 """
 import math
 
@@ -116,11 +117,15 @@ def build():
         (-0.2, 0, 0, 0, 3.0, 2.6),
         (6.0, 0, 0, 6.2, 3.0, 2.6),
         (3.0, 0, 0, 3.2, 1.0, 2.6),
-        (3.0, 1.8, 0, 3.2, 3.0, 2.6),
+        (3.0, 1.8, 0, 3.2, 2.2, 2.6),
+        (3.0, 2.8, 0, 3.2, 3.0, 2.6),
     ], plaster, structure)
     box_object("Door 1 (Alpha / Beta) lintel", [(3.0, 1.0, 2.05, 3.2, 1.8, 2.6)], plaster, structure)
+    box_object("Door 2 (Alpha / Beta) lintel", [(3.0, 2.2, 2.05, 3.2, 2.8, 2.6)], plaster, structure)
+    box_object("Door 2 infill", [(3.0, 2.2, 0, 3.2, 2.8, 2.05)], plaster, structure)
     box_object("Ceiling", [(-0.2, -0.2, 2.6, 6.2, 3.2, 2.7)], plaster, ceiling).hide_render = True
-    box_object("Door leaf 1", [(3.08, 1.02, 0, 3.12, 1.78, 2.0)], wood, doors)
+    box_object("Door leaf 1", [(2.34, 1.76, 0, 3.10, 1.80, 2.0)], wood, doors)  # open 90° into Alpha
+    box_object("Door leaf 2", [(3.12, 2.20, 0, 3.68, 2.24, 2.0)], wood, doors)  # open, infilled doorway
     box_object("Shelf", [(3.4, 0.5, 0, 3.9, 1.3, 1.2)], wood, furniture)
     box_object("Lamp", [(5.5, 2.5, 0, 5.8, 2.8, 0.5)], glow, furniture)
     sofa = box_object("Hidden sofa", [(1.0, 2.0, 0, 2.5, 2.8, 0.8)], wood, variant)

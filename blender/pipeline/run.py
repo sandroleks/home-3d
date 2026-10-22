@@ -31,7 +31,8 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
         return ctx
 
     leaves = [o for o in meshes if o.name.startswith("Door leaf")]
-    door_specs = doors.prepare_doors(leaves, grid, config.DOOR_OVERRIDES)
+    static = [o for o in meshes if not o.name.startswith("Door leaf")]
+    door_specs = doors.prepare_doors(leaves, grid, config.DOOR_OVERRIDES, ops, infilled)  # may delete leaves
     ctx["doors"] = door_specs
     if stop_after == "doors":
         return ctx
@@ -42,8 +43,6 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
     if stop_after == "switches":
         return ctx
 
-    door_names = {d["node"] for d in door_specs}
-    static = [o for o in meshes if o.name not in door_names]
     chunk_list = chunks.build_chunks(static, floor_index)
     ctx["chunks"] = chunk_list
     if stop_after == "chunks":

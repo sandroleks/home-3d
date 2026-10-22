@@ -1,13 +1,21 @@
-"""Move each door leaf's origin to its hinge and decide which way it swings."""
+"""Close each door leaf into its doorway, move its origin to the hinge, and record how it opens.
+
+The real file models leaves open (90° into the room). A leaf is matched to the opening whose
+jamb end is nearest one of its ends; that end is the hinge, the modelled pose becomes the open
+state, and the mesh is rotated into the doorway so it is baked closed. A leaf that matches no
+opening falls back to the swing heuristic (geom.choose_door_swing, DOOR_OVERRIDES).
+"""
 import math
 import re
 
+import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
 from . import bpyutil, geom
 
 NUM_RE = re.compile(r"(\d+)")
+HINGE_MATCH_DIST = 0.25
 
 
 def _number(name):
@@ -15,7 +23,7 @@ def _number(name):
     return int(m.group(1)) if m else 0
 
 
-def prepare_doors(door_objs, grid, overrides):
+def prepare_doors(door_objs, grid, overrides, openings, infilled):
     specs = []
     for obj in sorted(door_objs, key=lambda o: _number(o.name)):
         n = _number(obj.name)
@@ -27,13 +35,28 @@ def prepare_doors(door_objs, grid, overrides):
              (center[0] + u[0] * width / 2, center[1] + u[1] * width / 2)],
             key=lambda p: (round(p[0], 3), round(p[1], 3)),
         )
-        choice = geom.choose_door_swing(
-            ends[0], ends[1], lambda x, z: grid.is_blocked(x, z, raw=True), overrides.get(obj.name)
-        )
+        match = geom.door_from_opening(ends[0], ends[1], openings, HINGE_MATCH_DIST)
+        if match and match["opening"].num in infilled:
+            print(f"[doors] {obj.name}: opening {match['opening'].num} is infilled; leaf removed", flush=True)
+            bpy.data.objects.remove(obj, do_unlink=True)
+            continue
+        if match:
+            choice = {"hinge": match["hinge"], "dir": match["dir"], "width": match["width"]}
+            angle = to_closed = match["angle"]
+            if abs(abs(angle) - math.pi / 2) > math.radians(30):
+                print(f"[doors] WARNING {obj.name}: modelled {math.degrees(angle):.0f}° open", flush=True)
+            how = f"opening {match['opening'].num}"
+        else:
+            choice = geom.choose_door_swing(
+                ends[0], ends[1], lambda x, z: grid.is_blocked(x, z, raw=True), overrides.get(obj.name)
+            )
+            angle, to_closed = choice["sign"] * math.pi / 2, 0.0  # assumed modelled closed
+            how = "fallback swing heuristic"
         hx, hz = choice["hinge"]
         bx, by = geom.from_three_xz(hx, hz)
         hinge = Vector((bx, by, float(co[:, 2].min())))
-        obj.data.transform(Matrix.Translation(-hinge))
+        # Into the closed pose: rotation about three.js Y equals rotation about Blender Z.
+        obj.data.transform(Matrix.Rotation(-to_closed, 4, "Z") @ Matrix.Translation(-hinge))
         obj.location = hinge
         obj.name = f"Door_{n}"
         specs.append({
@@ -42,7 +65,8 @@ def prepare_doors(door_objs, grid, overrides):
             "hinge": [round(hx, 4), round(hz, 4)],
             "dir": [round(choice["dir"][0], 5), round(choice["dir"][1], 5)],
             "width": round(choice["width"], 4),
-            "openAngle": round(choice["sign"] * math.pi / 2, 5),
+            "openAngle": round(angle, 5),
         })
-        print(f"[doors] {obj.name}: hinge {specs[-1]['hinge']} sign {choice['sign']}", flush=True)
+        print(f"[doors] {obj.name}: {how}, hinge {specs[-1]['hinge']} dir {specs[-1]['dir']} "
+              f"open {math.degrees(angle):.1f}°", flush=True)
     return specs

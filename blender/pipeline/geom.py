@@ -153,6 +153,36 @@ def choose_door_swing(end_a, end_b, is_blocked, override=None):
     return best[1]
 
 
+def rot_y_angle(d, t):
+    """Signed phi with rot_y(d, phi) == t, for unit ground-plane vectors d and t."""
+    return math.atan2(t[0] * d[1] - t[1] * d[0], d[0] * t[0] + d[1] * t[1])
+
+
+def door_from_opening(end_a, end_b, openings, max_dist):
+    """Match a leaf modelled open to its doorway.
+
+    end_a, end_b: the leaf's two ends; openings: objects with center, u, width, num.
+    The leaf end nearest an opening's jamb end (within max_dist) is the hinge. Returns
+    {"opening", "hinge", "dir" (closed: hinge jamb toward the other jamb), "open" (hinge
+    to free end as modelled), "angle" (rot_y from dir to open)}, or None if nothing is close.
+    """
+    best = None
+    for op in openings:
+        c, u, half = op.center, op.u, op.width / 2
+        for jsign in (1, -1):
+            jamb = (c[0] + u[0] * half * jsign, c[1] + u[1] * half * jsign)
+            for hinge, free in ((end_a, end_b), (end_b, end_a)):
+                dist = math.hypot(hinge[0] - jamb[0], hinge[1] - jamb[1])
+                if dist <= max_dist and (best is None or dist < best[0]):
+                    best = (dist, op, hinge, free, (-u[0] * jsign, -u[1] * jsign))
+    if best is None:
+        return None
+    _, op, hinge, free, d = best
+    w = math.hypot(free[0] - hinge[0], free[1] - hinge[1])
+    t = ((free[0] - hinge[0]) / w, (free[1] - hinge[1]) / w)
+    return {"opening": op, "hinge": tuple(hinge), "dir": d, "open": t, "width": w, "angle": rot_y_angle(d, t)}
+
+
 def yaw_pitch_from_forward(f):
     """three.js camera yaw/pitch (rotation order YXZ) for a forward vector."""
     fx, fy, fz = f

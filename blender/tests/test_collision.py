@@ -40,15 +40,17 @@ class FixtureCollisionTests(unittest.TestCase):
         cls.ops, cls.infilled = openings.parse_openings(meshes)
         cls.grid = collision.build_collision(meshes, index, cls.ops)
 
-    def test_parses_the_door_opening(self):
-        self.assertEqual(len(self.ops), 1)
+    def test_parses_the_door_openings(self):
+        self.assertEqual([o.num for o in self.ops], [1, 2])
         op = self.ops[0]
         self.assertEqual((op.num, op.glazed, op.rooms), (1, False, ("Alpha", "Beta")))
         self.assertAlmostEqual(op.center[0], 3.1, places=3)
         self.assertAlmostEqual(op.center[1], -1.4, places=3)
         self.assertAlmostEqual(op.width, 0.8, places=3)
         self.assertAlmostEqual(op.thickness, 0.2, places=3)
-        self.assertEqual(self.infilled, set())
+        self.assertEqual(self.infilled, {2})
+        self.assertAlmostEqual(self.ops[1].center[1], -2.5, places=3)
+        self.assertAlmostEqual(self.ops[1].width, 0.6, places=3)
 
     def test_occupancy(self):
         g = self.grid
@@ -56,6 +58,7 @@ class FixtureCollisionTests(unittest.TestCase):
         self.assertTrue(g.is_blocked(1.5, -1.5))    # table
         self.assertTrue(g.is_blocked(3.1, -0.5))    # middle wall
         self.assertFalse(g.is_blocked(3.1, -1.4))   # doorway (door leaf is dynamic)
+        self.assertTrue(g.is_blocked(3.1, -2.5))    # infilled doorway (the infill is near every sample)
         self.assertTrue(g.is_blocked(3.65, -0.9))   # shelf
         self.assertTrue(g.is_blocked(-1.0, -1.0))   # outside
         self.assertTrue(g.is_blocked(0.1, -1.5))    # within radius of the west wall
