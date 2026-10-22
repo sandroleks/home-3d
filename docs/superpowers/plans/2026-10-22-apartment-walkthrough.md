@@ -3375,7 +3375,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 }
 ```
 
-Also add `"@types/node": "22.9.0"` to `devDependencies` (the tests read the shared fixture with `node:fs`).
+Also add `"@types/node": "22.19.0"` to `devDependencies` (the tests read the shared fixture with `node:fs`).
 
 `web/vite.config.ts`:
 
