@@ -1,5 +1,5 @@
 import {
-  AgXToneMapping, BufferGeometry, Color, Mesh, MeshStandardMaterial, PerspectiveCamera, PMREMGenerator,
+  AgXToneMapping, BufferGeometry, Mesh, MeshStandardMaterial, PerspectiveCamera, PMREMGenerator,
   Scene, SRGBColorSpace, WebGLRenderer,
 } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
@@ -57,7 +57,7 @@ async function run(): Promise<void> {
   });
 
   const scene = new Scene();
-  const surroundings = new Surroundings(new Color(CONFIG.skyColor));
+  const surroundings = new Surroundings();
   scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = CONFIG.envIntensity;
 
@@ -81,7 +81,6 @@ async function run(): Promise<void> {
   const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings);
   let real = loadRealLighting(() => localStorage);
   daylight.setReal(real);
-  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, world, daylight, clock, CONFIG, LIGHT_SPILL } }); // tuning from the console
   assets.surroundings.then((root) => {
     if (!root) return;
     surroundings.add(root);
@@ -91,6 +90,7 @@ async function run(): Promise<void> {
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, CONFIG, LIGHT_SPILL } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;
@@ -268,6 +268,7 @@ async function run(): Promise<void> {
     }
     world.lights.update(dt);
     applyGlows(world.glows, world.lights);
+    surroundings.sky.tick(now / 1000);
     renderer.clear();
     surroundings.render(renderer, camera);
     renderer.clearDepth();

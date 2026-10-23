@@ -3,6 +3,7 @@ import {
   type WebGLRenderer,
 } from 'three';
 import { CONFIG } from './config';
+import { Sky, type SkyState } from './sky';
 
 /** Flat ground layers (grass, asphalt, water…) lie in one plane; the bigger the layer, the further back it draws. */
 export function groundOffsets(layers: { flat: boolean; area: number }[]): number[] {
@@ -85,20 +86,21 @@ export function prepareSurroundings(root: Object3D, light: SurroundingsLight): v
 }
 
 /**
- * The neighbourhood outside the windows. It is drawn first, with its own camera reaching kilometres
+ * The neighbourhood outside the windows, in front of the sky. It is drawn first, with its own camera reaching kilometres
  * out, then the apartment on top after a depth clear, so the apartment keeps its depth precision.
  */
 export class Surroundings {
   readonly scene = new Scene();
   readonly light = makeSurroundingsLight();
+  readonly sky = new Sky();
   private camera = new PerspectiveCamera();
 
-  constructor(sky: Color) {
-    this.scene.background = sky.clone();
+  constructor() {
+    this.scene.add(this.sky.mesh);
   }
 
-  setSky(color: Color): void {
-    (this.scene.background as Color).copy(color);
+  setSky(state: SkyState): void {
+    this.sky.set(state);
   }
 
   add(root: Object3D): void {

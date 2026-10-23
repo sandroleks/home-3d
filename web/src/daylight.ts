@@ -6,6 +6,7 @@ import type { KeyValueStore } from './audio';
 import { type Climate, skyDiffuse, skyScale, sunStrength, typicalIrradiance } from './climate';
 import { CONFIG } from './config';
 import type { Manifest, WindowInfo } from './manifest';
+import { cloudCover } from './sky';
 import { solarPosition, sunVector } from './sun';
 import type { Surroundings } from './surroundings';
 import type { World } from './world';
@@ -25,17 +26,6 @@ export function sunColor(elevation: number): Color {
 export function sunFade(elevation: number): number {
   const t = clamp01((elevation + 0.5) / 1);
   return t * t * (3 - 2 * t);
-}
-
-/** Flat colour behind the neighbourhood: day, then a sunset band, then night by the end of civil twilight. */
-export function skyColor(elevation: number): Color {
-  const day = new Color(CONFIG.skyColor);
-  const sunset = new Color(CONFIG.sun.sunsetSky);
-  const night = new Color(CONFIG.sun.nightSky);
-  if (elevation >= 6) return day;
-  if (elevation >= 0) return sunset.lerp(day, elevation / 6);
-  if (elevation >= -6) return night.lerp(sunset, (elevation + 6) / 6);
-  return night;
 }
 
 /** Triangles (as flat xyz positions) whose centre lies within `radius` of `centre` on the ground plane. */
@@ -231,7 +221,8 @@ export class Daylight {
     this.scene.environmentIntensity = envIntensityFor(scale);
     this.ambient.intensity = ambientFor(sun.elevation);
 
-    this.surroundings.setSky(skyColor(sun.elevation));
+    const month = this.climate.months[new Date(utc).getUTCMonth()];
+    this.surroundings.setSky({ dir, elevation: sun.elevation, cover: cloudCover(month.cloudCover), sunColor: color, sunVisible: sunFade(sun.elevation) });
     const s = this.surroundings.light;
     s.sunDir.value.set(dir[0], dir[1], dir[2]);
     s.sunLight.value.copy(color).multiplyScalar(strength);
@@ -248,8 +239,8 @@ export class Daylight {
     this.world.sky.value = f.sky;
     this.scene.environmentIntensity = envIntensityFor(f.sky);
     this.ambient.intensity = f.ambient;
-    this.surroundings.setSky(new Color(CONFIG.skyColor));
     const dir = sunVector({ elevation: f.outsideSun.elevation, azimuth: f.outsideSun.azimuth }, site.yBearing);
+    this.surroundings.setSky({ dir, elevation: f.outsideSun.elevation, cover: CONFIG.sky.flatCloudCover, sunColor: WHITE, sunVisible: 1 });
     const s = this.surroundings.light;
     s.sunDir.value.set(dir[0], dir[1], dir[2]);
     s.sunLight.value.copy(WHITE).multiplyScalar(f.outsideSun.watts * sky.wattsToScene);

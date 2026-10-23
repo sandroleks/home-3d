@@ -17,8 +17,22 @@ export const CONFIG = {
   lightmapScale: Math.PI,
   // The room-environment reflections, scaled by the sky; higher values add light Cycles doesn't have.
   envIntensity: 0.0015,
-  /** Flat daylight sky seen through the windows. */
+  /** The daytime sky at the horizon, seen through the windows. */
   skyColor: '#cfdbe6',
+  sky: {
+    zenith: '#7ea6d4',
+    sunsetZenith: '#5a6f9e',
+    nightZenith: '#04070f',
+    /** Around the sun: faint and white by day, strong and orange near sunset. */
+    dayGlow: '#fff4dc',
+    sunsetGlow: '#ff9a4a',
+    /** Angular radius of the drawn disc in degrees; the real sun's is 0.27, too small to see at this resolution. */
+    sunRadius: 0.8,
+    /** Share of the month's mean cloud cover that is drawn: the mean includes overcast days, which the typical day's light doesn't show. */
+    cloudScale: 0.6,
+    /** Cloud cover with real lighting off. */
+    flatCloudCover: 0.25,
+  },
   /** Near/far of the surroundings pass: the building's own facade is just below the windows, the sea kilometres out. */
   surroundingsNear: 0.3,
   surroundingsFar: 20000,

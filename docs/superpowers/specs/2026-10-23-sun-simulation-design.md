@@ -21,7 +21,7 @@ Light the walkthrough with the real sun for any date and time. Sunlight should e
 
 **Out:**
 - Weather for a specific day in the past, and runtime network calls.
-- Visible clouds, a sun disc, the moon and stars.
+- Visible clouds, a sun disc, the moon and stars. (Clouds and the sun disc were added later: `docs/superpowers/plans/2026-10-23-doors-sun-and-sky.md`.)
 - Street lights.
 - Neighbours shadowing each other in the view through the windows.
 - Baked sun-bounce layers. That was option C; it can be added later on top of this design.

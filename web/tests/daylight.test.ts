@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { parseClimate } from '../src/climate';
 import { CONFIG } from '../src/config';
 import {
-  ambientFor, casterPositions, Daylight, enteringLight, loadRealLighting, saveRealLighting, envIntensityFor, gainedSkyScale, paneSamples, roomFill, skyColor, sunColor, sunFade,
+  ambientFor, casterPositions, Daylight, enteringLight, loadRealLighting, saveRealLighting, envIntensityFor, gainedSkyScale, paneSamples, roomFill, sunColor, sunFade,
 } from '../src/daylight';
 import { type Manifest, parseManifest, type WindowInfo } from '../src/manifest';
+import { cloudCover } from '../src/sky';
 import { fromLocal, solarPosition, sunVector } from '../src/sun';
 import { Surroundings } from '../src/surroundings';
 import type { World } from '../src/world';
@@ -20,13 +21,6 @@ describe('colours', () => {
     expect(sunFade(1)).toBe(1);
     expect(sunFade(-1)).toBe(0);
     expect(sunFade(0)).toBeCloseTo(0.5);
-  });
-
-  it('runs the sky from day through sunset to night', () => {
-    expect(skyColor(20).getHex()).toBe(new Color(CONFIG.skyColor).getHex());
-    expect(skyColor(0).getHex()).toBe(new Color(CONFIG.sun.sunsetSky).getHex());
-    expect(skyColor(-6).getHex()).toBe(new Color(CONFIG.sun.nightSky).getHex());
-    expect(skyColor(-20).getHex()).toBe(new Color(CONFIG.sun.nightSky).getHex());
   });
 });
 
@@ -111,9 +105,10 @@ function setup(blockSun: boolean) {
   const world = { root, sky: { value: 1 }, fills, occluders } as unknown as World;
   const renderer = { shadowMap: {} } as unknown as WebGLRenderer;
   const scene = new Scene();
-  const daylight = new Daylight(renderer, scene, world, m, climate(), new Surroundings(new Color(0xffffff)));
+  const surroundings = new Surroundings();
+  const daylight = new Daylight(renderer, scene, world, m, climate(), surroundings);
   const internals = daylight as unknown as { casters: Group; occluders: Mesh[] };
-  return { daylight, renderer, world, fills, scene, internals };
+  return { daylight, renderer, world, fills, scene, internals, surroundings, dir };
 }
 
 const drawn = (r: WebGLRenderer) => (r.shadowMap as { needsUpdate?: boolean }).needsUpdate === true;
@@ -191,6 +186,30 @@ describe('Daylight.apply', () => {
     daylight.update(SUMMER_EVENING, 1, false);
     expect(daylight.light.intensity).toBeGreaterThan(0);
     expect(fills.get('alpha')!.value.toArray()).toEqual([0, 0, 0]);
+  });
+});
+
+describe('Daylight sky', () => {
+  it('puts the sun where the sun light comes from, with the month\'s clouds, and hides it at night', () => {
+    const { daylight, surroundings, dir } = setup(false);
+    const u = surroundings.sky.uniforms;
+    daylight.update(SUMMER_EVENING, 1, false);
+    expect(u.sunDir.value.toArray().map((v) => +v.toFixed(6))).toEqual(dir.map((v) => +v.toFixed(6)));
+    expect(u.sunVisible.value).toBe(1);
+    expect(u.cover.value).toBeCloseTo(cloudCover(40));
+    expect(u.sunColor.value.getHex()).toBe(daylight.light.color.getHex());
+    daylight.update(NIGHT, 2, false);
+    expect(u.sunVisible.value).toBe(0);
+  });
+
+  it('shows a fixed sun and cloud cover with real lighting off', () => {
+    const { daylight, surroundings } = setup(false);
+    daylight.setReal(false);
+    daylight.update(NIGHT, 1, false);
+    const u = surroundings.sky.uniforms;
+    expect(u.sunVisible.value).toBe(1);
+    expect(u.cover.value).toBe(CONFIG.sky.flatCloudCover);
+    expect(u.sunDir.value.y).toBeCloseTo(Math.sin((CONFIG.flatLighting.outsideSun.elevation * Math.PI) / 180));
   });
 });
 
