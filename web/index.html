@@ -21,7 +21,8 @@
         <li><kbd>,</kbd><kbd>.</kbd> change the time</li>
         <li><kbd>Shift</kbd> + <kbd>,</kbd><kbd>.</kbd> change the date</li>
         <li><kbd>P</kbd> play the day</li>
-        <li><kbd>Esc</kbd> pause, set the date and time</li>
+        <li><kbd>R</kbd> real sun and sky on or off</li>
+        <li><kbd>Esc</kbd> pause, use the sun panel</li>
       </ul>
       <p id="error" hidden></p>
       <button id="retry-button" hidden>Try again</button>
@@ -30,36 +31,41 @@
       <div id="crosshair"></div>
       <div id="room-name"></div>
       <div id="prompt" hidden></div>
-      <div id="sun-clock"></div>
       <div id="muted" hidden>
         <svg viewBox="0 0 24 24" role="img" aria-label="Sound muted"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 9l5 6M21 9l-5 6" /></svg>
       </div>
+      <section id="sun-panel" aria-label="Sun">
+        <div class="sun-head">
+          <h2 id="sun-clock"></h2>
+          <label class="sun-real"><input id="sun-real" type="checkbox" /> Real sun and sky</label>
+        </div>
+        <fieldset id="sun-controls">
+          <label class="sun-row"><span>Date</span><input id="sun-date" type="range" min="1" max="365" step="1" /></label>
+          <div class="sun-months" aria-hidden="true">
+            <span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span>
+            <span>J</span><span>A</span><span>S</span><span>O</span><span>N</span><span>D</span>
+          </div>
+          <div class="sun-buttons">
+            <button type="button" data-season="12-21">Winter</button>
+            <button type="button" data-season="3-20">Spring</button>
+            <button type="button" data-season="6-21">Summer</button>
+            <button type="button" data-season="9-22">Autumn</button>
+          </div>
+          <label class="sun-row"><span>Time</span><input id="sun-time" type="range" min="0" max="1435" step="5" /></label>
+          <div class="sun-track" aria-hidden="true"><i id="sun-rise" title="Sunrise"></i><i id="sun-set" title="Sunset"></i></div>
+          <div class="sun-buttons">
+            <button type="button" id="sun-now">Now</button>
+            <button type="button" id="sun-play">Play</button>
+          </div>
+        </fieldset>
+        <p id="sun-readout" aria-live="polite"></p>
+        <p class="sun-hint">Press <kbd>Esc</kbd> to use this panel</p>
+      </section>
     </div>
     <div id="pause" class="overlay" hidden>
       <p>Paused</p>
-      <section id="sun-panel" aria-label="Sun">
-        <h2>Sun</h2>
-        <label class="sun-row"><span>Date</span><input id="sun-date" type="range" min="1" max="365" step="1" /></label>
-        <div class="sun-months" aria-hidden="true">
-          <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
-          <span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span>
-        </div>
-        <div class="sun-buttons">
-          <button type="button" data-season="12-21">Winter solstice</button>
-          <button type="button" data-season="3-20">Spring equinox</button>
-          <button type="button" data-season="6-21">Summer solstice</button>
-          <button type="button" data-season="9-22">Autumn equinox</button>
-        </div>
-        <label class="sun-row"><span>Time</span><input id="sun-time" type="range" min="0" max="1435" step="5" /></label>
-        <div class="sun-track" aria-hidden="true"><i id="sun-rise" title="Sunrise"></i><i id="sun-set" title="Sunset"></i></div>
-        <div class="sun-buttons">
-          <button type="button" id="sun-now">Now</button>
-          <button type="button" id="sun-play">Play</button>
-        </div>
-        <p id="sun-readout" aria-live="polite"></p>
-        <button type="button" id="resume-button">Keep exploring</button>
-      </section>
-      <p class="hint">Click outside the panel to keep exploring</p>
+      <button type="button" id="resume-button">Keep exploring</button>
+      <p class="hint">Set the date and time in the sun panel, bottom left</p>
     </div>
     <div id="notice" class="overlay" hidden><p id="notice-text"></p></div>
     <script type="module" src="/src/main.ts"></script>

@@ -4,6 +4,7 @@ export const COPY = {
   mobile: 'Best viewed on desktop. This walkthrough needs a keyboard and mouse.',
   contextLost: 'The 3D view stopped responding. Reload to continue.',
   noWebGL: "Your browser doesn't support WebGL 2, which this walkthrough needs. Try a recent Chrome, Firefox, Safari or Edge.",
+  flatLighting: 'Real sun and sky off: the same even daylight at any time.',
 };
 
 export function isTouchOnly(matchMedia: (q: string) => { matches: boolean }): boolean {
@@ -16,6 +17,7 @@ export interface SunPanelHandlers {
   minutes(m: number): void;
   now(): void;
   play(): void;
+  real(on: boolean): void;
 }
 export interface SunPanelState {
   dayOfYear: number;
@@ -25,11 +27,11 @@ export interface SunPanelState {
   sunset: number | null;
   readout: string;
   playing: boolean;
+  real: boolean;
 }
 
 export class UI {
   private lastRoom = '';
-  private clockTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private doc: Document) {}
 
@@ -86,21 +88,21 @@ export class UI {
     this.el('pause').hidden = !paused;
   }
 
+  /** While walking the mouse is captured: the sun panel only shows. */
+  setWalking(walking: boolean): void {
+    this.doc.body.classList.toggle('walking', walking);
+    if (walking) (this.doc.activeElement as HTMLElement | null)?.blur?.(); // a focused slider would eat the arrow keys
+  }
+
   setMuted(muted: boolean): void {
     this.el('muted').hidden = !muted;
   }
 
-  /** Resumes on Keep exploring, or on a click anywhere on the pause screen outside the sun panel. */
+  /** Resumes on Keep exploring or a click on the pause veil (the sun panel sits above it, outside #pause). */
   onResume(cb: () => void): void {
-    const panel = this.el('sun-panel');
     const pause = this.el('pause');
-    let pressInPanel = false; // a drag that starts on a slider and ends outside the panel clicks #pause
-    pause.addEventListener('pointerdown', (e) => {
-      pressInPanel = panel.contains(e.target as Node);
-    });
     pause.addEventListener('click', (e) => {
-      if (!pressInPanel && !panel.contains(e.target as Node)) cb();
-      pressInPanel = false;
+      if (!(e.target as HTMLElement).closest('button')) cb(); // the button has its own listener
     });
     this.el('resume-button').addEventListener('click', cb);
   }
@@ -116,6 +118,8 @@ export class UI {
     }
     this.el('sun-now').addEventListener('click', () => h.now());
     this.el('sun-play').addEventListener('click', () => h.play());
+    const real = this.el<HTMLInputElement>('sun-real');
+    real.addEventListener('change', () => h.real(real.checked));
   }
 
   setSunPanel(s: SunPanelState): void {
@@ -134,16 +138,14 @@ export class UI {
     mark('sun-set', s.sunset);
     this.el('sun-readout').textContent = s.readout;
     this.el('sun-play').textContent = s.playing ? 'Pause' : 'Play';
+    this.el<HTMLInputElement>('sun-real').checked = s.real;
+    this.el<HTMLFieldSetElement>('sun-controls').disabled = !s.real;
   }
 
-  /** The HUD's date and time; it brightens briefly whenever it changes. */
+  /** The date and time at the top of the sun panel. */
   setClock(text: string): void {
     const c = this.el('sun-clock');
-    if (c.textContent === text) return;
-    c.textContent = text;
-    c.classList.add('flash');
-    clearTimeout(this.clockTimer);
-    this.clockTimer = setTimeout(() => c.classList.remove('flash'), 1500);
+    if (c.textContent !== text) c.textContent = text;
   }
 
   showNotice(text: string): void {

@@ -14,6 +14,9 @@ export interface LightmapBinding {
   fill: { value: Color };
 }
 
+/** Shared by every lightmapped material: the lamp light that's there with the lights off (CONFIG.lightSpill). */
+export const LIGHT_SPILL = { value: CONFIG.lightSpill };
+
 export const BLACK_LIGHTMAP = (() => {
   const t = new DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
   t.needsUpdate = true;
@@ -35,6 +38,7 @@ uniform sampler2D lmLight;
 uniform float lmDayRange;
 uniform float lmLightRange;
 uniform float lmLightIntensity;
+uniform float lmLightSpill;
 uniform float lmScale;
 uniform float lmSkyScale;
 uniform vec3 lmFill;
@@ -43,7 +47,7 @@ ${RGBM_GLSL}`;
 const ACCUMULATE = /* glsl */ `
 #if defined( RE_IndirectDiffuse )
 	irradiance += ( lmSkyScale * rgbmDecode( texture( lmDay, vLmUv ), lmDayRange )
-		+ lmLightIntensity * rgbmDecode( texture( lmLight, vLmUv ), lmLightRange ) ) * lmScale
+		+ max( lmLightIntensity, lmLightSpill ) * rgbmDecode( texture( lmLight, vLmUv ), lmLightRange ) ) * lmScale
 		+ lmFill;
 #endif`;
 
@@ -67,6 +71,7 @@ export function applyLightmap(material: MeshStandardMaterial, b: LightmapBinding
     lmDayRange: { value: b.dayRange },
     lmLightRange: { value: b.lightRange },
     lmLightIntensity: b.intensity,
+    lmLightSpill: LIGHT_SPILL,
     lmScale: { value: scale },
     lmSkyScale: b.sky,
     lmFill: b.fill,
@@ -77,7 +82,7 @@ export function applyLightmap(material: MeshStandardMaterial, b: LightmapBinding
     shader.vertexShader = patchVertex(shader.vertexShader);
     shader.fragmentShader = patchFragment(shader.fragmentShader);
   };
-  material.customProgramCacheKey = () => 'room-lightmap-v2';
+  material.customProgramCacheKey = () => 'room-lightmap-v3';
   material.needsUpdate = true;
 }
 

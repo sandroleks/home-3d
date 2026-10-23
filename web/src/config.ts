@@ -8,9 +8,11 @@ export const CONFIG = {
   mouseSensitivity: 0.0022,
   doorDuration: 0.6,
   lightFadeDuration: 0.4,
+  /** Share of each room's own baked lamp light that is always there, lights off or not: light spilling in from elsewhere, so unlit rooms keep their shape rather than going flat or black. */
+  lightSpill: 0.02,
   interactDistance: 2.5,
-  /** Blender renders at +0.5 EV. */
-  exposure: Math.pow(2, 0.5),
+  /** Blender renders at +0.5 EV; the walkthrough runs 0.8 EV brighter than the Cycles references, which read too dark on screen. */
+  exposure: Math.pow(2, 1.3),
   /** Cycles' diffuse light pass is outgoing/albedo; three.js wants irradiance (×π). */
   lightmapScale: Math.PI,
   // The room-environment reflections, scaled by the sky; higher values add light Cycles doesn't have.
@@ -41,6 +43,17 @@ export const CONFIG = {
     warmColor: '#ffb070',
     sunsetSky: '#f2a46b',
     nightSky: '#0d1424',
+    /** Even light on top of the bake (three ambient intensity; pi gives full albedo), so corners and windowless rooms aren't black. Fades from day to night over civil twilight. */
+    ambient: { day: 0.15, night: 0.03, color: '#fff2e2' },
+  },
+  /** Real lighting off: the same even daylight whatever the date and time. */
+  flatLighting: {
+    /** Baked sky layer brightness; real days run from about 0.5 (winter sunset) to 4.7 (summer noon). */
+    sky: 3,
+    ambient: 0.15,
+    /** The neighbourhood's lighting (W/m²) and the sun's direction (degrees) outside. */
+    outsideSun: { elevation: 50, azimuth: 200, watts: 500 },
+    outsideSky: 150,
   },
   /** Optional display names by room id, e.g. { sala: 'Living room' }. */
   roomNames: {} as Record<string, string>,

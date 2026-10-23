@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { parseClimate } from '../src/climate';
 import { CONFIG } from '../src/config';
 import {
-  casterPositions, Daylight, enteringLight, envIntensityFor, gainedSkyScale, paneSamples, roomFill, skyColor, sunColor, sunFade,
+  ambientFor, casterPositions, Daylight, enteringLight, loadRealLighting, saveRealLighting, envIntensityFor, gainedSkyScale, paneSamples, roomFill, skyColor, sunColor, sunFade,
 } from '../src/daylight';
 import { type Manifest, parseManifest, type WindowInfo } from '../src/manifest';
 import { fromLocal, solarPosition, sunVector } from '../src/sun';
@@ -170,6 +170,14 @@ describe('Daylight.apply', () => {
     for (const f of fills.values()) expect(f.value.toArray()).toEqual([0, 0, 0]);
   });
 
+  it('keeps the night ambient after dark and the day ambient in daylight', () => {
+    const { daylight } = setup(false);
+    daylight.update(NIGHT, 1, false);
+    expect(daylight.ambient.intensity).toBeCloseTo(CONFIG.sun.ambient.night);
+    daylight.update(SUMMER_EVENING, 2, false);
+    expect(daylight.ambient.intensity).toBeGreaterThan(CONFIG.sun.ambient.night);
+  });
+
   it('fills a room whose window faces the sun', () => {
     const { daylight, fills } = setup(false);
     daylight.update(SUMMER_EVENING, 1, false);
@@ -183,6 +191,48 @@ describe('Daylight.apply', () => {
     daylight.update(SUMMER_EVENING, 1, false);
     expect(daylight.light.intensity).toBeGreaterThan(0);
     expect(fills.get('alpha')!.value.toArray()).toEqual([0, 0, 0]);
+  });
+});
+
+describe('real lighting off', () => {
+  it('lights every moment the same: no sun, the flat sky and ambient, no fill', () => {
+    const { daylight, world, fills, renderer } = setup(false);
+    daylight.update(SUMMER_EVENING, 1, false);
+    reset(renderer);
+    daylight.setReal(false);
+    daylight.update(SUMMER_EVENING, 1, false); // same moment: the switch alone re-applies
+    expect(daylight.light.intensity).toBe(0);
+    expect(drawn(renderer)).toBe(false);
+    expect(world.sky.value).toBe(CONFIG.flatLighting.sky);
+    expect(daylight.ambient.intensity).toBe(CONFIG.flatLighting.ambient);
+    for (const f of fills.values()) expect(f.value.toArray()).toEqual([0, 0, 0]);
+    daylight.update(NIGHT, 2, false);
+    expect(world.sky.value).toBe(CONFIG.flatLighting.sky);
+    daylight.setReal(true);
+    daylight.update(NIGHT, 2, false);
+    expect(world.sky.value).toBe(0);
+  });
+
+  it('remembers the choice, defaulting to on', () => {
+    const store = new Map<string, string>();
+    const storage = () => ({ getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) });
+    expect(loadRealLighting(storage)).toBe(true);
+    saveRealLighting(storage, false);
+    expect(loadRealLighting(storage)).toBe(false);
+    const blocked = () => { throw new Error('blocked'); };
+    expect(loadRealLighting(blocked)).toBe(true);
+    expect(() => saveRealLighting(blocked, false)).not.toThrow();
+  });
+});
+
+describe('ambientFor', () => {
+  it('runs from the night floor below civil twilight to the day level above 10 degrees', () => {
+    expect(ambientFor(-20)).toBe(CONFIG.sun.ambient.night);
+    expect(ambientFor(-6)).toBe(CONFIG.sun.ambient.night);
+    expect(ambientFor(10)).toBeCloseTo(CONFIG.sun.ambient.day);
+    expect(ambientFor(40)).toBeCloseTo(CONFIG.sun.ambient.day);
+    expect(ambientFor(2)).toBeGreaterThan(CONFIG.sun.ambient.night);
+    expect(ambientFor(2)).toBeLessThan(CONFIG.sun.ambient.day);
   });
 });
 

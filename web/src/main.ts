@@ -8,11 +8,12 @@ import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { doorSound, loadMuted, saveMuted, StepTimer } from './audio';
 import { CONFIG } from './config';
 import { Interactions, promptFor } from './interactions';
+import { LIGHT_SPILL } from './lightmaps';
 import { loadAssets, type LoadedAssets } from './loader';
 import { addMirrors } from './mirrors';
 import { Player, vfovFromHfov } from './player';
 import { Sound } from './sound';
-import { Daylight } from './daylight';
+import { Daylight, loadRealLighting, saveRealLighting } from './daylight';
 import { Surroundings } from './surroundings';
 import { solarPosition, sunTimes } from './sun';
 import { dayOfYear, daysInYear, formatClock, formatReadout, parseSunParam, SunClock, sunKeyAction } from './sun-clock';
@@ -78,6 +79,9 @@ async function run(): Promise<void> {
   const site = assets.manifest.site;
   const clock = new SunClock(parseSunParam(params.get('sun'), site.timeZone) ?? Date.now(), site.timeZone);
   const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings);
+  let real = loadRealLighting(() => localStorage);
+  daylight.setReal(real);
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, world, daylight, clock, CONFIG, LIGHT_SPILL } }); // tuning from the console
   assets.surroundings.then((root) => {
     if (!root) return;
     surroundings.add(root);
@@ -98,7 +102,7 @@ async function run(): Promise<void> {
   }
   player.update(0); // place the camera now so the view behind the start overlay shows the spawn
   const spawnRoom = world.rooms.locate(player.x, player.z, null);
-  if (spawnRoom && world.lights.has(spawnRoom) && daylight.isNight(clock.utc)) world.lights.toggle(spawnRoom);
+  if (spawnRoom && world.lights.has(spawnRoom) && real && daylight.isNight(clock.utc)) world.lights.toggle(spawnRoom);
   if (params.get('debug') === 'lightmap') {
     for (const m of world.lightmapped as MeshStandardMaterial[]) {
       m.color.setRGB(1, 1, 1);
@@ -137,6 +141,7 @@ async function run(): Promise<void> {
     minutes: (m) => clock.setMinutes(m),
     now: () => clock.now(),
     play: () => clock.togglePlay(),
+    real: (on) => setReal(on),
   });
   let shownVersion = -1;
   const times = new Map<string, ReturnType<typeof sunTimes>>();
@@ -151,9 +156,15 @@ async function run(): Promise<void> {
     ui.setClock(formatClock(l));
     ui.setSunPanel({
       dayOfYear: dayOfYear(l), daysInYear: daysInYear(l.year), minutes: l.hour * 60 + l.minute,
-      sunrise: t.sunrise, sunset: t.sunset, playing: clock.playing,
-      readout: formatReadout(l, solarPosition(clock.utc, site.lat, site.lon), assets.climate.months[l.month - 1]),
+      sunrise: t.sunrise, sunset: t.sunset, playing: clock.playing, real,
+      readout: real ? formatReadout(l, solarPosition(clock.utc, site.lat, site.lon), assets.climate.months[l.month - 1]) : COPY.flatLighting,
     });
+  };
+  const setReal = (on: boolean) => {
+    real = on;
+    saveRealLighting(() => localStorage, on);
+    daylight.setReal(on);
+    showSun();
   };
   ui.onResume(() => {
     sound?.setPaused(false); // resume inside the click: Safari only allows it in a gesture
@@ -164,6 +175,7 @@ async function run(): Promise<void> {
   document.addEventListener('pointerlockchange', () => {
     paused = started && !autostart && document.pointerLockElement !== canvas;
     ui.setPaused(paused);
+    ui.setWalking(document.pointerLockElement === canvas);
     sound?.setPaused(paused);
     if (paused) {
       for (const k of Object.keys(player.keys) as (keyof typeof player.keys)[]) player.keys[k] = false;
@@ -182,6 +194,7 @@ async function run(): Promise<void> {
       return;
     }
     if (e.repeat) return;
+    if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey && !e.altKey) setReal(!real);
     if (e.code === 'KeyL' && currentRoom && world.lights.has(currentRoom)) {
       world.lights.toggle(currentRoom);
       sound?.click(world.switches.get(currentRoom));

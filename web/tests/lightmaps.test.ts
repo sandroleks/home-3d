@@ -11,6 +11,7 @@ describe('shader patches', () => {
     const f = patchFragment(ShaderLib.standard.fragmentShader);
     expect(f).toContain('uniform sampler2D lmDay;');
     expect(f).toContain('irradiance += ');
+    expect(f).toContain('max( lmLightIntensity, lmLightSpill )');
     expect(f).toContain('uniform float lmSkyScale;'); expect(f).toContain('uniform vec3 lmFill;'); expect(f).toContain('+ lmFill');
     expect(f.indexOf('irradiance += (')).toBeGreaterThan(f.indexOf('#include <lights_fragment_maps>'));
   });
@@ -38,7 +39,7 @@ describe('applyLightmap', () => {
     expect(shader.uniforms.lmFill).toBe(fill);
     expect(shader.uniforms.lmScale.value).toBe(3);
     expect(shader.uniforms.lmDayRange.value).toBe(4);
-    expect(m.customProgramCacheKey()).toBe('room-lightmap-v2');
+    expect(m.customProgramCacheKey()).toBe('room-lightmap-v3');
   });
 });
 

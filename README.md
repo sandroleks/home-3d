@@ -76,7 +76,9 @@ The sun is live: its position comes from the NOAA solar equations for the flat's
 - Where the flat is: `SITE` in `blender/pipeline/config.py` (Blender's origin and the compass bearing of +Y).
 - Refresh the climate data: `cd web && node scripts/fetch-climate.mjs 41.117327 -8.653914`.
 - Compare with Cycles: `make render-refs SUN=2026-12-21T10:00` renders the viewpoints lit by the same sun into `build/ref/`.
-- Tuning: `CONFIG.sun` in `web/src/config.ts` (bounce, skyGain, shadow bias, colours, time-lapse speed).
+- Tuning: `CONFIG.sun` in `web/src/config.ts` (bounce, skyGain, ambient, shadow bias, colours, time-lapse speed); `CONFIG.lightSpill` keeps a little of each room's lamp light with the lights off; `CONFIG.exposure` sets the overall brightness.
+- Real sun and sky off (R, or the panel's checkbox; remembered per browser): the same even daylight at any time, set by `CONFIG.flatLighting`.
+- Mirrors reflect the room live (`web/src/mirrors.ts`): any thin slab with the `Mirror` material.
 
 ## Run and test
 
@@ -84,7 +86,7 @@ The sun is live: its position comes from the NOAA solar equations for the flat's
 cd web && npm run dev      # http://localhost:5173
 ```
 
-Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors and use switches, L toggles the current room's light, M mutes sound, `,` and `.` move the time back and forward 15 minutes (hold to keep going), Shift + `,` and `.` move the date a week, P plays the day (one hour of sun every two seconds), and Esc pauses. The pause screen has a sun panel that sets the date and time.
+Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors and use switches, L toggles the current room's light, M mutes sound, `,` and `.` move the time back and forward 15 minutes (hold to keep going), Shift + `,` and `.` move the date a week, P plays the day (one hour of sun every two seconds), R turns the real sun and sky on or off, and Esc pauses. The sun panel at the bottom left is always on screen; press Esc to use it.
 
 Handy URL options:
 

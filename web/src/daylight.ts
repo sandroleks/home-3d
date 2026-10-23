@@ -1,7 +1,8 @@
 import {
-  Box3, BufferGeometry, Color, DirectionalLight, DoubleSide, Float32BufferAttribute, Mesh, MeshBasicMaterial, Object3D,
+  AmbientLight, Box3, BufferGeometry, Color, DirectionalLight, DoubleSide, Float32BufferAttribute, Mesh, MeshBasicMaterial, Object3D,
   PCFSoftShadowMap, Raycaster, type Scene, Sphere, Vector3, type WebGLRenderer,
 } from 'three';
+import type { KeyValueStore } from './audio';
 import { type Climate, skyDiffuse, skyScale, sunStrength, typicalIrradiance } from './climate';
 import { CONFIG } from './config';
 import type { Manifest, WindowInfo } from './manifest';
@@ -74,6 +75,32 @@ export function gainedSkyScale(scale: number, gain = CONFIG.sun.skyGain): number
   return scale * gain;
 }
 
+const REAL_KEY = 'walkthrough.realLighting';
+
+/** Real lighting is on unless the visitor turned it off. */
+export function loadRealLighting(storage: () => KeyValueStore): boolean {
+  try {
+    return storage().getItem(REAL_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+export function saveRealLighting(storage: () => KeyValueStore, on: boolean): void {
+  try {
+    storage().setItem(REAL_KEY, on ? '1' : '0');
+  } catch {
+    // Storage is blocked: the choice just isn't remembered.
+  }
+}
+
+/** Even light everywhere, so corners and windowless rooms keep some light: the day level fading to the night floor over civil twilight. */
+export function ambientFor(elevation: number): number {
+  const { day, night } = CONFIG.sun.ambient;
+  const t = clamp01((elevation + 6) / 16);
+  return night + (day - night) * t * t * (3 - 2 * t);
+}
+
 /** Room-environment reflections follow the (gained) sky, capped so a bright sky adds no more. */
 export function envIntensityFor(gainedScale: number): number {
   return CONFIG.envIntensity * Math.min(gainedScale, 1.5);
@@ -90,6 +117,8 @@ export function roomFill(entering: number, area: number, bounce = CONFIG.sun.bou
  */
 export class Daylight {
   readonly light = new DirectionalLight();
+  readonly ambient = new AmbientLight(CONFIG.sun.ambient.color, 0);
+  private real = true;
   private centre = new Vector3();
   private radius: number;
   private distance: number;
@@ -128,7 +157,7 @@ export class Daylight {
     cam.far = this.distance + this.radius; // the camera sits `distance` toward the sun, so far casters fit
     cam.updateProjectionMatrix();
     l.target.position.copy(this.centre);
-    scene.add(l, l.target, this.casters);
+    scene.add(l, l.target, this.ambient, this.casters);
     this.occluders = [...world.occluders];
     (this.raycaster as Raycaster & { firstHitOnly?: boolean }).firstHitOnly = true;
   }
@@ -158,6 +187,13 @@ export class Daylight {
     this.dirty = true;
   }
 
+  /** Real sun and sky for the chosen moment, or (off) the same even daylight at any time. */
+  setReal(on: boolean): void {
+    if (on === this.real) return;
+    this.real = on;
+    this.dirty = true;
+  }
+
   isNight(utc: number): boolean {
     const { lat, lon } = this.manifest.site;
     return solarPosition(utc, lat, lon).elevation < -6;
@@ -176,6 +212,7 @@ export class Daylight {
   }
 
   private apply(utc: number): void {
+    if (!this.real) return this.applyFlat();
     const { site, sky } = this.manifest;
     const sun = solarPosition(utc, site.lat, site.lon);
     const { beam, diffuse } = typicalIrradiance(this.climate, utc);
@@ -192,6 +229,7 @@ export class Daylight {
     const scale = gainedSkyScale(skyScale(d, sky.wattsToScene, sky.irradiance));
     this.world.sky.value = scale;
     this.scene.environmentIntensity = envIntensityFor(scale);
+    this.ambient.intensity = ambientFor(sun.elevation);
 
     this.surroundings.setSky(skyColor(sun.elevation));
     const s = this.surroundings.light;
@@ -200,6 +238,23 @@ export class Daylight {
     s.skyLight.value = d * sky.wattsToScene;
 
     this.updateFills(dir, strength, color);
+  }
+
+  /** No sun indoors, a bright sky through the windows and a stronger ambient; outside, a fixed sunny midday. */
+  private applyFlat(): void {
+    const f = CONFIG.flatLighting;
+    const { site, sky } = this.manifest;
+    this.light.intensity = 0;
+    this.world.sky.value = f.sky;
+    this.scene.environmentIntensity = envIntensityFor(f.sky);
+    this.ambient.intensity = f.ambient;
+    this.surroundings.setSky(new Color(CONFIG.skyColor));
+    const dir = sunVector({ elevation: f.outsideSun.elevation, azimuth: f.outsideSun.azimuth }, site.yBearing);
+    const s = this.surroundings.light;
+    s.sunDir.value.set(dir[0], dir[1], dir[2]);
+    s.sunLight.value.copy(WHITE).multiplyScalar(f.outsideSun.watts * sky.wattsToScene);
+    s.skyLight.value = f.outsideSky * sky.wattsToScene;
+    for (const fill of this.world.fills.values()) fill.value.setRGB(0, 0, 0);
   }
 
   private updateFills(dir: Vec3, strength: number, color: Color): void {
