@@ -12,6 +12,8 @@ It has two halves: `blender/` turns the .blend into web assets (headless Blender
 
 ## Working on the model
 
+For which changes need Blender and which don't, and the full edit → export → check → publish workflow, see [docs/changing-the-model.md](docs/changing-the-model.md).
+
 1. Edit the original `~/Documents/Untitled.blend` in Blender.
 2. Copy it over the project's file before exporting: `cp ~/Documents/Untitled.blend .`
 3. Export (below).
