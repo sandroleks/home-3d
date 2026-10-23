@@ -1,5 +1,5 @@
 import {
-  Box3, Color, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera, Scene, Vector3,
+  Box3, Color, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, Scene, ShaderMaterial, Vector3,
   type WebGLRenderer,
 } from 'three';
 import { CONFIG } from './config';
@@ -12,8 +12,53 @@ export function groundOffsets(layers: { flat: boolean; area: number }[]): number
   return out;
 }
 
-/** Swap the glTF materials for unlit ones: colour × texture × the sun and sky baked into COLOR_0. */
-export function prepareSurroundings(root: Object3D): void {
+export interface SurroundingsLight {
+  /** Unit vector toward the sun, three.js space. */
+  sunDir: { value: Vector3 };
+  /** Sun colour times its direct-normal strength, scene units. */
+  sunLight: { value: Color };
+  /** Sky irradiance on an upward face, scene units. */
+  skyLight: { value: number };
+}
+
+export function makeSurroundingsLight(): SurroundingsLight {
+  return { sunDir: { value: new Vector3(0, 1, 0) }, sunLight: { value: new Color(0, 0, 0) }, skyLight: { value: 0 } };
+}
+
+const VERTEX = /* glsl */ `
+varying vec3 vNormal;
+varying vec2 vUv;
+void main() {
+  vNormal = normalize( mat3( modelMatrix ) * normal );
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+}`;
+
+// Lambert sun plus a sky that lights an upward face fully, a wall half and a downward face not at all
+// (the same formula the export used to bake). No shadows between buildings.
+const FRAGMENT = /* glsl */ `
+#include <common>
+uniform vec3 color;
+uniform sampler2D map;
+uniform vec3 sunDir;
+uniform vec3 sunLight;
+uniform float skyLight;
+varying vec3 vNormal;
+varying vec2 vUv;
+void main() {
+  vec3 n = normalize( vNormal );
+  vec3 albedo = color;
+#ifdef USE_SURROUNDINGS_MAP
+  albedo *= texture2D( map, vUv ).rgb;
+#endif
+  vec3 e = vec3( skyLight * ( 1.0 + n.y ) * 0.5 ) + sunLight * max( dot( n, sunDir ), 0.0 );
+  gl_FragColor = vec4( albedo * e / PI, 1.0 );
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+
+/** Swap the glTF materials for the live sun-and-sky shader. */
+export function prepareSurroundings(root: Object3D, light: SurroundingsLight): void {
   const meshes: Mesh[] = [];
   root.traverse((o) => {
     if ((o as Mesh).isMesh) meshes.push(o as Mesh);
@@ -27,9 +72,13 @@ export function prepareSurroundings(root: Object3D): void {
   );
   meshes.forEach((m, i) => {
     const src = m.material as MeshStandardMaterial;
-    const color = src.color.clone().multiplyScalar(CONFIG.surroundingsShadeScale);
-    m.material = new MeshBasicMaterial({
-      name: src.name, color, map: src.map, side: src.side, vertexColors: true,
+    m.material = new ShaderMaterial({
+      name: src.name,
+      uniforms: { color: { value: src.color.clone() }, map: { value: src.map }, ...light },
+      defines: src.map ? { USE_SURROUNDINGS_MAP: '' } : {},
+      vertexShader: VERTEX,
+      fragmentShader: FRAGMENT,
+      side: src.side,
       polygonOffset: offsets[i] > 0, polygonOffsetFactor: offsets[i], polygonOffsetUnits: offsets[i],
     });
   });
@@ -41,14 +90,19 @@ export function prepareSurroundings(root: Object3D): void {
  */
 export class Surroundings {
   readonly scene = new Scene();
+  readonly light = makeSurroundingsLight();
   private camera = new PerspectiveCamera();
 
   constructor(sky: Color) {
-    this.scene.background = sky;
+    this.scene.background = sky.clone();
+  }
+
+  setSky(color: Color): void {
+    (this.scene.background as Color).copy(color);
   }
 
   add(root: Object3D): void {
-    prepareSurroundings(root);
+    prepareSurroundings(root, this.light);
     this.scene.add(root);
   }
 

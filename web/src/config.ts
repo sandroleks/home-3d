@@ -17,8 +17,6 @@ export const CONFIG = {
   envIntensity: 0.08,
   /** Flat daylight sky seen through the windows. */
   skyColor: '#cfdbe6',
-  /** The export stores the surroundings' shade halved (glTF vertex colours stop at 1); see surroundings.py. */
-  surroundingsShadeScale: 2,
   /** Near/far of the surroundings pass: the building's own facade is just below the windows, the sea kilometres out. */
   surroundingsNear: 0.3,
   surroundingsFar: 20000,
