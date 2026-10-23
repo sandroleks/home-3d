@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Builds web/public/assets/audio/ from the downloaded CC0 sources listed in its CREDITS.md.
-# Usage: scripts/build-audio.sh <dir with the unzipped Kenney packs and the two OpenGameArt WAVs>
+# Builds web/public/assets/audio/ from the downloaded CC0 sources; its CREDITS.md links each source page.
+# Usage: scripts/build-audio.sh <source dir>
+# The source dir holds (each Kenney zip unzipped into a folder named after the zip):
+#   kenney_rpg-audio/Audio/  kenney_impact-sounds/Audio/  kenney_ui-audio/Audio/
+#   park_ambience_birds.wav  in_the_lobby.wav
 set -euo pipefail
 SRC=${1:?usage: build-audio.sh <source dir>}
 OUT="$(cd "$(dirname "$0")/.." && pwd)/public/assets/audio"

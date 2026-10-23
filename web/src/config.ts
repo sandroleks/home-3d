@@ -32,7 +32,7 @@ export const CONFIG = {
   audio: {
     base: 'assets/audio/',
     /** Bus levels for one-shot effects, footsteps, room ambience and music. */
-    effects: 0.8,
+    effects: 0.5,
     steps: 0.35,
     ambience: 0.4,
     music: 0.25,

@@ -62,7 +62,7 @@ When the automatic choice is wrong, adjust the tables in `blender/pipeline/confi
 
 ## Sound
 
-The audio lives in `web/public/assets/audio/`: doors, switches and footsteps from Kenney's CC0 packs, birdsong and music from CC0 OpenGameArt uploads, and two generated room-tone loops. `CREDITS.md` there lists every source. To rebuild the files (needs ffmpeg), download the sources it lists into one folder, unzip the Kenney packs next to their zips, and run `web/scripts/build-audio.sh <folder>`. Levels, fades, footstep spacing and which rooms sound outdoors or like a kitchen are in `CONFIG.audio` and `CONFIG.roomAmbience` (`web/src/config.ts`).
+The audio lives in `web/public/assets/audio/`: doors, switches and footsteps from Kenney's CC0 packs, birdsong and music from CC0 OpenGameArt uploads, and two generated room-tone loops. `CREDITS.md` there lists every source. To rebuild the files (needs ffmpeg), download the sources it lists into one folder, unzip each Kenney zip into a folder named after it (`kenney_rpg-audio`, `kenney_impact-sounds`, `kenney_ui-audio`), and run `web/scripts/build-audio.sh <folder>`. Levels, fades, footstep spacing and which rooms sound outdoors or like a kitchen are in `CONFIG.audio` and `CONFIG.roomAmbience` (`web/src/config.ts`).
 
 ## Run and test
 
