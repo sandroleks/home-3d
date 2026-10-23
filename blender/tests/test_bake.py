@@ -94,6 +94,35 @@ class BakeAllTests(unittest.TestCase):
         self.assertFalse(bpy.data.objects["Sun"].hide_render)
 
 
+class DenoiseTests(unittest.TestCase):
+    def test_removes_noise_keeps_level_alpha_and_cleans_up(self):
+        w, h = 96, 64
+        y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+        clean = np.stack([0.5 + 2.0 * x / w, 0.5 + y / h, np.full_like(x, 1.5)], axis=-1)
+        rng = np.random.default_rng(0)
+        noisy = clean * (1 + 0.4 * rng.standard_normal(clean.shape).astype(np.float32))
+        alpha = np.zeros((h, w, 1), np.float32)
+        alpha[8:56, 8:88] = 1.0
+        img = bpy.data.images.new("noisy", w, h, alpha=True, float_buffer=True)
+        img.colorspace_settings.name = "Non-Color"
+        img.pixels.foreach_set(np.concatenate([noisy, alpha], axis=-1).ravel())
+        scenes, groups = len(bpy.data.scenes), len(bpy.data.node_groups)
+
+        bake.denoise(img)
+        px = np.empty(w * h * 4, dtype=np.float32)
+        img.pixels.foreach_get(px)
+        px = px.reshape(h, w, 4)
+        bpy.data.images.remove(img)
+
+        inner = (slice(16, 48), slice(16, 80))
+        err_noisy = np.sqrt(((noisy - clean)[inner] ** 2).mean())
+        err_denoised = np.sqrt(((px[..., :3] - clean)[inner] ** 2).mean())
+        self.assertLess(err_denoised, 0.5 * err_noisy)
+        self.assertAlmostEqual(float(px[..., :3][inner].mean()), float(clean[inner].mean()), delta=0.1)
+        np.testing.assert_array_equal(px[..., 3], alpha[..., 0])
+        self.assertEqual((len(bpy.data.scenes), len(bpy.data.node_groups)), (scenes, groups))
+
+
 class RoomIsolationTests(unittest.TestCase):
     def test_room_state_without_ceiling_light_is_black(self):
         fixture_scene.build()

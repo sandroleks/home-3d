@@ -1,5 +1,7 @@
 """Bake daylight and per-room ceiling-light layers, then save them as RGBM WebP."""
 import os
+import shutil
+import tempfile
 
 import bpy
 import numpy as np
@@ -91,6 +93,56 @@ def bake_lighting(obj, size, name):
     return img
 
 
+def denoise(img):
+    """Run OpenImageDenoise over a float bake in place (Cycles never denoises bakes); alpha is kept.
+
+    The compositor is the only way to reach OIDN from Python, so a throwaway scene composites the
+    image through a Denoise node and renders it to a temporary EXR.
+    """
+    w, h = img.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(h, w, 4)
+    scene = bpy.data.scenes.new("web_denoise")
+    tree = bpy.data.node_groups.new("web_denoise", "CompositorNodeTree")
+    tmp = tempfile.mkdtemp()
+    path = os.path.join(tmp, "denoised.exr")
+    result = None
+    try:
+        scene.render.engine = "BLENDER_WORKBENCH"  # the scene is empty; only the compositor does work
+        scene.render.resolution_x, scene.render.resolution_y = w, h
+        scene.render.resolution_percentage = 100
+        scene.render.image_settings.file_format = "OPEN_EXR"
+        scene.render.image_settings.color_depth = "32"
+        scene.render.filepath = path
+        if hasattr(scene.render, "compositor_denoise_final_quality"):
+            scene.render.compositor_denoise_final_quality = "HIGH"
+        tree.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
+        src = tree.nodes.new("CompositorNodeImage")
+        src.image = img
+        node = tree.nodes.new("CompositorNodeDenoise")
+        out = tree.nodes.new("NodeGroupOutput")
+        tree.links.new(src.outputs["Image"], node.inputs["Image"])
+        tree.links.new(node.outputs["Image"], out.inputs[0])
+        scene.compositing_node_group = tree
+        scene.render.use_compositing = True
+        with bpy.context.temp_override(scene=scene):
+            bpy.ops.render.render(write_still=True, scene=scene.name)
+        result = bpy.data.images.load(path)
+        result.colorspace_settings.name = "Non-Color"
+        den = np.empty(w * h * 4, dtype=np.float32)
+        result.pixels.foreach_get(den)
+        px[..., :3] = den.reshape(h, w, 4)[..., :3]
+        img.pixels.foreach_set(px.ravel())
+    finally:
+        if result is not None:
+            bpy.data.images.remove(result)
+        bpy.data.scenes.remove(scene)
+        bpy.data.node_groups.remove(tree)
+        shutil.rmtree(tmp, ignore_errors=True)
+    return img
+
+
 def encode_and_save(img, path, blur_sigma):
     w, h = img.size
     px = np.empty(w * h * 4, dtype=np.float32)
@@ -125,7 +177,7 @@ def bake_all(scene, state, quality, out_dir):
     ranges = {}
 
     def run(node, key, layer, size):
-        img = bake_lighting(bpy.data.objects[node], size, f"lm_{key}_{layer}")
+        img = denoise(bake_lighting(bpy.data.objects[node], size, f"lm_{key}_{layer}"))
         path = os.path.join(out_dir, "lightmaps", f"{key}_{layer}.webp")
         ranges[f"{key}_{layer}"] = encode_and_save(img, path, quality.blur_sigma_px)
         print(f"[bake] {key}_{layer} {size}px range {ranges[f'{key}_{layer}']}", flush=True)
