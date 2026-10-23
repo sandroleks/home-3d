@@ -79,6 +79,7 @@ The sun is live: its position comes from the NOAA solar equations for the flat's
 - Tuning: `CONFIG.sun` in `web/src/config.ts` (bounce, skyGain, ambient, shadow bias, colours, time-lapse speed); `CONFIG.lightSpill` keeps a little of each room's lamp light with the lights off; `CONFIG.exposure` sets the overall brightness.
 - Real sun and sky off (R, or the panel's checkbox; remembered per browser): the same even daylight at any time, set by `CONFIG.flatLighting`.
 - Mirrors reflect the room live (`web/src/mirrors.ts`): any thin slab with the `Mirror` material.
+- The sky behind the neighbourhood (`web/src/sky.ts`) has a gradient, the sun's disc and glow where the sun really is, and drifting clouds. Cloud cover follows each month's average from `climate.json`, scaled by `CONFIG.sky.cloudScale`. Colours and the disc's size are in `CONFIG.sky`.
 
 ## Run and test
 
@@ -117,6 +118,8 @@ File names are stable across exports. Vercel revalidates static files on every v
 ## Known limits
 
 - Desktop only (keyboard and mouse); phones and tablets see a notice.
-- Light from one room doesn't spill through doorways into the next.
+- Light from one room doesn't spill through doorways into the next. Rooms open to each other with no wall between them (the kitchen and the living room) do share lamp light: each one's lamps are baked onto the other as well, on the other's switch.
+- An open door keeps the lighting it was baked with closed.
+- No moon or stars at night.
 - The baked sky light comes from below the horizon too, compensated globally by `CONFIG.sun.skyGain`, so ceilings near windows read a little bright and up-facing outdoor surfaces (balcony floor, sills) a little dark.
 - The bounce fill is a flat approximation: rooms without exterior glass of their own (e.g. the kitchen, lit through the glazed doors) get none and read darker than Cycles.
