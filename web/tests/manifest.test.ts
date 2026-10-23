@@ -9,6 +9,11 @@ describe('parseManifest', () => {
     expect(m.chunks[1].light).toBeNull();
     expect(m.doors[0].hinge).toEqual([3.1, -1.78]);
     expect(m.viewpoints[0].name).toBe('Cam_Sala');
+    expect(m.version).toBe(2);
+    expect(m.rooms[0].area).toBe(9);
+    expect(m.site.timeZone).toBe('Europe/Lisbon');
+    expect(m.sky.irradiance).toBeCloseTo(0.6467);
+    expect(m.windows[0].normal).toEqual([0, 0, 1]);
   });
 
   it('names the path of a broken field', () => {
@@ -19,7 +24,13 @@ describe('parseManifest', () => {
   });
 
   it('rejects other versions', () => {
-    expect(() => parseManifest({ ...(sampleManifest() as object), version: 2 })).toThrow('version');
+    expect(() => parseManifest({ ...(sampleManifest() as object), version: 1 })).toThrow('version');
+  });
+
+  it('names a broken window field', () => {
+    const bad = sampleManifest() as { windows: { normal: unknown }[] };
+    bad.windows[0].normal = [0, 1];
+    expect(() => parseManifest(bad)).toThrow('windows[0].normal');
   });
 });
 
