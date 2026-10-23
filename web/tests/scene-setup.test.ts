@@ -1,4 +1,4 @@
-import { BoxGeometry, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Texture } from 'three';
+import { BoxGeometry, Color, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Texture } from 'three';
 import { describe, expect, it } from 'vitest';
 import { isGlass, makeGlass, prepareMeshes } from '../src/scene-setup';
 
@@ -22,11 +22,15 @@ describe('scene setup', () => {
     const a = new Mesh(new BoxGeometry(), shared);
     const b = new Mesh(new BoxGeometry(), Object.assign(new MeshStandardMaterial(), { name: 'Glass' }));
     group.add(a, b);
-    const binding = { day: new Texture(), dayRange: 2, light: new Texture(), lightRange: 1, intensity: { value: 0 } };
+    const binding = { day: new Texture(), dayRange: 2, light: new Texture(), lightRange: 1, intensity: { value: 0 }, sky: { value: 1 }, fill: { value: new Color() } };
     const lit = prepareMeshes(group, binding);
     expect(lit).toHaveLength(1);
     expect(a.material).not.toBe(shared);
     expect((a.material as MeshStandardMaterial).userData.lightmapUniforms.lmDayRange.value).toBe(2);
     expect((b.material as MeshStandardMaterial).transparent).toBe(true);
+    expect(a.castShadow).toBe(true);
+    expect(a.receiveShadow).toBe(true);
+    expect(b.castShadow).toBe(false);
+    expect(b.receiveShadow).toBe(false);
   });
 });

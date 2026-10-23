@@ -1,4 +1,4 @@
-import { DataTexture, MeshStandardMaterial, Texture } from 'three';
+import { type Color, DataTexture, MeshStandardMaterial, Texture } from 'three';
 import { CONFIG } from './config';
 import { RGBM_GLSL } from './rgbm';
 
@@ -8,6 +8,10 @@ export interface LightmapBinding {
   light: Texture;
   lightRange: number;
   intensity: { value: number };
+  /** Shared by every lightmapped material: how bright the baked sky is right now. */
+  sky: { value: number };
+  /** Per room: flat bounce light from sun entering its windows. */
+  fill: { value: Color };
 }
 
 export const BLACK_LIGHTMAP = (() => {
@@ -32,12 +36,15 @@ uniform float lmDayRange;
 uniform float lmLightRange;
 uniform float lmLightIntensity;
 uniform float lmScale;
+uniform float lmSkyScale;
+uniform vec3 lmFill;
 ${RGBM_GLSL}`;
 
 const ACCUMULATE = /* glsl */ `
 #if defined( RE_IndirectDiffuse )
-	irradiance += ( rgbmDecode( texture( lmDay, vLmUv ), lmDayRange )
-		+ lmLightIntensity * rgbmDecode( texture( lmLight, vLmUv ), lmLightRange ) ) * lmScale;
+	irradiance += ( lmSkyScale * rgbmDecode( texture( lmDay, vLmUv ), lmDayRange )
+		+ lmLightIntensity * rgbmDecode( texture( lmLight, vLmUv ), lmLightRange ) ) * lmScale
+		+ lmFill;
 #endif`;
 
 function inject(src: string, anchor: string, extra: string): string {
@@ -61,6 +68,8 @@ export function applyLightmap(material: MeshStandardMaterial, b: LightmapBinding
     lmLightRange: { value: b.lightRange },
     lmLightIntensity: b.intensity,
     lmScale: { value: scale },
+    lmSkyScale: b.sky,
+    lmFill: b.fill,
   };
   material.userData.lightmapUniforms = uniforms;
   material.onBeforeCompile = (shader) => {
@@ -68,7 +77,7 @@ export function applyLightmap(material: MeshStandardMaterial, b: LightmapBinding
     shader.vertexShader = patchVertex(shader.vertexShader);
     shader.fragmentShader = patchFragment(shader.fragmentShader);
   };
-  material.customProgramCacheKey = () => 'room-lightmap-v1';
+  material.customProgramCacheKey = () => 'room-lightmap-v2';
   material.needsUpdate = true;
 }
 

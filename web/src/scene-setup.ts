@@ -26,6 +26,8 @@ export function prepareMeshes(node: Object3D, binding: LightmapBinding | null): 
     const src = mesh.material as MeshStandardMaterial;
     if (isGlass(src)) {
       mesh.material = makeGlass(src);
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
       return;
     }
     const m = src.clone();
@@ -33,6 +35,8 @@ export function prepareMeshes(node: Object3D, binding: LightmapBinding | null): 
       applyLightmap(m, binding);
       lit.push(m);
     }
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     mesh.material = m;
   });
   return lit;
