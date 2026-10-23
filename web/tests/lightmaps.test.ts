@@ -1,6 +1,6 @@
-import { MeshStandardMaterial, ShaderLib, Texture } from 'three';
+import { Color, MeshStandardMaterial, ShaderLib, Texture } from 'three';
 import { describe, expect, it } from 'vitest';
-import { applyLightmap, fadeToward, patchFragment, patchVertex, RoomLights } from '../src/lightmaps';
+import { applyLightmap, fadeToward, patchFragment, patchVertex, RoomLights, setLightTexture } from '../src/lightmaps';
 
 describe('shader patches', () => {
   it('patch the standard material shaders', () => {
@@ -11,6 +11,8 @@ describe('shader patches', () => {
     const f = patchFragment(ShaderLib.standard.fragmentShader);
     expect(f).toContain('uniform sampler2D lmDay;');
     expect(f).toContain('irradiance += ');
+    expect(f).toContain('max( lmLightIntensity, lmLightSpill )');
+    expect(f).toContain('uniform float lmSkyScale;'); expect(f).toContain('uniform vec3 lmFill;'); expect(f).toContain('+ lmFill');
     expect(f.indexOf('irradiance += (')).toBeGreaterThan(f.indexOf('#include <lights_fragment_maps>'));
   });
 
@@ -20,10 +22,12 @@ describe('shader patches', () => {
 });
 
 describe('applyLightmap', () => {
-  it('wires uniforms through onBeforeCompile, sharing the intensity object', () => {
+  it('wires uniforms through onBeforeCompile, sharing the intensity, sky and fill objects', () => {
     const m = new MeshStandardMaterial();
     const intensity = { value: 0.25 };
-    applyLightmap(m, { day: new Texture(), dayRange: 4, light: new Texture(), lightRange: 2, intensity }, 3);
+    const sky = { value: 0.8 };
+    const fill = { value: new Color(0.1, 0.05, 0) };
+    applyLightmap(m, { day: new Texture(), dayRange: 4, light: new Texture(), lightRange: 2, intensity, sky, fill }, 3);
     const shader = {
       uniforms: {} as Record<string, { value: unknown }>,
       vertexShader: ShaderLib.standard.vertexShader,
@@ -31,9 +35,27 @@ describe('applyLightmap', () => {
     };
     m.onBeforeCompile(shader as never, undefined as never);
     expect(shader.uniforms.lmLightIntensity).toBe(intensity);
+    expect(shader.uniforms.lmSkyScale).toBe(sky);
+    expect(shader.uniforms.lmFill).toBe(fill);
     expect(shader.uniforms.lmScale.value).toBe(3);
     expect(shader.uniforms.lmDayRange.value).toBe(4);
-    expect(m.customProgramCacheKey()).toBe('room-lightmap-v1');
+    expect(m.customProgramCacheKey()).toBe('room-lightmap-v4');
+    expect((shader.uniforms.lmLight2Intensity as { value: number }).value).toBe(0); // no second layer: dark
+  });
+
+  it("takes a door's second lamp layer and binds its texture into slot 2 once loaded", () => {
+    const m = new MeshStandardMaterial();
+    const second = { value: 0 };
+    const binding = { day: new Texture(), dayRange: 1, light: new Texture(), lightRange: 1, intensity: { value: 0 }, sky: { value: 1 }, fill: { value: new Color() } };
+    applyLightmap(m, { ...binding, light2: { texture: new Texture(), range: 0, intensity: second } });
+    const u = m.userData.lightmapUniforms;
+    expect(u.lmLight2Intensity).toBe(second);
+    const tex = new Texture();
+    setLightTexture(m, tex, 3, 2);
+    expect(u.lmLight2.value).toBe(tex);
+    expect(u.lmLight2Range.value).toBe(3);
+    expect(u.lmLight.value).not.toBe(tex);
+    expect(patchFragment(ShaderLib.standard.fragmentShader)).toContain('max( lmLight2Intensity, lmLightSpill )');
   });
 });
 

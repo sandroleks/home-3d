@@ -3,8 +3,8 @@ import os
 
 import bpy
 
-from . import (bake, chunks, checks, collision, config, debug_map, doors, export, manifest,
-               openings, proc_materials, rooms, scene_select, state, surroundings, switches, uvs)
+from . import (bake, chunks, checks, collision, config, debug_map, doors, export, geom, lamps, manifest,
+               openings, proc_materials, rooms, scene_select, state, surroundings, switches, uvs, windows)
 
 
 def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
@@ -34,6 +34,8 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
     leaves = [o for o in meshes if o.name.startswith("Door leaf")]
     static = [o for o in meshes if not o.name.startswith("Door leaf")]
     door_specs = doors.prepare_doors(leaves, grid, config.DOOR_OVERRIDES, ops, infilled)  # may delete leaves
+    for d in door_specs:  # whose lamps light each face of the leaf
+        d["rooms"] = geom.door_rooms(d["hinge"], d["dir"], d["width"], floor_index.locate)
     ctx["doors"] = door_specs
     if stop_after == "doors":
         return ctx
@@ -44,7 +46,26 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
     if stop_after == "switches":
         return ctx
 
+    ceilings = {r["light"] for r in room_list if r["light"]}
+    found_lamps, lost_lamps = lamps.room_lamps(scene, floor_index, ctx["day_lights"], ceilings)
+    found_glows, lost_glows = lamps.split_emitters(static, floor_index)  # before chunking joins the meshes
+    window_list = windows.exterior_windows(static, floor_index)  # also before chunking
+    switched = {r["id"] for r in room_list if r["light"]}
+    lost = [f"{n} (in no room)" for n in lost_lamps + lost_glows]
+    lost += [f"{n} (in {room}, which has no ceiling light)"
+             for found in (found_lamps, found_glows) for room, names in sorted(found.items())
+             if room not in switched for n in names]
+    room_lights = {r["id"]: [r["light"]] + found_lamps.get(r["id"], []) for r in room_list if r["light"]}
+    room_emitters = {k: v for k, v in found_glows.items() if k in switched}
+    for msg in lost:
+        print(f"[lamps] WARNING: {msg} is never lit", flush=True)
+
     chunk_list = chunks.build_chunks(static, floor_index)
+    open_plan = geom.open_neighbours({r["id"]: r["floor"] for r in room_list}, floor_index.locate_many)
+    for c in chunk_list:  # lamps in an open-plan neighbour light this room too, on the neighbour's switch
+        c["neighbours"] = [r for r in open_plan.get(c["room"], []) if r in room_lights]
+        if c["neighbours"]:
+            print(f"[chunks] {c['node']}: also lit from {', '.join(c['neighbours'])} (open plan)", flush=True)
     ctx["chunks"] = chunk_list
     if stop_after == "chunks":
         return ctx
@@ -59,6 +80,8 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
         "rooms": room_list, "switches": sw, "doors": door_specs, "chunks": chunk_list,
         "door_lightmap_size": quality.door_lightmap, "day_lights": day_lights,
         "spawn": export.spawn_from(scene, room_list), "viewpoints": export.viewpoints(scene),
+        "room_lights": room_lights, "room_emitters": room_emitters, "lost_lamps": lost,
+        "windows": window_list, "sky_irradiance": bake.sky_irradiance(scene),
     }
     state.save(scene, st)
     switch_points = [(bpy.data.objects[n].location.x, -bpy.data.objects[n].location.y) for n in sw.values()]

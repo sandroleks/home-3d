@@ -42,10 +42,8 @@ DICE_MAX_FACE_AREA = 0.5
 
 DROP_OBJECT_NAMES = ("Walls (backup before finishes)",)
 # Collections (and their sub-collections) seen through the windows. They are kilometre-scale, so
-# instead of being chunked and lightmapped they go to surroundings.glb, shaded per vertex by the
-# day's sun lamps and a sky of this irradiance (on an upward face, in the units of a sun's strength).
+# instead of being chunked and lightmapped they go to surroundings.glb, which the viewer lights live.
 SURROUNDINGS_COLLECTION_PREFIXES = ("Exterior - neighbourhood",)
-SURROUNDINGS_SKY_IRRADIANCE = 1.0
 FORCE_INCLUDE_COLLECTION_PREFIXES = ("Ceiling",)
 PASSABLE_NAME_PATTERN = r"^Glazed Door .* (glass|mullion|rail)(\.\d+)?$"
 
@@ -67,3 +65,16 @@ SWITCH_OVERRIDES = {
     "quarto-01": {"door": 6, "side": -1},
     "quarto-02": {"door": 9, "side": -1},
 }
+
+# Where the flat is: Blender's origin, and the compass bearing of Blender +Y. Measured by matching the model's
+# neighbourhood to OpenStreetMap outlines (docs/superpowers/specs/2026-10-23-sun-simulation-design.md).
+SITE = {"lat": 41.117327, "lon": -8.653914, "timeZone": "Europe/Lisbon", "yBearing": 142.1}
+# Real W/m² to the scene's light units. Calibrated against Cycles references so a daylight interior matches the
+# exposure of the old renders (8x the old Sun lamp's 4 per 900 W/m²); the sun-to-sky ratio stays physical.
+WATTS_TO_SCENE = 32.0 / 900.0
+# The day layer bakes sky light only. The world's colour is replaced by this flat sky (the Sky Texture has a sun of its
+# own built in) at the world's own strength, and only lights named DAY_FILL_LIGHT_PREFIX stay on.
+SKY_BAKE_COLOR = (0.55, 0.70, 0.95)
+DAY_FILL_LIGHT_PREFIX = "Portal "
+# Lamps on a wall, and lampshades, can sit just outside their room's floor polygon.
+LAMP_ROOM_MAX_DIST = 0.5

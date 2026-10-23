@@ -116,6 +116,55 @@ def principal_frame(points_xz):
     )
 
 
+def door_rooms(hinge, direction, width, locate, probe=0.3):
+    """Rooms on either side of a closed door (three.js ground plane), each once, in side order.
+
+    locate(x, z) -> room id or None; the probes sit `probe` m off the leaf's middle, past the wall.
+    """
+    mx, mz = hinge[0] + direction[0] * width / 2, hinge[1] + direction[1] * width / 2
+    nx, nz = -direction[1], direction[0]
+    out = []
+    for s in (1, -1):
+        room = locate(mx + nx * probe * s, mz + nz * probe * s)
+        if room is not None and room not in out:
+            out.append(room)
+    return out
+
+
+def open_neighbours(rooms, locate_many, min_shared=0.5, step=0.05, probe=0.02):
+    """Rooms whose floors meet with no wall between them (an open-plan kitchen and living room): {room id: [ids]}.
+
+    rooms: {room id: flat [x0, z0, x1, z1, x2, z2, ...] triangles}; locate_many(points) -> floor index per point
+    (-1 for none), in the order of `rooms`. Each floor edge is sampled every `step` m and probed `probe` m to either
+    side; a pair counts once its shared boundary reaches `min_shared` m. Rooms behind a wall or a door never meet:
+    the wall's thickness lies between their floors.
+    """
+    ids = list(rooms)
+    shared = {}
+    for rid in ids:
+        tris = np.asarray(rooms[rid], dtype=np.float64).reshape(-1, 3, 2)
+        for t in tris:
+            for a, b in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+                length = float(np.hypot(*(b - a)))
+                if length < 1e-9:
+                    continue
+                n = np.array([-(b - a)[1], (b - a)[0]]) / length
+                k = max(1, int(length / step))
+                pts = a + (b - a) * ((np.arange(k) + 0.5) / k)[:, None]
+                left, right = locate_many(pts + n * probe), locate_many(pts - n * probe)
+                for i, j in zip(left, right):
+                    if i >= 0 and j >= 0 and i != j:
+                        pair = (min(i, j), max(i, j))
+                        shared[pair] = shared.get(pair, 0.0) + length / k
+    out = {}
+    # Every shared edge is seen from both floors, so each pair's length is counted twice.
+    for (i, j), total in sorted(shared.items()):
+        if total / 2 >= min_shared:
+            out.setdefault(ids[i], []).append(ids[j])
+            out.setdefault(ids[j], []).append(ids[i])
+    return out
+
+
 def choose_door_swing(end_a, end_b, is_blocked, override=None):
     """Pick the hinge end and swing direction for a closed door leaf.
 

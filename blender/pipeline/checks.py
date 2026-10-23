@@ -26,7 +26,8 @@ def sanitized_node_name(name):
 
 def check_outputs(out_dir, m, budget_bytes, expected_doors):
     errors = list(manifest_mod.validate_manifest(m))
-    refs = [c["day"] for c in m["chunks"]] + [c["light"] for c in m["chunks"]] + [d["lightmap"] for d in m["doors"]]
+    refs = [c["day"] for c in m["chunks"]] + [c["light"] for c in m["chunks"]] + [d["lightmap"] for d in m["doors"]] + [
+        l for x in m["chunks"] + m["doors"] for l in x.get("lights", [])]
     for ref in refs:
         if ref and not os.path.exists(os.path.join(out_dir, ref["file"])):
             errors.append(f"missing file {ref['file']}")
@@ -72,13 +73,13 @@ def check_outputs(out_dir, m, budget_bytes, expected_doors):
 
 
 def check_surroundings(out_dir):
-    """surroundings.glb is optional, but when present every primitive needs its baked shade (COLOR_0)."""
+    """surroundings.glb is optional, but when present every primitive needs normals: the viewer lights it live."""
     path = os.path.join(out_dir, "surroundings.glb")
     if not os.path.exists(path):
         return []
     for mesh in read_glb_json(path)["meshes"]:
-        if any("COLOR_0" not in p["attributes"] for p in mesh["primitives"]):
-            return [f"surroundings.glb mesh {mesh.get('name')!r}: a primitive lacks COLOR_0 (shade)"]
+        if any("NORMAL" not in p["attributes"] for p in mesh["primitives"]):
+            return [f"surroundings.glb mesh {mesh.get('name')!r}: a primitive lacks NORMAL"]
     return []
 
 
@@ -108,4 +109,6 @@ def check_scene(state):
         bx, by = geom.from_three_xz(*d["hinge"])
         if abs(loc.x - bx) > 1e-3 or abs(loc.y - by) > 1e-3:
             errors.append(f"{d['node']}: origin is not at its hinge")
+    for msg in state.get("lost_lamps", []):
+        errors.append(f"lamp or glowing object {msg}: move it into a room with a ceiling light")
     return errors

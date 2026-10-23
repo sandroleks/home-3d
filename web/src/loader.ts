@@ -2,12 +2,14 @@ import { DataTexture, Group, ImageBitmapLoader, LinearFilter, NoColorSpace, Text
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG } from './config';
+import { type Climate, parseClimate } from './climate';
 import { type CollisionData, type LightmapRef, type Manifest, parseCollision, parseManifest } from './manifest';
 
 export interface LoadedMap { texture: Texture; range: number }
 export interface LoadedAssets {
   manifest: Manifest;
   collision: CollisionData;
+  climate: Climate;
   scene: Group;
   day: Map<string, LoadedMap>;
   light: Promise<Map<string, LoadedMap>>;
@@ -42,6 +44,7 @@ export async function loadAssets(onProgress: (fraction: number) => void): Promis
   const base = CONFIG.assetsBase;
   const manifest = parseManifest(await fetchJson(`${base}manifest.json`));
   const collision = parseCollision(await fetchJson(`${base}collision.json`));
+  const climate = parseClimate(await fetchJson(`${base}climate.json`));
 
   const draco = new DRACOLoader().setDecoderPath(CONFIG.dracoPath);
   const gltfLoader = new GLTFLoader().setDRACOLoader(draco);
@@ -95,9 +98,9 @@ export async function loadAssets(onProgress: (fraction: number) => void): Promis
   glbFraction = 1;
   report();
 
-  const lightRefs = manifest.chunks.flatMap((c) => (c.light ? [c.light] : []));
+  const lightRefs = [...manifest.chunks.flatMap((c) => [...(c.light ? [c.light] : []), ...c.lights]), ...manifest.doors.flatMap((d) => d.lights)];
   const light = Promise.all(lightRefs.map(async (ref) => [ref.file, await loadMap(ref)] as const)).then(
     (entries) => new Map(entries),
   );
-  return { manifest, collision, scene: gltf.scene, day: new Map(dayEntries), light, surroundings };
+  return { manifest, collision, climate, scene: gltf.scene, day: new Map(dayEntries), light, surroundings };
 }

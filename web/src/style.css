@@ -33,7 +33,7 @@ kbd {
   border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
 }
 #room-name {
-  position: fixed; left: 20px; bottom: 18px; font-size: 15px; letter-spacing: 0.04em;
+  position: fixed; left: 20px; top: 16px; font-size: 15px; letter-spacing: 0.04em;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
 }
 #prompt {
@@ -49,3 +49,33 @@ kbd {
   width: 100%; height: 100%; fill: none; stroke: var(--ink); stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round;
 }
+
+/* The sun panel stays on screen, bottom left. While walking the mouse is captured, so it only shows.
+   Tab frees the mouse without pausing, so the panel takes clicks while the keys keep walking; with
+   the walkthrough paused (Esc) it sits above the pause veil and takes clicks too. */
+#sun-panel {
+  position: fixed; left: 16px; bottom: 16px; z-index: 10; width: min(300px, calc(100vw - 32px));
+  box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: rgba(30, 28, 25, 0.78);
+  text-align: left; display: flex; flex-direction: column; gap: 8px; font-size: 13px;
+}
+body.walking #sun-panel { pointer-events: none; opacity: 0.8; }
+body.cursor #sun-panel { box-shadow: 0 0 0 1px rgba(232, 194, 122, 0.45); }
+body.cursor #crosshair, body.cursor #prompt { display: none; } /* a click on the view only looks again */
+body.cursor #view { cursor: pointer; }
+body:not(.walking):not(.cursor) .sun-hint { display: none; }
+body.walking .sun-hint-cursor, body.cursor .sun-hint-walking { display: none; }
+.sun-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#sun-clock { margin: 0; font-size: 14px; font-weight: 500; letter-spacing: 0.03em; }
+.sun-real { display: flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
+.sun-real input { accent-color: var(--accent); margin: 0; }
+#sun-controls { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+#sun-controls:disabled { opacity: 0.35; }
+.sun-row { display: grid; grid-template-columns: 36px 1fr; align-items: center; gap: 8px; }
+.sun-row input { width: 100%; margin: 0; accent-color: var(--accent); }
+.sun-months { display: flex; justify-content: space-between; margin: -4px 0 0 44px; font-size: 10px; color: var(--muted); }
+.sun-track { position: relative; height: 6px; margin: -6px 0 0 44px; }
+.sun-track i { position: absolute; top: 0; width: 2px; height: 6px; background: var(--accent); transform: translateX(-1px); }
+.sun-buttons { display: flex; flex-wrap: wrap; gap: 5px; }
+.sun-buttons button { padding: 4px 10px; font-size: 12px; background: rgba(255, 255, 255, 0.12); color: var(--ink); }
+#sun-readout { margin: 0; line-height: 1.4; color: var(--muted); }
+.sun-hint { margin: 0; font-size: 12px; color: var(--muted); }

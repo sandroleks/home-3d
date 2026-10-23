@@ -18,7 +18,7 @@ test-blender:
 export-preview export-final: export-%:
 	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && rm -rf $(STAGE)/out
 	$(IN_STAGE) -b --factory-startup source.blend --python-exit-code 1 --python blender/export_web.py -- --quality $* --out out/assets --build out/build
-	mkdir -p $(OUT) $(BUILD) && rsync -a --delete $(STAGE)/out/assets/ $(OUT)/ && rsync -a $(STAGE)/out/build/ $(BUILD)/
+	mkdir -p $(OUT) $(BUILD) && rsync -a --delete --exclude audio/ --exclude climate.json --exclude DATA-SOURCES.md $(STAGE)/out/assets/ $(OUT)/ && rsync -a $(STAGE)/out/build/ $(BUILD)/
 
 # Only the neighbourhood seen through the windows: no bake, and the other assets stay as they are.
 export-surroundings:
@@ -26,9 +26,11 @@ export-surroundings:
 	$(IN_STAGE) -b --factory-startup source.blend --python-exit-code 1 --python blender/export_web.py -- --quality final --stage surroundings --out out/assets --build out/build
 	mkdir -p $(OUT) && cp $(STAGE)/out/assets/surroundings.glb $(OUT)/
 
+# Cycles renders of the viewpoints. SUN=2026-12-21T10:00 (Lisbon time) lights them like the viewer at that
+# moment: the real sun and the month's typical sky, with lamps off.
 render-refs:
-	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && mkdir -p $(STAGE)/ref
-	for cam in Cam_Sala Cam_Kitchen Cam_Bedroom; do $(IN_STAGE) -b --factory-startup source.blend --python-expr "import bpy; s=bpy.context.scene; s.camera=bpy.data.objects['$$cam']; s.render.resolution_percentage=50; s.frame_set(s.frame_end); s.render.filepath='$(STAGE)/ref/$$cam.png'; s.render.image_settings.file_format='PNG'; bpy.ops.render.render(write_still=True)" || exit 1; done
+	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && cp web/public/assets/climate.json $(STAGE)/climate.json && mkdir -p $(STAGE)/ref
+	$(IN_STAGE) -b --factory-startup source.blend --python-exit-code 1 --python blender/render_refs.py -- --out ref $(if $(SUN),--sun $(SUN) --climate climate.json)
 	mkdir -p $(BUILD)/ref && rsync -a $(STAGE)/ref/ $(BUILD)/ref/
 
 web-test:

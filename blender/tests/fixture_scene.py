@@ -3,6 +3,8 @@
 Blender coordinates (Z up). Alpha: x 0..3, y 0..3. Beta: x 3.2..6, y 0..3.
 A 0.2 m wall at x 3.0..3.2 has an opening at y 1.0..1.8 whose door leaf is modelled open into
 Alpha (hinge at (3.1, 1.78)), and an infilled opening at y 2.2..2.8 with a leftover leaf open in Beta.
+Alpha has an exterior window in its south wall (y -0.2..0), a desk lamp, a window fill light and a
+glowing wall lamp; Beta's 'Lamp' glows with the same material.
 """
 import math
 
@@ -98,11 +100,15 @@ def build():
     if scene.world.node_tree is None:
         scene.world.use_nodes = True
     next(n for n in scene.world.node_tree.nodes if n.type == "BACKGROUND").inputs["Strength"].default_value = 1.0
+    tree = scene.world.node_tree
+    sky = tree.nodes.new("ShaderNodeTexSky")  # like the real file: a sky texture drives the world colour
+    tree.links.new(sky.outputs["Color"], next(n for n in tree.nodes if n.type == "BACKGROUND").inputs["Color"])
 
     plaster = _mat_flat("Plaster", (0.8, 0.8, 0.78), 0.9)
     wood = _mat_flat("Wood", (0.4, 0.25, 0.15), 0.6)
     tile = _mat_procedural("Tile proc")
     glow = _mat_emissive("Lamp glow")
+    glass = _mat_flat("Window glass", (0.9, 0.95, 1.0), 0.05)
 
     structure = _collection("Structure")
     floors = _collection("Floors")
@@ -135,6 +141,8 @@ def build():
     box_object("Door leaf 2", [(3.12, 2.20, 0, 3.68, 2.24, 2.0)], wood, doors)  # open, infilled doorway
     box_object("Shelf", [(3.4, 0.5, 0, 3.9, 1.3, 1.2)], wood, furniture)
     box_object("Lamp", [(5.5, 2.5, 0, 5.8, 2.8, 0.5)], glow, furniture)
+    box_object("Alpha wall lamp", [(2.2, 0.8, 1.75, 2.5, 1.1, 1.95)], glow, furniture)  # above the collision rays
+    box_object("Window 3 (Exterior / Alpha) glass", [(1.0, -0.11, 1.0, 2.0, -0.09, 2.0)], glass, structure)
     sofa = box_object("Hidden sofa", [(1.0, 2.0, 0, 2.5, 2.8, 0.8)], wood, variant)
     sofa.location = (0.5, 0, 0)
     # Kept child of a dropped parent: world centre is (0.5 + 1.5, 2.4, 0.85) = (2.0, 2.4, 0.85).
@@ -151,6 +159,8 @@ def build():
     table.modifiers.new("Bevel", "BEVEL").width = 0.01
 
     _light("Sun", "SUN", (0, 0, 10), 3.0, lights)
+    _light("Desk lamp light", "POINT", (0.5, 2.5, 0.9), 10.0, lights)
+    _light("Portal Alpha window", "AREA", (1.5, 0.05, 1.5), 5.0, lights, size=1.0)
     _light("Ceiling light Alpha", "AREA", (1.5, 1.5, 2.55), 100.0, interior, size=0.5)
     _light("Ceiling light Beta", "AREA", (4.6, 1.5, 2.55), 100.0, interior, size=0.5)
     bpy.context.view_layer.layer_collection.children["Interior lights"].exclude = True

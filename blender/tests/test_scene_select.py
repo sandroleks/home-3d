@@ -80,9 +80,10 @@ class SceneSelectTests(unittest.TestCase):
         web = bpy.data.collections["WEB"]
         for o in self.meshes:
             self.assertEqual([c.name for c in o.users_collection], ["WEB"])
-        self.assertEqual(self.day_lights, ["Sun"])
+        self.assertEqual(self.day_lights, ["Desk lamp light", "Portal Alpha window", "Sun"])
         lights = bpy.data.collections["WEB_LIGHTS"]
-        self.assertEqual({o.name for o in lights.objects}, {"Sun", "Ceiling light Alpha", "Ceiling light Beta"})
+        self.assertEqual({o.name for o in lights.objects},
+                         {"Sun", "Desk lamp light", "Portal Alpha window", "Ceiling light Alpha", "Ceiling light Beta"})
         self.assertFalse(bpy.data.objects["Sun"].hide_render)
         self.assertTrue(bpy.data.objects["Ceiling light Alpha"].hide_render)
         self.assertIs(web, bpy.data.collections["WEB"])

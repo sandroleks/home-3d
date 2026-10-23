@@ -1,4 +1,5 @@
-"""Bake daylight and per-room ceiling-light layers, then save them as RGBM WebP."""
+"""Bake the sky-only daylight layer and each room's light layer, then save them as RGBM WebP."""
+import math
 import os
 import shutil
 import tempfile
@@ -6,62 +7,88 @@ import tempfile
 import bpy
 import numpy as np
 
-from . import bpyutil, raster
+from . import bpyutil, config, lamps, raster
 
 BAKE_NODE = "WEB_LIGHTMAP_TARGET"
 
 
 def _emission_sockets():
-    sockets = []
+    """(material name, strength socket, original strength) for everything that glows."""
+    out = []
     for mat in bpy.data.materials:
         if mat.node_tree is None:
             continue
         for n in mat.node_tree.nodes:
+            socket = None
             if n.type == "BSDF_PRINCIPLED":
-                sockets.append(n.inputs["Emission Strength"])
+                socket = n.inputs["Emission Strength"]
             elif n.type == "EMISSION":
-                sockets.append(n.inputs["Strength"])
-    return [(s, s.default_value) for s in sockets if s.default_value > 0]
+                socket = n.inputs["Strength"]
+            if socket is not None and socket.default_value > 0:
+                out.append((mat.name, socket, socket.default_value))
+    return out
+
+
+def sky_irradiance(scene):
+    """Irradiance the day layer's flat sky gives an upward face, in the scene's light units (pi x radiance)."""
+    bg = next(n for n in scene.world.node_tree.nodes if n.type == "BACKGROUND")
+    r, g, b = config.SKY_BAKE_COLOR
+    return math.pi * bg.inputs["Strength"].default_value * (0.2126 * r + 0.7152 * g + 0.0722 * b)
 
 
 class Lighting:
-    """Switch the scene between the daylight bake setup and one room's ceiling light."""
+    """Switch the scene between the sky-only daylight bake and one room's lights."""
 
-    def __init__(self, scene, day_lights, room_lights):
-        self.day_lights = set(day_lights)
-        self.room_lights = dict(room_lights)
+    def __init__(self, scene, room_lights, room_emitters):
+        """room_lights: {room id: [names of the lights the room's switch turns on]};
+        room_emitters: {room id: [names of the glowing materials it turns on]}."""
+        self.room_lights = {k: set(v) for k, v in room_lights.items()}
+        self.room_emitters = {k: set(v) for k, v in room_emitters.items()}
         self.lights = [o for o in scene.objects if o.type == "LIGHT"]
         self.saved_hide = {o.name: o.hide_render for o in self.lights}
         world = scene.world
-        nodes = world.node_tree.nodes if world is not None and world.node_tree is not None else []
+        self.tree = world.node_tree if world is not None else None
+        nodes = self.tree.nodes if self.tree is not None else []
         self.background = next((n for n in nodes if n.type == "BACKGROUND"), None)
         if self.background is None:
             raise RuntimeError("scene world has no Background node")
+        self.color = self.background.inputs["Color"]
+        self.saved_color = tuple(self.color.default_value)
+        self.saved_sources = [l.from_socket for l in self.tree.links if l.to_socket == self.color]
         self.saved_strength = self.background.inputs["Strength"].default_value
         self.emitters = _emission_sockets()
 
+    def _sky(self, on):
+        for link in [l for l in self.tree.links if l.to_socket == self.color]:
+            self.tree.links.remove(link)
+        self.color.default_value = (*config.SKY_BAKE_COLOR, 1.0)
+        self.background.inputs["Strength"].default_value = self.saved_strength if on else 0.0
+
+    def _glow(self, names):
+        for name, socket, value in self.emitters:
+            socket.default_value = value if name in names else 0.0
+
     def day(self):
-        ceiling = set(self.room_lights.values())
         for o in self.lights:
-            o.hide_render = not (o.name in self.day_lights and o.name not in ceiling)
-        self.background.inputs["Strength"].default_value = self.saved_strength
-        for socket, value in self.emitters:
-            socket.default_value = value
+            o.hide_render = self.saved_hide[o.name] or not lamps.is_day_fill(o)
+        self._sky(True)
+        self._glow(set())
 
     def room(self, room_id):
         keep = self.room_lights[room_id]
         for o in self.lights:
-            o.hide_render = o.name != keep
-        self.background.inputs["Strength"].default_value = 0.0
-        for socket, _ in self.emitters:
-            socket.default_value = 0.0
+            o.hide_render = o.name not in keep
+        self._sky(False)
+        self._glow(self.room_emitters.get(room_id, set()))
 
     def restore(self):
         for o in self.lights:
             o.hide_render = self.saved_hide[o.name]
         self.background.inputs["Strength"].default_value = self.saved_strength
-        for socket, value in self.emitters:
-            socket.default_value = value
+        self.color.default_value = self.saved_color
+        for src in self.saved_sources:
+            self.tree.links.new(src, self.color)
+        self._glow({name for name, _, _ in self.emitters})
 
 
 def _target_node(mat):
@@ -172,8 +199,8 @@ def bake_all(scene, state, quality, out_dir):
     device = bpyutil.set_cycles(scene, quality.bake_samples)
     print(f"[bake] Cycles on {device}, {quality.bake_samples} samples", flush=True)
     os.makedirs(os.path.join(out_dir, "lightmaps"), exist_ok=True)
-    room_lights = {r["id"]: r["light"] for r in state["rooms"] if r["light"]}
-    lighting = Lighting(scene, state["day_lights"], room_lights)
+    room_lights = state["room_lights"]
+    lighting = Lighting(scene, room_lights, state["room_emitters"])
     ranges = {}
 
     def run(node, key, layer, size):
@@ -188,10 +215,16 @@ def bake_all(scene, state, quality, out_dir):
             run(c["node"], c["key"], "day", c["size"])
         for d in state["doors"]:
             run(d["node"], d["key"], "day", state["door_lightmap_size"])
-        for c in state["chunks"]:
-            if c["room"] in room_lights:
-                lighting.room(c["room"])
-                run(c["node"], c["key"], "light", c["size"])
+        for room in room_lights:
+            lighting.room(room)
+            for c in state["chunks"]:
+                if c["room"] == room:
+                    run(c["node"], c["key"], "light", c["size"])
+                elif room in c.get("neighbours", []):  # an open-plan neighbour's lamps reach this room too
+                    run(c["node"], c["key"], f"light-{room}", c["size"])
+            for d in state["doors"]:  # a door is lit from both its rooms, each switched on its own
+                if room in d.get("rooms", []):
+                    run(d["node"], d["key"], f"light-{room}", state["door_lightmap_size"])
     finally:
         lighting.restore()
         remove_bake_nodes()

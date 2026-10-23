@@ -9,6 +9,27 @@ describe('parseManifest', () => {
     expect(m.chunks[1].light).toBeNull();
     expect(m.doors[0].hinge).toEqual([3.1, -1.78]);
     expect(m.viewpoints[0].name).toBe('Cam_Sala');
+    expect(m.version).toBe(2);
+    expect(m.rooms[0].area).toBe(9);
+    expect(m.site.timeZone).toBe('Europe/Lisbon');
+    expect(m.sky.irradiance).toBeCloseTo(0.6467);
+    expect(m.windows[0].normal).toEqual([0, 0, 1]);
+  });
+
+  it('reads the lamp layers baked onto a door, and none from an older manifest', () => {
+    const raw = sampleManifest() as { doors: Record<string, unknown>[] };
+    expect(parseManifest(raw).doors[0].lights).toEqual([]);
+    raw.doors[0].lights = [{ room: 'alpha', file: 'lightmaps/door-1_light-alpha.webp', range: 1.5 }];
+    expect(parseManifest(raw).doors[0].lights).toEqual([{ room: 'alpha', file: 'lightmaps/door-1_light-alpha.webp', range: 1.5 }]);
+    raw.doors[0].lights = [{ file: 'x.webp', range: 1 }];
+    expect(() => parseManifest(raw)).toThrow('doors[0].lights[0].room');
+  });
+
+  it('reads the lamp layers an open-plan neighbour bakes onto a chunk, and none from an older manifest', () => {
+    const raw = sampleManifest() as { chunks: Record<string, unknown>[] };
+    expect(parseManifest(raw).chunks[1].lights).toEqual([]);
+    raw.chunks[1].lights = [{ room: 'alpha', file: 'lightmaps/beta_light-alpha.webp', range: 1 }];
+    expect(parseManifest(raw).chunks[1].lights).toEqual([{ room: 'alpha', file: 'lightmaps/beta_light-alpha.webp', range: 1 }]);
   });
 
   it('names the path of a broken field', () => {
@@ -19,7 +40,13 @@ describe('parseManifest', () => {
   });
 
   it('rejects other versions', () => {
-    expect(() => parseManifest({ ...(sampleManifest() as object), version: 2 })).toThrow('version');
+    expect(() => parseManifest({ ...(sampleManifest() as object), version: 1 })).toThrow('version');
+  });
+
+  it('names a broken window field', () => {
+    const bad = sampleManifest() as { windows: { normal: unknown }[] };
+    bad.windows[0].normal = [0, 1];
+    expect(() => parseManifest(bad)).toThrow('windows[0].normal');
   });
 });
 
