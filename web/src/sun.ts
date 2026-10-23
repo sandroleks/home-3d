@@ -59,6 +59,7 @@ export function solarPosition(utcMillis: number, lat: number, lon: number): SunP
   return { azimuth, elevation: geometric + refraction(geometric) };
 }
 
+const CLOCK_PARTS = new Set(['year', 'month', 'day', 'hour', 'minute']);
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
 function formatter(tz: string): Intl.DateTimeFormat {
@@ -74,7 +75,9 @@ function formatter(tz: string): Intl.DateTimeFormat {
 
 export function toLocal(utcMillis: number, tz: string): LocalTime {
   const p: Record<string, number> = {};
-  for (const part of formatter(tz).formatToParts(new Date(utcMillis))) p[part.type] = Number(part.value);
+  for (const part of formatter(tz).formatToParts(new Date(utcMillis))) {
+    if (CLOCK_PARTS.has(part.type)) p[part.type] = Number(part.value);
+  }
   return { year: p.year, month: p.month, day: p.day, hour: p.hour, minute: p.minute };
 }
 
@@ -98,16 +101,29 @@ export function sunVector(sun: SunPosition, yBearing: number): [number, number, 
   return [Math.sin(rel) * Math.cos(el), Math.sin(el), -Math.cos(rel) * Math.cos(el)];
 }
 
-/** Sunrise and sunset in minutes after local midnight, found minute by minute; null if it doesn't happen. */
+/** A local calendar day lasts 23, 24 or 25 hours; scan this many minutes of instants from local midnight. */
+const MAX_DAY_MINUTES = 25 * 60;
+
+/**
+ * Sunrise and sunset as wall-clock minutes after local midnight on the zone's calendar day (0 to 1440),
+ * found minute by minute over the day's instants; null if the sun does not cross the horizon that day.
+ */
 export function sunTimes(date: LocalDate, lat: number, lon: number, tz: string): { sunrise: number | null; sunset: number | null } {
   const start = fromLocal({ year: date.year, month: date.month, day: date.day, hour: 0, minute: 0 }, tz);
   let sunrise: number | null = null;
   let sunset: number | null = null;
   let wasUp = solarPosition(start, lat, lon).elevation > HORIZON;
-  for (let m = 1; m <= 1440; m++) {
-    const up = solarPosition(start + m * 60000, lat, lon).elevation > HORIZON;
-    if (up && !wasUp && sunrise === null) sunrise = m;
-    if (!up && wasUp) sunset = m;
+  for (let m = 1; m <= MAX_DAY_MINUTES; m++) {
+    const t = start + m * 60000;
+    const up = solarPosition(t, lat, lon).elevation > HORIZON;
+    if (up !== wasUp) {
+      const local = toLocal(t, tz);
+      if (local.year === date.year && local.month === date.month && local.day === date.day) {
+        const wall = local.hour * 60 + local.minute;
+        if (up) sunrise ??= wall;
+        else sunset = wall;
+      }
+    }
     wasUp = up;
   }
   return { sunrise, sunset };

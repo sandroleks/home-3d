@@ -75,3 +75,35 @@ describe('sunTimes', () => {
     expect(dec.sunset!).toBeLessThanOrEqual(17 * 60 + 12);
   });
 });
+
+/** First UTC-grid instant at or after `startUtc` (within a day) where the sun crosses the horizon in the given direction. */
+function utcCrossing(startUtc: number, rising: boolean): number {
+  let wasUp = solarPosition(startUtc, LAT, LON).elevation > -0.27;
+  for (let m = 1; m <= 1440; m++) {
+    const t = startUtc + m * 60000;
+    const up = solarPosition(t, LAT, LON).elevation > -0.27;
+    if (up !== wasUp && up === rising) return t;
+    wasUp = up;
+  }
+  throw new Error('no crossing found');
+}
+
+function wallMinutes(utcMillis: number): number {
+  const l = toLocal(utcMillis, TZ);
+  return l.hour * 60 + l.minute;
+}
+
+describe('sunTimes on clock-change days', () => {
+  it('gives wall-clock sunrise on 29 Mar 2026 (23 h day, clocks go forward)', () => {
+    const expected = wallMinutes(utcCrossing(Date.UTC(2026, 2, 29), true));
+    expect(sunTimes({ year: 2026, month: 3, day: 29 }, LAT, LON, TZ).sunrise).toBe(expected);
+  });
+
+  it('gives wall-clock sunset on 25 Oct 2026 (25 h day, clocks go back)', () => {
+    const expected = wallMinutes(utcCrossing(Date.UTC(2026, 9, 25), false));
+    const sunset = sunTimes({ year: 2026, month: 10, day: 25 }, LAT, LON, TZ).sunset!;
+    expect(sunset).toBe(expected);
+    expect(sunset).toBeGreaterThanOrEqual(17 * 60);
+    expect(sunset).toBeLessThanOrEqual(18 * 60);
+  });
+});
