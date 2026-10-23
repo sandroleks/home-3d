@@ -37,6 +37,8 @@ def light_for(scene, when, climate):
     for link in [l for l in tree.links if l.to_socket == bg.inputs["Color"]]:
         tree.links.remove(link)
     baked = bg.inputs["Strength"].default_value
+    if baked <= 0:
+        raise SystemExit("[refs] the world's Background strength is 0, so the window-fill lights can't be scaled to the sky; fix the world and retry")
     bg.inputs["Color"].default_value = (*config.SKY_BAKE_COLOR, 1.0)
     r, g, b = config.SKY_BAKE_COLOR
     bg.inputs["Strength"].default_value = diffuse * config.WATTS_TO_SCENE / (math.pi * (0.2126 * r + 0.7152 * g + 0.0722 * b))
@@ -61,13 +63,15 @@ def main():
     p.add_argument("--sun")
     p.add_argument("--climate")
     args = p.parse_args(argv)
+    if args.sun and not args.climate:
+        p.error("--sun needs --climate (the path to climate.json)")
     scene = bpy.context.scene
+    scene.frame_set(scene.frame_end)  # first: animation must not undo the lighting set below
     suffix = ""
     if args.sun:
         with open(args.climate) as f:
             light_for(scene, args.sun, json.load(f))
         suffix = "_" + args.sun.replace(":", "")
-    scene.frame_set(scene.frame_end)
     scene.render.resolution_percentage = 50
     scene.render.image_settings.file_format = "PNG"
     for cam in config.VIEWPOINT_CAMERAS:
