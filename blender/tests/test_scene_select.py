@@ -6,7 +6,7 @@ from pipeline import rooms, scene_select
 from tests import fixture_scene
 
 
-class DroppedCollectionTests(unittest.TestCase):
+class SurroundingsCollectionTests(unittest.TestCase):
     def test_render_visible_neighbourhood_is_left_out(self):
         fixture_scene.build()
         scene = bpy.context.scene

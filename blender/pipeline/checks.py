@@ -64,10 +64,22 @@ def check_outputs(out_dir, m, budget_bytes, expected_doors):
     first_view = ["apartment.glb", "collision.json", "manifest.json"] + [c["day"]["file"] for c in m["chunks"]] + [
         d["lightmap"]["file"] for d in m["doors"]
     ]
+    errors += check_surroundings(out_dir)
     total = sum(os.path.getsize(os.path.join(out_dir, f)) for f in first_view)
     if total > budget_bytes:
         errors.append(f"first-view download is {total / 1048576:.1f} MB, budget {budget_bytes / 1048576:.0f} MB")
     return errors
+
+
+def check_surroundings(out_dir):
+    """surroundings.glb is optional, but when present every primitive needs its baked shade (COLOR_0)."""
+    path = os.path.join(out_dir, "surroundings.glb")
+    if not os.path.exists(path):
+        return []
+    for mesh in read_glb_json(path)["meshes"]:
+        if any("COLOR_0" not in p["attributes"] for p in mesh["primitives"]):
+            return [f"surroundings.glb mesh {mesh.get('name')!r}: a primitive lacks COLOR_0 (shade)"]
+    return []
 
 
 def check_scene(state):

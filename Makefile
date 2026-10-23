@@ -9,7 +9,7 @@ STAGE := /private/tmp/apartment-walkthrough-blender
 SYNC = mkdir -p $(STAGE)/home && rsync -a --delete blender $(wildcard shared) $(STAGE)/
 IN_STAGE = cd $(STAGE) && HOME=$(STAGE)/home "$(BLENDER)"
 
-.PHONY: test-blender export-preview export-final render-refs web-test
+.PHONY: test-blender export-preview export-final export-surroundings render-refs web-test
 
 test-blender:
 	$(SYNC)
@@ -19,6 +19,12 @@ export-preview export-final: export-%:
 	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && rm -rf $(STAGE)/out
 	$(IN_STAGE) -b --factory-startup source.blend --python-exit-code 1 --python blender/export_web.py -- --quality $* --out out/assets --build out/build
 	mkdir -p $(OUT) $(BUILD) && rsync -a --delete $(STAGE)/out/assets/ $(OUT)/ && rsync -a $(STAGE)/out/build/ $(BUILD)/
+
+# Only the neighbourhood seen through the windows: no bake, and the other assets stay as they are.
+export-surroundings:
+	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && rm -rf $(STAGE)/out
+	$(IN_STAGE) -b --factory-startup source.blend --python-exit-code 1 --python blender/export_web.py -- --quality final --stage surroundings --out out/assets --build out/build
+	mkdir -p $(OUT) && cp $(STAGE)/out/assets/surroundings.glb $(OUT)/
 
 render-refs:
 	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && mkdir -p $(STAGE)/ref

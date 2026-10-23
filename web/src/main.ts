@@ -9,6 +9,7 @@ import { CONFIG } from './config';
 import { Interactions, promptFor } from './interactions';
 import { loadAssets, type LoadedAssets } from './loader';
 import { Player, vfovFromHfov } from './player';
+import { Surroundings } from './surroundings';
 import { COPY, isTouchOnly, UI } from './ui';
 import { applyDoorRotation, buildWorld } from './world';
 import './style.css';
@@ -41,6 +42,7 @@ async function run(): Promise<void> {
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = AgXToneMapping;
   renderer.toneMappingExposure = CONFIG.exposure;
+  renderer.autoClear = false; // two passes per frame: surroundings, then the apartment
   canvas.addEventListener('webglcontextlost', (event) => {
     event.preventDefault();
     renderer.setAnimationLoop(null);
@@ -48,7 +50,7 @@ async function run(): Promise<void> {
   });
 
   const scene = new Scene();
-  scene.background = new Color(CONFIG.skyColor);
+  const surroundings = new Surroundings(new Color(CONFIG.skyColor));
   scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = CONFIG.envIntensity;
 
@@ -66,6 +68,7 @@ async function run(): Promise<void> {
   const assets: LoadedAssets = await loadAssets((f) => ui.setProgress(f));
 
   const world = buildWorld(assets, scene);
+  assets.surroundings.then((root) => root && surroundings.add(root));
   const names = new Map(assets.manifest.rooms.map((r) => [r.id, CONFIG.roomNames[r.id] ?? r.name]));
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
@@ -133,6 +136,9 @@ async function run(): Promise<void> {
     const target = started ? interactions.update() : null;
     ui.setPrompt(target ? promptFor(target, world.lights) : null);
     world.lights.update(dt);
+    renderer.clear();
+    surroundings.render(renderer, camera);
+    renderer.clearDepth();
     renderer.render(scene, camera);
   });
 }

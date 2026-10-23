@@ -36,16 +36,16 @@ def viewpoints(scene):
     return [camera_pose(scene.objects[n]) for n in config.VIEWPOINT_CAMERAS if n in scene.objects]
 
 
-def export_glb(objs, path):
+def export_glb(objs, path, **options):
     bpyutil.select_only(objs, objs[0])
-    bpy.ops.export_scene.gltf(
-        filepath=path, export_format="GLB", use_selection=True, export_apply=False,
-        export_texcoords=True, export_normals=True, export_materials="EXPORT",
-        export_image_format="WEBP", export_image_quality=90,
-        export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=6,
-        export_draco_texcoord_quantization=14, export_cameras=False, export_lights=False,
-        export_extras=False, export_yup=True, export_animations=False,
-    )
+    bpy.ops.export_scene.gltf(**{
+        "filepath": path, "export_format": "GLB", "use_selection": True, "export_apply": False,
+        "export_texcoords": True, "export_normals": True, "export_materials": "EXPORT",
+        "export_image_format": "WEBP", "export_image_quality": 90,
+        "export_draco_mesh_compression_enable": True, "export_draco_mesh_compression_level": 6,
+        "export_draco_texcoord_quantization": 14, "export_cameras": False, "export_lights": False,
+        "export_extras": False, "export_yup": True, "export_animations": False, **options,
+    })
 
 
 def write_json(path, data):

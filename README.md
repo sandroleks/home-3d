@@ -26,13 +26,14 @@ Good to know:
 ```
 make export-preview    # about 1 minute, low-quality lighting, good for checking changes
 make export-final      # about 35 minutes on the GPU
+make export-surroundings   # about 30 seconds: only the view through the windows, nothing else changes
 ```
 
 If the GPU bake hangs, quit Blender and try again, or run on the CPU (much slower): `WEB_BAKE_DEVICE=CPU make export-final`.
 
 Outputs:
 
-- `web/public/assets/`: what the viewer loads.
+- `web/public/assets/`: what the viewer loads. `surroundings.glb` is the neighbourhood seen through the windows.
 - `build/debug_map.png`: a floor plan check. Red = closed door, green = open door, blue = light switches, yellow = spawn point.
 - `build/web-export.blend`: the baked scene, for inspection.
 
@@ -47,6 +48,7 @@ Keep these names in Blender, or the export won't find things:
 - Door parts: `Door N infill` (a filled-in opening), `Door leaf N`, and the glazed parts (glass, mullion, rail).
 - Cameras: `Cam_Entrada` is where visitors start. `Cam_Sala`, `Cam_Kitchen` and `Cam_Bedroom` are viewpoints (used for `?view=` and the reference renders).
 - The build-up animation is fine: the export uses the final frame.
+- The view through the windows is everything in `Exterior - neighbourhood` (and its sub-collections). It is too big to lightmap, so it goes to `surroundings.glb` with simple sun-and-sky shading worked out from the scene's sun lamp (no shadows between buildings). When only the neighbourhood changed, `make export-surroundings` is enough.
 
 ## Overrides
 
@@ -56,6 +58,7 @@ When the automatic choice is wrong, adjust the tables in `blender/pipeline/confi
 - `SWITCH_OVERRIDES`: move a room's light switch (`door`, `side`, and `face: outside` to put it on the other room's wall).
 - `DOOR_OVERRIDES`: fix a door leaf's hinge side or swing direction.
 - `QUALITY`: bake resolution and samples for preview and final.
+- `SURROUNDINGS_COLLECTION_PREFIXES`: which collections make the view through the windows. `SURROUNDINGS_SKY_IRRADIANCE`: how much the sky brightens it besides the sun.
 
 ## Run and test
 
@@ -88,7 +91,7 @@ The repo is self-contained: the exported assets in `web/public/assets/` (about 3
 
 **Building locally:** `cd web && npm run build` writes the static site to `web/dist/`. Any static host works. Serve it from a URL ending in `/`, because asset paths are relative.
 
-File names are stable across exports. Vercel revalidates static files on every visit, so that's fine there. On another CDN, purge the cache after re-exporting, or use short cache times for `assets/manifest.json`, `assets/*.glb` and `assets/lightmaps/*`.
+File names are stable across exports. Vercel revalidates static files on every visit, so that's fine there. On another CDN, purge the cache after re-exporting, or use short cache times for `assets/manifest.json`, `assets/*.glb` (including `surroundings.glb`) and `assets/lightmaps/*`.
 
 ## Known limits
 
