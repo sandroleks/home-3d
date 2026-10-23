@@ -35,9 +35,9 @@ A single Python script, `blender/export_web.py`, run inside Blender. It is idemp
    - `day`: sun, sky and portals on, all ceiling lights off.
    - `light_<room>`: only that room's ceiling light on, with the sky, sun and portals off. It is baked onto that room's chunk only, so spill into neighbouring rooms is not captured. The Varanda has no ceiling light and gets only a `day` bake.
 6. **Light switches.** For each of the 12 lit rooms, the script adds a small wall switch mesh (`Switch_<room>`, 8 × 8 × 1 cm, white) on the wall beside the room's main door frame at 1.1 m height, on the room side. Position and door choice can be overridden per room in a table at the top of the script. Switches are part of the room chunk's bake but exported as separate nodes so they can be targeted.
-7. **Collision mesh.** Export a simplified `collision.glb` containing walls, closed door leaves (as separate named nodes), and the bounding boxes of furniture at or below 1.8 m. It is used only for physics, never rendered.
+7. **Collision mesh.** Export a simplified `collision.json` (a 2D occupancy grid, see Amendments) covering walls, closed door leaves, and the bounding boxes of furniture at or below 1.8 m. It is used only for physics, never rendered.
 8. **Export.**
-   - `apartment.glb`: geometry and materials, meshopt-compressed, with textures as WebP.
+   - `apartment.glb`: geometry and materials, Draco-compressed, with textures as WebP.
    - `lightmaps/<room>_day.webp` and `lightmaps/<room>_light.webp`: HDR encoded as RGBM in 8-bit WebP, 2048² per room (smaller rooms may use 1024²).
    - `manifest.json`: per room, its name, chunk node name, lightmap files, RGBM range, light colour, switch node name (if any) and the floor polygon (XY) used for room detection; per door, its node name, hinge axis, swing direction and open angle; plus the spawn point and orientation.
 9. **Self-check.** The script fails with a clear message if any check fails: every chunk has `UVLightmap` and a `day` lightmap; every lit room has a `light` lightmap and a switch; there are 10 doors with hinge origins; no procedural texture nodes remain; the manifest validates; the total size is under budget.
@@ -53,7 +53,7 @@ Modules (in `web/src/`):
 | Module | Responsibility | Depends on |
 |---|---|---|
 | `config.ts` | Display names for rooms, spawn override, speeds, fade times. | none |
-| `loader.ts` | Loads `manifest.json`, `apartment.glb` and `collision.glb`, then streams lightmaps, reporting progress. | three |
+| `loader.ts` | Loads `manifest.json`, `apartment.glb` and `collision.json`, then streams lightmaps, reporting progress. | three |
 | `lightmaps.ts` | Patches `MeshStandardMaterial` via `onBeforeCompile` so the shader adds `day + intensity × roomLight` (RGBM-decoded) on UV channel 1. Exposes `setRoomLight(room, 0..1)`. | three, manifest |
 | `player.ts` | Pointer-lock first-person controller: mouse look, WASD, Shift for faster walking, eye height 1.6 m, capsule collision against the collision mesh using `three-mesh-bvh`. Closed doors block movement. If the player falls below the floor, they are reset to the last safe position. | three, three-mesh-bvh |
 | `interactions.ts` | Raycasts from the screen-centre crosshair to find what is targeted, outlines the target and shows a prompt. On click, a door animates 0 ↔ open angle over 0.6 s with ease-in-out and its collision node is toggled; clicking a room's wall switch fades that room's light over 0.4 s. **L** toggles the light of the current room (ignored in the Varanda). | player, lightmaps, rooms |
@@ -61,7 +61,7 @@ Modules (in `web/src/`):
 | `ui.ts` | Start screen (title, "Click to explore", controls, progress bar), HUD (crosshair, room name, prompt), pause on Esc, mobile notice, and the WebGL2-unsupported message. | none |
 | `main.ts` | Wiring and the render loop. | all |
 
-Rendering uses ACES Filmic tone mapping and sRGB output. A low-intensity environment map is generated from the scene sky so glossy surfaces get some reflection.
+Rendering uses AgX tone mapping and sRGB output. A low-intensity environment map is generated from the scene sky so glossy surfaces get some reflection.
 
 **Initial state:** the player starts in the Entrada, with all doors closed, daylight on and every ceiling light off.
 
@@ -83,7 +83,7 @@ Rendering uses ACES Filmic tone mapping and sRGB output. A low-intensity environ
 ```
 blender/export_web.py      # export + bake pipeline
 build/                     # web-export.blend (git-ignored)
-web/public/assets/         # apartment.glb, collision.glb, lightmaps/, manifest.json
+web/public/assets/         # apartment.glb, collision.json, lightmaps/, manifest.json
 web/src/                   # modules above
 web/tests/                 # Vitest unit tests
 docs/superpowers/specs/    # this document
@@ -109,3 +109,11 @@ docs/superpowers/specs/    # this document
 13. Door leaf 5 (in the walled-up doorway 20 of the open-kitchen layout) is removed: the walkthrough has 9 interactive doors.
 14. The Closet and Lavandaria switches sit outside their doorways: in the Entrada beside the Closet door, and on the Marquise side of the Lavandaria's glazed door.
 15. Exports run with Blender's factory settings, so the user's own add-ons never load.
+
+## Amendments (16)
+
+16. Final-review updates:
+    - The scene background is a sky colour, visible through windows.
+    - Cycles reference renders (`make render-refs`) are taken at the finished frame of the build-up animation.
+    - Environment intensity is tuned to 0.08 against those references.
+    - Tone mapping is AgX, not ACES Filmic.
