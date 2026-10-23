@@ -1,4 +1,4 @@
-import { Color, Mesh, MeshStandardMaterial, Object3D, BoxGeometry, PerspectiveCamera } from 'three';
+import { Color, Mesh, MeshStandardMaterial, Object3D, BoxGeometry, PerspectiveCamera, Vector2 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { DoorState } from '../src/doors';
 import { activate, findTarget, Interactions, promptFor, setHighlight, type Target } from '../src/interactions';
@@ -21,6 +21,7 @@ describe('interactions', () => {
     expect(promptFor(t, lights)).toBe('Click: turn light on');
     activate(t, lights);
     expect(promptFor(t, lights)).toBe('Click: turn light off');
+    expect(promptFor(t, lights, 'Tap')).toBe('Tap: turn light off');
   });
 
   it('finds the target through parent nodes', () => {
@@ -53,6 +54,20 @@ describe('interactions', () => {
     expect(interactions.click()).toBeNull();
     interactions.update();
     expect(interactions.click()).toBe(t);
+    expect(lights.isOn('sala')).toBe(true);
+  });
+  it('tap activates what is under the tapped point, not the crosshair', () => {
+    const lights = new RoomLights(['sala']);
+    const node = new Mesh(new BoxGeometry(0.2, 0.2, 0.2), new MeshStandardMaterial());
+    node.position.set(0.5, 0, -1); // right of centre
+    node.updateMatrixWorld();
+    const t: Target = { kind: 'switch', room: 'sala', node };
+    const camera = new PerspectiveCamera(90, 1);
+    camera.updateMatrixWorld();
+    const interactions = new Interactions(camera, [node], new Map([[node as Object3D, t]]), lights);
+    expect(interactions.tap(new Vector2(0, 0))).toBeNull();
+    expect(lights.isOn('sala')).toBe(false);
+    expect(interactions.tap(new Vector2(0.5, 0))).toBe(t);
     expect(lights.isOn('sala')).toBe(true);
   });
 });

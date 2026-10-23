@@ -1,7 +1,7 @@
 export const COPY = {
   ready: 'Click to explore',
+  readyTouch: 'Tap to explore',
   loadError: "Couldn't load the apartment. Check your connection and try again.",
-  mobile: 'Best viewed on desktop. This walkthrough needs a keyboard and mouse.',
   contextLost: 'The 3D view stopped responding. Reload to continue.',
   noWebGL: "Your browser doesn't support WebGL 2, which this walkthrough needs. Try a recent Chrome, Firefox, Safari or Edge.",
   flatLighting: 'Real sun and sky off: the same even daylight at any time.',
@@ -19,6 +19,11 @@ export interface SunPanelHandlers {
   play(): void;
   real(on: boolean): void;
 }
+export interface TouchBarHandlers {
+  light(): void;
+  mute(): void;
+  pause(): void;
+}
 export interface SunPanelState {
   dayOfYear: number;
   daysInYear: number;
@@ -32,6 +37,8 @@ export interface SunPanelState {
 
 export class UI {
   private lastRoom = '';
+  private lastRoomLight: boolean | null | undefined;
+  private touch = false;
 
   constructor(private doc: Document) {}
 
@@ -43,10 +50,16 @@ export class UI {
     this.el('progress-bar').style.width = `${Math.round(fraction * 100)}%`;
   }
 
+  /** Phones and tablets: touch controls on the start screen, a button bar for the keys, the sun panel behind a button. */
+  setTouch(): void {
+    this.touch = true;
+    this.doc.body.classList.add('touch');
+  }
+
   setReady(): void {
     const b = this.el<HTMLButtonElement>('start-button');
     b.disabled = false;
-    b.textContent = COPY.ready;
+    b.textContent = this.touch ? COPY.readyTouch : COPY.ready;
   }
 
   onStart(cb: () => void): void {
@@ -102,6 +115,28 @@ export class UI {
 
   setMuted(muted: boolean): void {
     this.el('muted').hidden = !muted;
+    this.el('touch-sound').setAttribute('aria-pressed', String(muted));
+  }
+
+  /** The touch bar's buttons: what L, M and Esc do with a keyboard, and the sun panel shown or hidden. */
+  bindTouchBar(h: TouchBarHandlers): void {
+    this.el('touch-light').addEventListener('click', () => h.light());
+    this.el('touch-sound').addEventListener('click', () => h.mute());
+    this.el('touch-pause').addEventListener('click', () => h.pause());
+    const sun = this.el('touch-sun');
+    sun.addEventListener('click', () => {
+      const open = this.doc.body.classList.toggle('sun-open');
+      sun.setAttribute('aria-expanded', String(open));
+    });
+  }
+
+  /** The current room's light on the touch bar: null when the room has none. */
+  setRoomLight(on: boolean | null): void {
+    if (on === this.lastRoomLight) return;
+    this.lastRoomLight = on;
+    const b = this.el<HTMLButtonElement>('touch-light');
+    b.disabled = on === null;
+    b.setAttribute('aria-pressed', String(on === true));
   }
 
   /** Resumes on Keep exploring or a click on the pause veil (the sun panel sits above it, outside #pause). */
