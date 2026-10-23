@@ -15,13 +15,19 @@ def exterior_windows(meshes, floor_index):
     out = []
     for o in sorted(meshes, key=lambda o: o.name):
         m = GLASS_RE.match(o.name)
-        if not m or EXTERIOR not in (m["a"], m["b"]):
+        if not m:
+            if EXTERIOR in o.name and "glass" in o.name.lower():
+                print(f"[windows] WARNING: '{o.name}' looks like exterior glass but doesn't match the naming pattern; no sunlight enters through it")
+            continue
+        if EXTERIOR not in (m["a"], m["b"]):
             continue
         room = geom.slugify(m["b"] if m["a"] == EXTERIOR else m["a"])
         co = bpyutil.world_coords(o)
         (cx, cz), _, (nx, nz), width, _ = geom.principal_frame(np.stack([co[:, 0], -co[:, 1]], axis=1))
         if floor_index.locate(cx + nx * PROBE, cz + nz * PROBE) == room:
             nx, nz = -nx, -nz
+        elif floor_index.locate(cx - nx * PROBE, cz - nz * PROBE) != room:
+            print(f"[windows] WARNING: neither side of '{o.name}' lands in room '{room}'; its outdoor direction is unverified")
         y0, y1 = float(co[:, 2].min()), float(co[:, 2].max())
         out.append({
             "room": room,
