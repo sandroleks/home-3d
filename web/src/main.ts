@@ -5,10 +5,12 @@ import {
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
+import { doorSound, loadMuted, saveMuted, StepTimer } from './audio';
 import { CONFIG } from './config';
 import { Interactions, promptFor } from './interactions';
 import { loadAssets, type LoadedAssets } from './loader';
 import { Player, vfovFromHfov } from './player';
+import { Sound } from './sound';
 import { Surroundings } from './surroundings';
 import { COPY, isTouchOnly, UI } from './ui';
 import { applyDoorRotation, buildWorld } from './world';
@@ -95,12 +97,22 @@ async function run(): Promise<void> {
   const autostart = params.has('autostart');
   let started = false;
   let currentRoom: string | null = null;
+  let sound: Sound | null = null;
+  let muted = loadMuted(() => localStorage);
+  const steps = new StepTimer();
+  const doorsBefore = world.doors.map((d) => ({ target: d.state.target, progress: d.state.progress }));
 
   const start = () => {
     ui.hideStart();
     ui.showHud();
     started = true;
-    if (!autostart) canvas.requestPointerLock();
+    if (autostart) return; // ?autostart and ?view= reference renders stay silent
+    sound = new Sound(camera);
+    sound.setMuted(muted);
+    sound.setRoom(currentRoom);
+    ui.setMuted(muted);
+    void sound.load();
+    canvas.requestPointerLock();
   };
   ui.setReady();
   ui.onStart(start);
@@ -110,28 +122,52 @@ async function run(): Promise<void> {
   document.addEventListener('pointerlockchange', () => {
     paused = started && !autostart && document.pointerLockElement !== canvas;
     ui.setPaused(paused);
+    sound?.setPaused(paused);
     if (paused) {
       for (const k of Object.keys(player.keys) as (keyof typeof player.keys)[]) player.keys[k] = false;
     }
   });
   window.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && (autostart || document.pointerLockElement === canvas)) interactions.click();
+    if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
+    const t = interactions.click();
+    if (t?.kind === 'switch') sound?.click(t.node); // doors sound from the frame loop as they move
   });
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyL' && !e.repeat && started && !paused && currentRoom && world.lights.has(currentRoom)) world.lights.toggle(currentRoom);
+    if (e.repeat || !started || paused) return;
+    if (e.code === 'KeyL' && currentRoom && world.lights.has(currentRoom)) {
+      world.lights.toggle(currentRoom);
+      sound?.click(world.switches.get(currentRoom));
+    }
+    if (e.code === 'KeyM' && sound) {
+      muted = !muted;
+      saveMuted(() => localStorage, muted);
+      sound.setMuted(muted);
+      ui.setMuted(muted);
+    }
   });
 
   let last = performance.now();
   renderer.setAnimationLoop((now) => {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    for (const d of world.doors) {
+    world.doors.forEach((d, i) => {
       d.state.update(dt);
       applyDoorRotation(d);
+      const before = doorsBefore[i];
+      const s = doorSound(before, d.state);
+      if (s) sound?.door(d.node, s);
+      before.target = d.state.target;
+      before.progress = d.state.progress;
+    });
+    if (started && !paused) {
+      const x = player.x;
+      const z = player.z;
+      player.update(dt);
+      if (sound && steps.update(Math.hypot(player.x - x, player.z - z), player.keys.run)) sound.step();
     }
-    if (started && !paused) player.update(dt);
     if (!player.frozen && world.collision.isBlocked(player.x, player.z)) player.resolve();
     currentRoom = world.rooms.locate(player.x, player.z, currentRoom);
+    sound?.setRoom(currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');
     const target = started ? interactions.update() : null;
     ui.setPrompt(target ? promptFor(target, world.lights) : null);
