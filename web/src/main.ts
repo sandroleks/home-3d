@@ -9,6 +9,7 @@ import { doorSound, loadMuted, saveMuted, StepTimer } from './audio';
 import { CONFIG } from './config';
 import { Interactions, promptFor } from './interactions';
 import { loadAssets, type LoadedAssets } from './loader';
+import { addMirrors } from './mirrors';
 import { Player, vfovFromHfov } from './player';
 import { Sound } from './sound';
 import { Daylight } from './daylight';
@@ -73,6 +74,7 @@ async function run(): Promise<void> {
   const assets: LoadedAssets = await loadAssets((f) => ui.setProgress(f));
 
   const world = buildWorld(assets, scene);
+  addMirrors(world.root, surroundings);
   const site = assets.manifest.site;
   const clock = new SunClock(parseSunParam(params.get('sun'), site.timeZone) ?? Date.now(), site.timeZone);
   const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings);
