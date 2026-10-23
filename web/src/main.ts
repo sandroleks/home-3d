@@ -11,9 +11,12 @@ import { Interactions, promptFor } from './interactions';
 import { loadAssets, type LoadedAssets } from './loader';
 import { Player, vfovFromHfov } from './player';
 import { Sound } from './sound';
+import { Daylight } from './daylight';
 import { Surroundings } from './surroundings';
+import { solarPosition, sunTimes } from './sun';
+import { dayOfYear, daysInYear, formatClock, formatReadout, parseSunParam, SunClock, sunKeyAction } from './sun-clock';
 import { COPY, isTouchOnly, UI } from './ui';
-import { applyDoorRotation, buildWorld } from './world';
+import { applyDoorRotation, applyGlows, buildWorld } from './world';
 import './style.css';
 
 BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -70,7 +73,14 @@ async function run(): Promise<void> {
   const assets: LoadedAssets = await loadAssets((f) => ui.setProgress(f));
 
   const world = buildWorld(assets, scene);
-  assets.surroundings.then((root) => root && surroundings.add(root));
+  const site = assets.manifest.site;
+  const clock = new SunClock(parseSunParam(params.get('sun'), site.timeZone) ?? Date.now(), site.timeZone);
+  const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings);
+  assets.surroundings.then((root) => {
+    if (!root) return;
+    surroundings.add(root);
+    daylight.addCasters(root);
+  });
   const names = new Map(assets.manifest.rooms.map((r) => [r.id, CONFIG.roomNames[r.id] ?? r.name]));
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
@@ -85,6 +95,8 @@ async function run(): Promise<void> {
     resize();
   }
   player.update(0); // place the camera now so the view behind the start overlay shows the spawn
+  const spawnRoom = world.rooms.locate(player.x, player.z, null);
+  if (spawnRoom && world.lights.has(spawnRoom) && daylight.isNight(clock.utc)) world.lights.toggle(spawnRoom);
   if (params.get('debug') === 'lightmap') {
     for (const m of world.lightmapped as MeshStandardMaterial[]) {
       m.color.setRGB(1, 1, 1);
@@ -117,6 +129,30 @@ async function run(): Promise<void> {
   };
   ui.setReady();
   ui.onStart(start);
+  ui.bindSunPanel({
+    dayOfYear: (n) => clock.setDayOfYear(n),
+    season: (month, day) => clock.setDate(clock.local().year, month, day),
+    minutes: (m) => clock.setMinutes(m),
+    now: () => clock.now(),
+    play: () => clock.togglePlay(),
+  });
+  let shownVersion = -1;
+  const times = new Map<string, ReturnType<typeof sunTimes>>();
+  const showSun = () => {
+    const l = clock.local();
+    const key = `${l.year}-${l.month}-${l.day}`;
+    let t = times.get(key);
+    if (!t) {
+      t = sunTimes(l, site.lat, site.lon, site.timeZone);
+      times.set(key, t);
+    }
+    ui.setClock(formatClock(l));
+    ui.setSunPanel({
+      dayOfYear: dayOfYear(l), daysInYear: daysInYear(l.year), minutes: l.hour * 60 + l.minute,
+      sunrise: t.sunrise, sunset: t.sunset, playing: clock.playing,
+      readout: formatReadout(l, solarPosition(clock.utc, site.lat, site.lon), assets.climate.months[l.month - 1]),
+    });
+  };
   ui.onResume(() => {
     sound?.setPaused(false); // resume inside the click: Safari only allows it in a gesture
     canvas.requestPointerLock();
@@ -137,7 +173,13 @@ async function run(): Promise<void> {
     if (t?.kind === 'switch') sound?.click(t.node); // doors sound from the frame loop as they move
   });
   window.addEventListener('keydown', (e) => {
-    if (e.repeat || !started || paused) return;
+    if (!started || paused) return;
+    const sunKey = sunKeyAction(e.code, e.shiftKey);
+    if (sunKey) {
+      if (sunKey !== 'play' || !e.repeat) clock.apply(sunKey); // holding , or . keeps scrolling
+      return;
+    }
+    if (e.repeat) return;
     if (e.code === 'KeyL' && currentRoom && world.lights.has(currentRoom)) {
       world.lights.toggle(currentRoom);
       sound?.click(world.switches.get(currentRoom));
@@ -154,12 +196,14 @@ async function run(): Promise<void> {
   renderer.setAnimationLoop((now) => {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
+    let doorsMoved = false;
     world.doors.forEach((d, i) => {
       d.state.update(dt);
       applyDoorRotation(d);
       const before = doorsBefore[i];
       const s = doorSound(before, d.state);
       if (s) sound?.door(d.node, s);
+      if (d.state.progress !== before.progress) doorsMoved = true;
       before.target = d.state.target;
       before.progress = d.state.progress;
     });
@@ -175,7 +219,14 @@ async function run(): Promise<void> {
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');
     const target = started ? interactions.update() : null;
     ui.setPrompt(target ? promptFor(target, world.lights) : null);
+    clock.tick(dt);
+    daylight.update(clock.utc, clock.version, doorsMoved);
+    if (clock.version !== shownVersion) {
+      shownVersion = clock.version;
+      showSun();
+    }
     world.lights.update(dt);
+    applyGlows(world.glows, world.lights);
     renderer.clear();
     surroundings.render(renderer, camera);
     renderer.clearDepth();

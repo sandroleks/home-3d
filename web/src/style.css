@@ -49,3 +49,23 @@ kbd {
   width: 100%; height: 100%; fill: none; stroke: var(--ink); stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round;
 }
+
+#sun-panel {
+  width: min(460px, calc(100vw - 32px)); box-sizing: border-box; padding: 18px 20px; border-radius: 12px;
+  background: rgba(30, 28, 25, 0.92); text-align: left; display: flex; flex-direction: column; gap: 10px;
+}
+#sun-panel h2 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: 0.04em; color: var(--muted); }
+.sun-row { display: grid; grid-template-columns: 44px 1fr; align-items: center; gap: 10px; font-size: 14px; }
+.sun-row input { width: 100%; accent-color: var(--accent); }
+.sun-months { display: flex; justify-content: space-between; margin-left: 54px; font-size: 11px; color: var(--muted); }
+.sun-track { position: relative; height: 8px; margin: -6px 0 0 54px; }
+.sun-track i { position: absolute; top: 0; width: 2px; height: 8px; background: var(--accent); transform: translateX(-1px); }
+.sun-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.sun-buttons button { padding: 6px 12px; font-size: 13px; background: rgba(255, 255, 255, 0.12); color: var(--ink); }
+#sun-readout { margin: 0; font-size: 13px; line-height: 1.4; min-height: 2.8em; }
+#resume-button { align-self: flex-end; padding: 8px 18px; font-size: 14px; }
+#sun-clock {
+  position: fixed; right: 20px; bottom: 46px; font-size: 13px; letter-spacing: 0.03em; opacity: 0.55;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); transition: opacity 0.4s;
+}
+#sun-clock.flash { opacity: 1; transition: none; }
