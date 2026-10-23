@@ -1,3 +1,5 @@
+import type { Ambience } from './audio';
+
 export const CONFIG = {
   assetsBase: 'assets/',
   dracoPath: 'draco/',
@@ -25,4 +27,21 @@ export const CONFIG = {
   verticalFov: 70,
   /** Optional display names by room id, e.g. { sala: 'Living room' }. */
   roomNames: {} as Record<string, string>,
+  /** Rooms whose ambience isn't the default quiet room tone. */
+  roomAmbience: { varanda: 'outdoor', marquise: 'outdoor', cozinha: 'kitchen', lavandaria: 'kitchen' } as Record<string, Ambience>,
+  audio: {
+    base: 'assets/audio/',
+    /** Bus levels for one-shot effects, footsteps, room ambience and music. */
+    effects: 0.8,
+    steps: 0.35,
+    ambience: 0.4,
+    music: 0.25,
+    /** Seconds. */
+    ambienceFade: 1.5,
+    muteFade: 0.2,
+    /** Metres between footsteps, and before the first one after standing still. */
+    stride: 0.7,
+    runStride: 0.9,
+    firstStep: 0.25,
+  },
 };
