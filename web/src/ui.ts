@@ -2,6 +2,7 @@ export const COPY = {
   ready: 'Click to explore',
   loadError: "Couldn't load the apartment. Check your connection and try again.",
   mobile: 'Best viewed on desktop. This walkthrough needs a keyboard and mouse.',
+  contextLost: 'The 3D view stopped responding. Reload to continue.',
   noWebGL: "Your browser doesn't support WebGL 2, which this walkthrough needs. Try a recent Chrome, Firefox, Safari or Edge.",
 };
 
@@ -41,6 +42,7 @@ export class UI {
   }
 
   showError(message: string, retry: () => void): void {
+    this.el('start').hidden = false; // the error text lives in the start overlay
     this.el('start-button').hidden = true;
     const e = this.el('error');
     e.textContent = message;

@@ -19,16 +19,33 @@ Mesh.prototype.raycast = acceleratedRaycast;
 const params = new URLSearchParams(location.search);
 const ui = new UI(document);
 
+function fail(message: string, err: unknown): void {
+  console.error(err);
+  ui.showError(message, () => location.reload());
+}
+
 async function boot(): Promise<void> {
   if (isTouchOnly((q) => window.matchMedia(q))) return ui.showNotice(COPY.mobile);
   if (!WebGL.isWebGL2Available()) return ui.showNotice(COPY.noWebGL);
+  try {
+    await run();
+  } catch (err) {
+    fail(COPY.loadError, err); // anything that throws while setting up must not leave "Loading…" up forever
+  }
+}
 
+async function run(): Promise<void> {
   const canvas = document.getElementById('view') as HTMLCanvasElement;
   const renderer = new WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = AgXToneMapping;
   renderer.toneMappingExposure = CONFIG.exposure;
+  canvas.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault();
+    renderer.setAnimationLoop(null);
+    fail(COPY.contextLost, new Error('WebGL context lost'));
+  });
 
   const scene = new Scene();
   scene.background = new Color(CONFIG.skyColor);
@@ -46,13 +63,7 @@ async function boot(): Promise<void> {
   resize();
   window.addEventListener('resize', resize);
 
-  let assets: LoadedAssets;
-  try {
-    assets = await loadAssets((f) => ui.setProgress(f));
-  } catch (err) {
-    console.error(err);
-    return ui.showError(COPY.loadError, () => location.reload());
-  }
+  const assets: LoadedAssets = await loadAssets((f) => ui.setProgress(f));
 
   const world = buildWorld(assets, scene);
   const names = new Map(assets.manifest.rooms.map((r) => [r.id, CONFIG.roomNames[r.id] ?? r.name]));
@@ -68,6 +79,7 @@ async function boot(): Promise<void> {
     fixedHfov = vp.hfov;
     resize();
   }
+  player.update(0); // place the camera now so the view behind the start overlay shows the spawn
   if (params.get('debug') === 'lightmap') {
     for (const m of world.lightmapped as MeshStandardMaterial[]) {
       m.color.setRGB(1, 1, 1);
@@ -125,4 +137,4 @@ async function boot(): Promise<void> {
   });
 }
 
-boot();
+boot().catch((err) => fail(COPY.loadError, err));

@@ -7,6 +7,7 @@ describe('shader patches', () => {
     const v = patchVertex(ShaderLib.standard.vertexShader);
     expect(v).toContain('attribute vec2 uv1;');
     expect(v).toContain('vLmUv = uv1;');
+    expect(v).toMatch(/#ifndef USE_UV1\s+attribute vec2 uv1;\s+#endif/);
     const f = patchFragment(ShaderLib.standard.fragmentShader);
     expect(f).toContain('uniform sampler2D lmDay;');
     expect(f).toContain('irradiance += ');

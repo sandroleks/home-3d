@@ -1,4 +1,4 @@
-import { DataTexture, Group, LinearFilter, NoColorSpace, Texture, TextureLoader } from 'three';
+import { DataTexture, Group, ImageBitmapLoader, LinearFilter, NoColorSpace, Texture } from 'three';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG } from './config';
@@ -43,7 +43,13 @@ export async function loadAssets(onProgress: (fraction: number) => void): Promis
 
   const draco = new DRACOLoader().setDecoderPath(CONFIG.dracoPath);
   const gltfLoader = new GLTFLoader().setDRACOLoader(draco);
-  const texLoader = new TextureLoader();
+  // ImageBitmapLoader with premultiplyAlpha 'none': browsers may premultiply <img> data (TextureLoader),
+  // which destroys the precision of low-alpha RGBM pixels.
+  const bitmapLoader = new ImageBitmapLoader().setOptions({
+    imageOrientation: 'none',
+    premultiplyAlpha: 'none',
+    colorSpaceConversion: 'none',
+  });
 
   const dayRefs: LightmapRef[] = [...manifest.chunks.map((c) => c.day), ...manifest.doors.map((d) => d.lightmap)];
   let glbFraction = 0;
@@ -52,7 +58,7 @@ export async function loadAssets(onProgress: (fraction: number) => void): Promis
 
   const loadMap = async (ref: LightmapRef): Promise<LoadedMap> => {
     try {
-      const t = await texLoader.loadAsync(base + ref.file);
+      const t = new Texture(await bitmapLoader.loadAsync(base + ref.file));
       configureLightmap(t);
       return { texture: t, range: ref.range };
     } catch (err) {

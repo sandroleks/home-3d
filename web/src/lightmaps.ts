@@ -16,10 +16,12 @@ export const BLACK_LIGHTMAP = (() => {
   return t;
 })();
 
-// Our own attribute + varying keep this independent of three's USE_UV1 handling.
-// Don't also give these materials a map on UV channel 1, or three will declare uv1 twice.
+// Our own attribute + varying. The uv1 declaration is guarded so it can't collide with three's own
+// when a material ever uses texCoord 1 (USE_UV1).
 const VERTEX_DECL = /* glsl */ `
+#ifndef USE_UV1
 attribute vec2 uv1;
+#endif
 varying vec2 vLmUv;`;
 
 const FRAGMENT_DECL = /* glsl */ `
