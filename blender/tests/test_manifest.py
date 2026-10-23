@@ -13,13 +13,15 @@ STATE = {
         {"node": "Room_porch", "room": "porch", "key": "porch", "size": 64},
         {"node": "Room_exterior", "room": None, "key": "exterior", "size": 64},
     ],
-    "doors": [{"node": "Door_1", "key": "door-1", "hinge": [3.1, -1.78], "dir": [0, 1], "width": 0.76, "openAngle": -1.5708}],
+    "doors": [{"node": "Door_1", "key": "door-1", "hinge": [3.1, -1.78], "dir": [0, 1], "width": 0.76, "openAngle": -1.5708,
+               "rooms": ["alpha", "porch"]}],
     "spawn": {"x": 1.0, "z": -0.8, "yaw": -1.5708},
     "viewpoints": [],
     "windows": [{"room": "alpha", "center": [0.5, 1.5, 0.0], "normal": [0.0, 0.0, 1.0], "width": 1.0, "height": 1.2}],
     "sky_irradiance": 0.6467,
 }
-RANGES = {"alpha_day": 4.0, "alpha_light": 2.0, "porch_day": 3.0, "exterior_day": 8.0, "door-1_day": 2.5}
+RANGES = {"alpha_day": 4.0, "alpha_light": 2.0, "porch_day": 3.0, "exterior_day": 8.0, "door-1_day": 2.5,
+          "door-1_light-alpha": 1.5}
 
 
 class ManifestTests(unittest.TestCase):
@@ -36,6 +38,8 @@ class ManifestTests(unittest.TestCase):
         self.assertIsNone(m["chunks"][1]["light"])
         self.assertEqual(m["doors"][0]["lightmap"], {"file": "lightmaps/door-1_day.webp", "range": 2.5})
         self.assertNotIn("key", m["doors"][0])
+        # porch has no lights, so only alpha's layer is listed
+        self.assertEqual(m["doors"][0]["lights"], [{"room": "alpha", "file": "lightmaps/door-1_light-alpha.webp", "range": 1.5}])
         self.assertEqual(manifest.validate_manifest(m), [])
 
     def test_validate_reports_missing_pieces(self):

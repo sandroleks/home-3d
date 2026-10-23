@@ -47,6 +47,12 @@ class FloorIndexTests(unittest.TestCase):
     def test_bounds(self):
         self.assertEqual(self.index.bounds(), (0.0, 0.0, 3.0, 1.0))
 
+    def test_door_rooms_probes_both_sides(self):
+        # a leaf along z at x = 1.5 between room a (x < 1) and b (x > 2), probing 0.7 m out
+        self.assertEqual(geom.door_rooms((1.5, 0.1), (0, 1), 0.8, self.index.locate, probe=0.7), ["a", "b"])
+        self.assertEqual(geom.door_rooms((0.5, 0.1), (0, 1), 0.8, self.index.locate, probe=0.2), ["a"])
+        self.assertEqual(geom.door_rooms((5, 5), (1, 0), 0.8, self.index.locate), [])
+
 
 class PrincipalFrameTests(unittest.TestCase):
     def test_rotated_rectangle(self):

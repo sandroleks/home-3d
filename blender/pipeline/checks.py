@@ -26,7 +26,8 @@ def sanitized_node_name(name):
 
 def check_outputs(out_dir, m, budget_bytes, expected_doors):
     errors = list(manifest_mod.validate_manifest(m))
-    refs = [c["day"] for c in m["chunks"]] + [c["light"] for c in m["chunks"]] + [d["lightmap"] for d in m["doors"]]
+    refs = [c["day"] for c in m["chunks"]] + [c["light"] for c in m["chunks"]] + [d["lightmap"] for d in m["doors"]] + [
+        l for d in m["doors"] for l in d.get("lights", [])]
     for ref in refs:
         if ref and not os.path.exists(os.path.join(out_dir, ref["file"])):
             errors.append(f"missing file {ref['file']}")

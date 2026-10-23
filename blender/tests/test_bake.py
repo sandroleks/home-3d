@@ -94,12 +94,14 @@ class BakeAllTests(unittest.TestCase):
         state = {"rooms": room_list, "chunks": chunk_list, "day_lights": day,
                  "room_lights": {"alpha": ["Ceiling light Alpha", "Desk lamp light"], "beta": ["Ceiling light Beta"]},
                  "room_emitters": {},
-                 "doors": [{"node": leaf.name, "key": "door-1"}], "door_lightmap_size": q.door_lightmap}
+                 "doors": [{"node": leaf.name, "key": "door-1", "rooms": ["alpha", "beta"]}],
+                 "door_lightmap_size": q.door_lightmap}
         cls.out = tempfile.mkdtemp()
         cls.ranges = bake.bake_all(scene, state, q, cls.out)
 
     def test_files_and_ranges(self):
-        expected = {"alpha_day", "beta_day", "exterior_day", "door-1_day", "alpha_light", "beta_light"}
+        expected = {"alpha_day", "beta_day", "exterior_day", "door-1_day", "alpha_light", "beta_light",
+                    "door-1_light-alpha", "door-1_light-beta"}
         self.assertEqual(set(self.ranges), expected)
         for key in expected:
             self.assertTrue(os.path.exists(os.path.join(self.out, "lightmaps", f"{key}.webp")), key)

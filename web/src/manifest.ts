@@ -11,7 +11,10 @@ export interface DoorInfo {
   width: number;
   openAngle: number;
   lightmap: LightmapRef;
+  /** Lamp light baked onto the leaf from each room it faces that has lights. */
+  lights: DoorLight[];
 }
+export interface DoorLight extends LightmapRef { room: string }
 export interface Viewpoint { name: string; position: [number, number, number]; yaw: number; pitch: number; hfov: number }
 export interface SiteInfo { lat: number; lon: number; timeZone: string; yBearing: number }
 /** The baked sky's irradiance on an upward face, and the factor from real W/m² to the scene's light units. */
@@ -109,6 +112,10 @@ export function parseManifest(json: unknown): Manifest {
         width: num(d.width, `doors[${i}].width`),
         openAngle: num(d.openAngle, `doors[${i}].openAngle`),
         lightmap: lightmap(d.lightmap, `doors[${i}].lightmap`),
+        lights: (d.lights === undefined ? [] : arr(d.lights, `doors[${i}].lights`)).map((l, k) => {
+          const path = `doors[${i}].lights[${k}]`;
+          return { room: str(obj(l, path).room, `${path}.room`), ...lightmap(l, path) };
+        }),
       };
     }),
     viewpoints: arr(m.viewpoints, 'viewpoints').map((v, i) => {

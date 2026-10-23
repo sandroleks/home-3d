@@ -52,7 +52,10 @@ export function buildWorld(assets: LoadedAssets, scene: Scene): World {
   const lights = new RoomLights(lightRooms);
   const lightmapped: MeshStandardMaterial[] = [];
   const pickables: Object3D[] = [];
-  const pendingLight = new Map<string, MeshStandardMaterial[]>();
+  /** Lamp layers waiting for their texture: file -> the materials and which slot it binds to. */
+  const pendingLight = new Map<string, { mats: MeshStandardMaterial[]; slot: 1 | 2 }[]>();
+  const awaitLight = (file: string, mats: MeshStandardMaterial[], slot: 1 | 2) =>
+    pendingLight.set(file, [...(pendingLight.get(file) ?? []), { mats, slot }]);
 
   const sky = { value: 1 };
   const noFill = { value: new Color(0, 0, 0) };
@@ -73,7 +76,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene): World {
         if (m.emissive.r + m.emissive.g + m.emissive.b > 0) glows.push({ room: chunk.room, material: m, base: m.emissiveIntensity });
       }
     }
-    if (chunk.light) pendingLight.set(chunk.light.file, mats);
+    if (chunk.light) awaitLight(chunk.light.file, mats, 1);
     n.traverse((o) => {
       if ((o as Mesh).isMesh) (o as Mesh).geometry.computeBoundsTree?.();
     });
@@ -81,9 +84,9 @@ export function buildWorld(assets: LoadedAssets, scene: Scene): World {
   }
 
   assets.light.then((maps) => {
-    for (const [file, mats] of pendingLight) {
+    for (const [file, uses] of pendingLight) {
       const m = maps.get(file);
-      if (m) for (const mat of mats) setLightTexture(mat, m.texture, m.range);
+      if (m) for (const { mats, slot } of uses) for (const mat of mats) setLightTexture(mat, m.texture, m.range, slot);
     }
   }).catch((err) => console.warn('Room light maps failed to bind; lights will stay dark.', err));
 
@@ -91,7 +94,15 @@ export function buildWorld(assets: LoadedAssets, scene: Scene): World {
   const doors: DoorRuntime[] = manifest.doors.map((info) => {
     const n = node(root, info.node);
     const d = day.get(info.lightmap.file)!;
-    lightmapped.push(...prepareMeshes(n, { day: d.texture, dayRange: d.range, light: BLACK_LIGHTMAP, lightRange: 0, intensity: { value: 0 }, sky, fill: noFill }));
+    // Each face of the leaf takes its room's lamps; the two layers are bound once they load.
+    const lit = info.lights.filter((l) => lights.has(l.room)).slice(0, 2);
+    const intensity = (k: number) => (lit[k] ? lights.uniform(lit[k].room) : { value: 0 });
+    const mats = prepareMeshes(n, {
+      day: d.texture, dayRange: d.range, light: BLACK_LIGHTMAP, lightRange: 0, intensity: intensity(0),
+      light2: { texture: BLACK_LIGHTMAP, range: 0, intensity: intensity(1) }, sky, fill: noFill,
+    });
+    lightmapped.push(...mats);
+    lit.forEach((l, k) => awaitLight(l.file, mats, k === 0 ? 1 : 2));
     const state = new DoorState(info);
     targets.set(n, { kind: 'door', door: state, node: n });
     pickables.push(n);

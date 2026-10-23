@@ -8,6 +8,8 @@ export interface LightmapBinding {
   light: Texture;
   lightRange: number;
   intensity: { value: number };
+  /** A second lamp layer: a door's leaf is lit from the rooms on both sides. Chunks leave it out. */
+  light2?: { texture: Texture; range: number; intensity: { value: number } };
   /** Shared by every lightmapped material: how bright the baked sky is right now. */
   sky: { value: number };
   /** Per room: flat bounce light from sun entering its windows. */
@@ -39,6 +41,9 @@ uniform float lmDayRange;
 uniform float lmLightRange;
 uniform float lmLightIntensity;
 uniform float lmLightSpill;
+uniform sampler2D lmLight2;
+uniform float lmLight2Range;
+uniform float lmLight2Intensity;
 uniform float lmScale;
 uniform float lmSkyScale;
 uniform vec3 lmFill;
@@ -47,7 +52,8 @@ ${RGBM_GLSL}`;
 const ACCUMULATE = /* glsl */ `
 #if defined( RE_IndirectDiffuse )
 	irradiance += ( lmSkyScale * rgbmDecode( texture( lmDay, vLmUv ), lmDayRange )
-		+ max( lmLightIntensity, lmLightSpill ) * rgbmDecode( texture( lmLight, vLmUv ), lmLightRange ) ) * lmScale
+		+ max( lmLightIntensity, lmLightSpill ) * rgbmDecode( texture( lmLight, vLmUv ), lmLightRange )
+		+ max( lmLight2Intensity, lmLightSpill ) * rgbmDecode( texture( lmLight2, vLmUv ), lmLight2Range ) ) * lmScale
 		+ lmFill;
 #endif`;
 
@@ -72,6 +78,9 @@ export function applyLightmap(material: MeshStandardMaterial, b: LightmapBinding
     lmLightRange: { value: b.lightRange },
     lmLightIntensity: b.intensity,
     lmLightSpill: LIGHT_SPILL,
+    lmLight2: { value: b.light2?.texture ?? BLACK_LIGHTMAP },
+    lmLight2Range: { value: b.light2?.range ?? 0 },
+    lmLight2Intensity: b.light2?.intensity ?? { value: 0 },
     lmScale: { value: scale },
     lmSkyScale: b.sky,
     lmFill: b.fill,
@@ -82,14 +91,15 @@ export function applyLightmap(material: MeshStandardMaterial, b: LightmapBinding
     shader.vertexShader = patchVertex(shader.vertexShader);
     shader.fragmentShader = patchFragment(shader.fragmentShader);
   };
-  material.customProgramCacheKey = () => 'room-lightmap-v3';
+  material.customProgramCacheKey = () => 'room-lightmap-v4';
   material.needsUpdate = true;
 }
 
-export function setLightTexture(material: MeshStandardMaterial, texture: Texture, range: number): void {
+/** Bind a lamp layer once it has loaded: slot 2 is a door's second room. */
+export function setLightTexture(material: MeshStandardMaterial, texture: Texture, range: number, slot: 1 | 2 = 1): void {
   const u = material.userData.lightmapUniforms;
-  u.lmLight.value = texture;
-  u.lmLightRange.value = range;
+  u[slot === 1 ? 'lmLight' : 'lmLight2'].value = texture;
+  u[slot === 1 ? 'lmLightRange' : 'lmLight2Range'].value = range;
 }
 
 export function fadeToward(current: number, target: number, dt: number, duration: number): number {

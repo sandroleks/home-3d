@@ -215,10 +215,14 @@ def bake_all(scene, state, quality, out_dir):
             run(c["node"], c["key"], "day", c["size"])
         for d in state["doors"]:
             run(d["node"], d["key"], "day", state["door_lightmap_size"])
-        for c in state["chunks"]:
-            if c["room"] in room_lights:
-                lighting.room(c["room"])
-                run(c["node"], c["key"], "light", c["size"])
+        for room in room_lights:
+            lighting.room(room)
+            for c in state["chunks"]:
+                if c["room"] == room:
+                    run(c["node"], c["key"], "light", c["size"])
+            for d in state["doors"]:  # a door is lit from both its rooms, each switched on its own
+                if room in d.get("rooms", []):
+                    run(d["node"], d["key"], f"light-{room}", state["door_lightmap_size"])
     finally:
         lighting.restore()
         remove_bake_nodes()

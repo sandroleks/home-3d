@@ -26,7 +26,8 @@ def build_manifest(state, ranges, eye_height):
         for c in state["chunks"]
     ]
     doors = [
-        {**{k: d[k] for k in ("node", "hinge", "dir", "width", "openAngle")}, "lightmap": ref(d["key"], "day")}
+        {**{k: d[k] for k in ("node", "hinge", "dir", "width", "openAngle")}, "lightmap": ref(d["key"], "day"),
+         "lights": [{"room": r, **ref(d["key"], f"light-{r}")} for r in d.get("rooms", []) if ref(d["key"], f"light-{r}")]}
         for d in state["doors"]
     ]
     return {

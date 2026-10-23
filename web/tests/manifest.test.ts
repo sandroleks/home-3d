@@ -16,6 +16,15 @@ describe('parseManifest', () => {
     expect(m.windows[0].normal).toEqual([0, 0, 1]);
   });
 
+  it('reads the lamp layers baked onto a door, and none from an older manifest', () => {
+    const raw = sampleManifest() as { doors: Record<string, unknown>[] };
+    expect(parseManifest(raw).doors[0].lights).toEqual([]);
+    raw.doors[0].lights = [{ room: 'alpha', file: 'lightmaps/door-1_light-alpha.webp', range: 1.5 }];
+    expect(parseManifest(raw).doors[0].lights).toEqual([{ room: 'alpha', file: 'lightmaps/door-1_light-alpha.webp', range: 1.5 }]);
+    raw.doors[0].lights = [{ file: 'x.webp', range: 1 }];
+    expect(() => parseManifest(raw)).toThrow('doors[0].lights[0].room');
+  });
+
   it('names the path of a broken field', () => {
     const bad = sampleManifest() as { chunks: { day: unknown }[] };
     bad.chunks[0].day = null;

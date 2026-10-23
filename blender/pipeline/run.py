@@ -3,7 +3,7 @@ import os
 
 import bpy
 
-from . import (bake, chunks, checks, collision, config, debug_map, doors, export, lamps, manifest,
+from . import (bake, chunks, checks, collision, config, debug_map, doors, export, geom, lamps, manifest,
                openings, proc_materials, rooms, scene_select, state, surroundings, switches, uvs, windows)
 
 
@@ -34,6 +34,8 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
     leaves = [o for o in meshes if o.name.startswith("Door leaf")]
     static = [o for o in meshes if not o.name.startswith("Door leaf")]
     door_specs = doors.prepare_doors(leaves, grid, config.DOOR_OVERRIDES, ops, infilled)  # may delete leaves
+    for d in door_specs:  # whose lamps light each face of the leaf
+        d["rooms"] = geom.door_rooms(d["hinge"], d["dir"], d["width"], floor_index.locate)
     ctx["doors"] = door_specs
     if stop_after == "doors":
         return ctx

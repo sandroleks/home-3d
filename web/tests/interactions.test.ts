@@ -4,7 +4,7 @@ import { DoorState } from '../src/doors';
 import { activate, findTarget, Interactions, promptFor, setHighlight, type Target } from '../src/interactions';
 import { RoomLights } from '../src/lightmaps';
 
-const doorInfo = { node: 'Door_1', hinge: [0, 0] as [number, number], dir: [1, 0] as [number, number], width: 0.8, openAngle: 1.5, lightmap: { file: 'x', range: 1 } };
+const doorInfo = { node: 'Door_1', hinge: [0, 0] as [number, number], dir: [1, 0] as [number, number], width: 0.8, openAngle: 1.5, lightmap: { file: 'x', range: 1 }, lights: [] };
 
 describe('interactions', () => {
   it('prompts and activates doors', () => {

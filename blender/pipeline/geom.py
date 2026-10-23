@@ -116,6 +116,21 @@ def principal_frame(points_xz):
     )
 
 
+def door_rooms(hinge, direction, width, locate, probe=0.3):
+    """Rooms on either side of a closed door (three.js ground plane), each once, in side order.
+
+    locate(x, z) -> room id or None; the probes sit `probe` m off the leaf's middle, past the wall.
+    """
+    mx, mz = hinge[0] + direction[0] * width / 2, hinge[1] + direction[1] * width / 2
+    nx, nz = -direction[1], direction[0]
+    out = []
+    for s in (1, -1):
+        room = locate(mx + nx * probe * s, mz + nz * probe * s)
+        if room is not None and room not in out:
+            out.append(room)
+    return out
+
+
 def choose_door_swing(end_a, end_b, is_blocked, override=None):
     """Pick the hinge end and swing direction for a closed door leaf.
 
