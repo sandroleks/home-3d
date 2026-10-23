@@ -169,8 +169,8 @@ export class Daylight {
       this.seen = version;
       this.dirty = false;
       this.apply(utc);
-      this.renderer.shadowMap.needsUpdate = true;
-    } else if (doorsMoved) {
+      if (this.light.intensity > 0) this.renderer.shadowMap.needsUpdate = true; // nothing to draw while the sun is down
+    } else if (doorsMoved && this.light.intensity > 0) {
       this.renderer.shadowMap.needsUpdate = true;
     }
   }

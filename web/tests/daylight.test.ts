@@ -1,8 +1,15 @@
-import { Color } from 'three';
+import { BoxGeometry, Color, DoubleSide, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Scene, type WebGLRenderer } from 'three';
 import { describe, expect, it } from 'vitest';
+import { parseClimate } from '../src/climate';
 import { CONFIG } from '../src/config';
-import { casterPositions, enteringLight, envIntensityFor, gainedSkyScale, paneSamples, roomFill, skyColor, sunColor, sunFade } from '../src/daylight';
-import type { WindowInfo } from '../src/manifest';
+import {
+  casterPositions, Daylight, enteringLight, envIntensityFor, gainedSkyScale, paneSamples, roomFill, skyColor, sunColor, sunFade,
+} from '../src/daylight';
+import { type Manifest, parseManifest, type WindowInfo } from '../src/manifest';
+import { fromLocal, solarPosition, sunVector } from '../src/sun';
+import { Surroundings } from '../src/surroundings';
+import type { World } from '../src/world';
+import { sampleManifest } from './fixtures';
 
 const pane: WindowInfo = { room: 'sala', center: [0, 1.5, 0], normal: [0, 0, 1], width: 2, height: 1 };
 
@@ -65,5 +72,146 @@ describe('sky calibration', () => {
     expect(envIntensityFor(0)).toBe(0);
     expect(envIntensityFor(0.5)).toBeCloseTo(CONFIG.envIntensity * 0.5);
     expect(envIntensityFor(10)).toBeCloseTo(CONFIG.envIntensity * 1.5);
+  });
+});
+
+// Daylight itself, without WebGL: only the renderer is stubbed. Shadows are not drawn here, so the
+// shadow map's contents (and the real GPU path) are covered by looking at the page, not by these tests.
+const TZ = 'Europe/Lisbon';
+const SUMMER_EVENING = fromLocal({ year: 2026, month: 6, day: 21, hour: 18, minute: 0 }, TZ);
+const NIGHT = fromLocal({ year: 2026, month: 1, day: 1, hour: 2, minute: 0 }, TZ);
+
+/** Constant light all day: 100 W/m² beam, 50 diffuse, so any sun above the horizon has something to deliver. */
+const climate = () => parseClimate({
+  months: Array.from({ length: 12 }, (_, m) => ({
+    month: m + 1, sunshineHours: 5, cloudCover: 40,
+    hours: Array.from({ length: 24 }, (_, h) => ({ utcHour: h + 0.5, gb: 100, gd: 50, gcs: 200 })),
+  })),
+});
+
+function setup(blockSun: boolean) {
+  const manifest = parseManifest(sampleManifest());
+  const dir = sunVector(solarPosition(SUMMER_EVENING, manifest.site.lat, manifest.site.lon), manifest.site.yBearing);
+  const horizontal = Math.hypot(dir[0], dir[2]);
+  // A pane facing the sun's compass direction, at the origin.
+  const window = { room: 'alpha', center: [0, 1.5, 0], normal: [dir[0] / horizontal, 0, dir[2] / horizontal], width: 1, height: 1 };
+  const m: Manifest = { ...manifest, windows: [window as Manifest['windows'][0]] };
+
+  const root = new Group();
+  root.add(new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial()));
+  const occluders: Mesh[] = [];
+  if (blockSun) {
+    const plate = new Mesh(new PlaneGeometry(20, 20), new MeshBasicMaterial({ side: DoubleSide }));
+    plate.position.set(dir[0] * 2, 1.5 + dir[1] * 2, dir[2] * 2);
+    plate.lookAt(0, 1.5, 0);
+    plate.updateMatrixWorld(true);
+    occluders.push(plate);
+  }
+  const fills = new Map(m.rooms.map((r) => [r.id, { value: new Color(0, 0, 0) }] as const));
+  const world = { root, sky: { value: 1 }, fills, occluders } as unknown as World;
+  const renderer = { shadowMap: {} } as unknown as WebGLRenderer;
+  const scene = new Scene();
+  const daylight = new Daylight(renderer, scene, world, m, climate(), new Surroundings(new Color(0xffffff)));
+  const internals = daylight as unknown as { casters: Group; occluders: Mesh[] };
+  return { daylight, renderer, world, fills, scene, internals };
+}
+
+const drawn = (r: WebGLRenderer) => (r.shadowMap as { needsUpdate?: boolean }).needsUpdate === true;
+const reset = (r: WebGLRenderer) => { (r.shadowMap as { needsUpdate?: boolean }).needsUpdate = false; };
+
+describe('Daylight.update', () => {
+  it('applies on the first call and then only when the version, the casters or a door change', () => {
+    const { daylight, renderer, world } = setup(false);
+    daylight.update(SUMMER_EVENING, 1, false);
+    expect(drawn(renderer)).toBe(true);
+    expect(daylight.light.intensity).toBeGreaterThan(0);
+    expect(world.sky.value).toBeGreaterThan(0);
+
+    reset(renderer);
+    world.sky.value = -1; // a sentinel: an apply would overwrite it
+    daylight.update(SUMMER_EVENING, 1, false);
+    expect(drawn(renderer)).toBe(false);
+    expect(world.sky.value).toBe(-1);
+
+    daylight.update(SUMMER_EVENING, 1, true); // a door moved: redraw shadows, nothing else
+    expect(drawn(renderer)).toBe(true);
+    expect(world.sky.value).toBe(-1);
+
+    reset(renderer);
+    daylight.addCasters(new Group());
+    daylight.update(SUMMER_EVENING, 1, false);
+    expect(world.sky.value).toBeGreaterThan(0);
+    expect(drawn(renderer)).toBe(true);
+
+    reset(renderer);
+    daylight.update(SUMMER_EVENING + 60000, 2, false);
+    expect(drawn(renderer)).toBe(true);
+  });
+
+  it('does not redraw the shadow map while the sun is down', () => {
+    const { daylight, renderer } = setup(false);
+    daylight.update(NIGHT, 1, false);
+    expect(daylight.light.intensity).toBe(0);
+    expect(drawn(renderer)).toBe(false);
+    daylight.update(NIGHT, 1, true);
+    expect(drawn(renderer)).toBe(false);
+    daylight.update(SUMMER_EVENING, 2, false); // the first apply with light draws again
+    expect(drawn(renderer)).toBe(true);
+  });
+});
+
+describe('Daylight.apply', () => {
+  it('goes dark at night: no sun, no sky, no fill', () => {
+    const { daylight, world, fills, scene } = setup(false);
+    daylight.update(NIGHT, 1, false);
+    expect(daylight.light.intensity).toBe(0);
+    expect(world.sky.value).toBe(0);
+    expect(scene.environmentIntensity).toBe(0);
+    for (const f of fills.values()) expect(f.value.toArray()).toEqual([0, 0, 0]);
+  });
+
+  it('fills a room whose window faces the sun', () => {
+    const { daylight, fills } = setup(false);
+    daylight.update(SUMMER_EVENING, 1, false);
+    const f = fills.get('alpha')!.value;
+    expect(f.r + f.g + f.b).toBeGreaterThan(0);
+    expect(fills.get('beta')!.value.r).toBe(0);
+  });
+
+  it('gives no fill when something stands between the pane and the sun', () => {
+    const { daylight, fills } = setup(true);
+    daylight.update(SUMMER_EVENING, 1, false);
+    expect(daylight.light.intensity).toBeGreaterThan(0);
+    expect(fills.get('alpha')!.value.toArray()).toEqual([0, 0, 0]);
+  });
+});
+
+describe('Daylight.addCasters', () => {
+  const box = (x: number, h: number, w = 10) => {
+    const m = new Mesh(new BoxGeometry(w, h, w), new MeshBasicMaterial());
+    m.position.set(x, h / 2, 0);
+    return m;
+  };
+
+  it('skips ground layers and meshes beyond the shadow reach, and adds near buildings', () => {
+    const { daylight, internals } = setup(false);
+    const before = internals.occluders.length;
+    const root = new Group();
+    root.add(box(20, 0.001, 100)); // flat ground, thinner than surroundingsFlatHeight
+    root.add(box(CONFIG.sun.shadowReach + 500, 10)); // too far to matter
+    root.add(box(20, 10)); // a neighbour
+    daylight.addCasters(root);
+    expect(internals.casters.children).toHaveLength(1);
+    expect(internals.occluders).toHaveLength(before + 1);
+    expect((internals.casters.children[0] as Mesh).castShadow).toBe(true);
+  });
+});
+
+describe('Daylight.isNight', () => {
+  it('is true only when the sun is more than 6 degrees down', () => {
+    const { daylight } = setup(false);
+    expect(daylight.isNight(NIGHT)).toBe(true);
+    expect(daylight.isNight(SUMMER_EVENING)).toBe(false);
+    expect(daylight.isNight(fromLocal({ year: 2026, month: 6, day: 21, hour: 21, minute: 30 }, TZ))).toBe(false); // sun still near the horizon
   });
 });
