@@ -67,7 +67,7 @@ New module `web/src/sun.ts`, pure and unit-tested:
 A one-off script, `web/scripts/fetch-climate.mjs` (Node, no dependencies), writes `web/public/assets/climate.json`. The file is committed. A new `web/public/assets/DATA-SOURCES.md` lists both sources with their URLs, query parameters, fetch date and licence (PVGIS: © European Union, free reuse with attribution; Open-Meteo: CC BY 4.0).
 
 - **PVGIS 5.3 daily profiles** (`DRcalc`, `month=0`, `global=1`, `clearsky=1`, horizontal plane) at the site. Each month gets an average day of 24 hourly values: beam `Gb`, diffuse `Gd` and clear-sky `Gcs` irradiance in W/m². These are SARAH3 data averaged over 2005–2023. The times are UTC.
-- **Open-Meteo archive** (`daily=sunshine_duration,cloud_cover_mean`, 2015–2024, `timezone=Europe/Lisbon`), averaged per month. It is kept in the data file for reference but not shown: Open-Meteo overstates Porto sunshine (12.9 h in June against about 10 h observed). The readout uses the PVGIS figures instead, for example "typical June: 81% of clear-sky sunlight" (the month's sum of beam + diffuse over the sum of clear-sky global, whole percent).
+- **Open-Meteo archive** (`daily=sunshine_duration,cloud_cover_mean`, 2015–2024, `timezone=Europe/Lisbon`), averaged per month. It is kept in the data file for reference but not shown: Open-Meteo overstates Porto sunshine (12.9 h in June against about 10 h observed). The readout uses the PVGIS figures instead, for example "typical June: 78% of clear-sky sunlight" (the month's sum of beam + diffuse over the sum of clear-sky global, whole percent).
 - Format:
 
   ```
@@ -147,7 +147,7 @@ The pause overlay gains a sun panel. Clicks inside the panel don't resume the wa
 - **Date:** a slider over the days of the year, labelled Jan–Dec, plus four buttons: **Winter solstice** (21 Dec), **Spring equinox** (20 Mar), **Summer solstice** (21 Jun) and **Autumn equinox** (22 Sep). The year is the current one.
 - **Time:** a slider from 00:00 to 24:00 in 5-minute steps, with sunrise and sunset marked for the chosen date.
 - **Now**, **Play / Pause**, and **Keep exploring**.
-- **Readout:** for example `21 Jun · 18:30 · Sun 24° high, west-north-west · typical June: 81% of clear-sky sunlight`. Below the horizon it reads `Sun below the horizon` instead.
+- **Readout:** for example `21 Jun · 18:30 · Sun 24° high, west-north-west · typical June: 78% of clear-sky sunlight`. Below the horizon it reads `Sun below the horizon` instead.
 - The panel follows the existing overlay style (`style.css` variables, rounded accent buttons) and fits within 16 px side margins down to 768 px wide.
 
 ### Keys while walking
