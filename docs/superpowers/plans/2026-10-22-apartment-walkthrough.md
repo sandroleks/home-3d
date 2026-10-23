@@ -49,6 +49,8 @@ The first run on the real file found that the model differs from the plan's assu
 14. **Switches may sit outside the room.** The Closet and Lavandaria have no free wall inside their doorways, so `SWITCH_OVERRIDES` gains `"face": "outside"`, which puts the switch on the other room's face of that opening. Closet: in the Entrada beside opening 18. Lavandaria: on the Marquise side of glazed door 26.
 15. **Exports run with `--factory-startup`.** The user's own add-ons (e.g. BlenderGIS, which downloaded a library during a run) must not load during exports or reference renders. Cycles is enabled in factory settings.
 
+16. **Sky behind the windows.** The web scene's background is a flat daylight sky colour (`CONFIG.skyColor`, `#cfdbe6`), so windows don't show black. **Reference renders use the finished frame**, i.e. `render-refs` sets the scene to `frame_end` before rendering.
+
 ---
 
 ## File Structure
@@ -5307,11 +5309,11 @@ These are read-only renders of a staged copy of the source file:
 make render-refs
 ```
 
-Expected: `build/ref/Cam_Sala0001.png` and the other two cameras' renders (800×500).
+Expected: `build/ref/Cam_Sala.png`, `Cam_Kitchen.png` and `Cam_Bedroom.png` (800×500), rendered at the scene's last frame so the source file's build-up animation has finished.
 
 - [ ] **Step 3: Compare against the browser**
 
-With the dev server running, `resize_window` to 1600×1000 (render aspect 1.6). For each of `Cam_Sala`, `Cam_Kitchen` and `Cam_Bedroom`, open `?view=<cam>&autostart`, take a screenshot, and compare it with `build/ref/<cam>0001.png` (Read tool). They should match in framing, overall brightness, shadow placement, and colours of the floor, walls and furniture.
+With the dev server running, `resize_window` to 1600×1000 (render aspect 1.6). For each of `Cam_Sala`, `Cam_Kitchen` and `Cam_Bedroom`, open `?view=<cam>&autostart`, take a screenshot, and compare it with `build/ref/<cam>.png` (Read tool). They should match in framing, overall brightness, shadow placement, and colours of the floor, walls and furniture.
 - Everything uniformly too bright or too dark: adjust `CONFIG.exposure`.
 - Lit areas wrong relative to the albedo: adjust `CONFIG.lightmapScale` (start from `Math.PI`).
 - Glossy surfaces too flat or too chrome-like: adjust `CONFIG.envIntensity`.
