@@ -1,10 +1,8 @@
-import math
 import os
 import tempfile
 import unittest
 
 import bpy
-import numpy as np
 
 from pipeline import checks, config, surroundings
 from tests import fixture_scene
@@ -24,18 +22,6 @@ def _add_neighbourhood(scene):
     top.objects.link(hidden)
 
 
-class ShadeTests(unittest.TestCase):
-    def test_sun_and_sky(self):
-        up, wall, down = (0, 0, 1), (1, 0, 0), (0, 0, -1)
-        sun = ((0.0, 0.0, 1.0), 4.0)
-        s = surroundings.shade([up, wall, down], [sun], 2.0)
-        np.testing.assert_allclose(s, [(4.0 + 2.0) / math.pi, 1.0 / math.pi, 0.0])
-
-    def test_faces_turned_away_get_no_sun(self):
-        s = surroundings.shade([(1, 0, 0)], [((-1.0, 0.0, 0.0), 4.0)], 0.0)
-        self.assertEqual(s[0], 0.0)
-
-
 class ExportTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -46,11 +32,15 @@ class ExportTests(unittest.TestCase):
             bpy.context.scene, bpy.context.view_layer, config.QUALITY["test"], cls.out)
         cls.path = os.path.join(cls.out, surroundings.FILE)
 
-    def test_exports_render_visible_neighbourhood_with_shade(self):
+    def test_exports_render_visible_neighbourhood_with_normals_and_no_shade(self):
         self.assertEqual(self.names, ["Exterior grass", "Exterior pine"])
         self.assertEqual(checks.check_surroundings(self.out), [])
         gltf = checks.read_glb_json(self.path)
         self.assertEqual(len(gltf["meshes"]), 2)
+        for mesh in gltf["meshes"]:
+            for p in mesh["primitives"]:
+                self.assertIn("NORMAL", p["attributes"])
+                self.assertNotIn("COLOR_0", p["attributes"])
 
     def test_leaves_the_scene_as_it_was(self):
         self.assertNotIn("WEB_SURROUNDINGS", bpy.data.collections)

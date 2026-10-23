@@ -72,13 +72,13 @@ def check_outputs(out_dir, m, budget_bytes, expected_doors):
 
 
 def check_surroundings(out_dir):
-    """surroundings.glb is optional, but when present every primitive needs its baked shade (COLOR_0)."""
+    """surroundings.glb is optional, but when present every primitive needs normals: the viewer lights it live."""
     path = os.path.join(out_dir, "surroundings.glb")
     if not os.path.exists(path):
         return []
     for mesh in read_glb_json(path)["meshes"]:
-        if any("COLOR_0" not in p["attributes"] for p in mesh["primitives"]):
-            return [f"surroundings.glb mesh {mesh.get('name')!r}: a primitive lacks COLOR_0 (shade)"]
+        if any("NORMAL" not in p["attributes"] for p in mesh["primitives"]):
+            return [f"surroundings.glb mesh {mesh.get('name')!r}: a primitive lacks NORMAL"]
     return []
 
 
