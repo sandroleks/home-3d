@@ -82,7 +82,7 @@ make render-refs     # Cycles reference renders in build/ref/ to compare against
 
 The repo is self-contained: the exported assets in `web/public/assets/` (about 36 MB) and the source `Untitled.blend` are committed, so a host can build straight from GitHub.
 
-**Vercel:** import the GitHub repo and leave the settings alone. `vercel.json` tells Vercel to install and build inside `web/` and to serve `web/dist/`. Every push to `main` redeploys.
+**Vercel:** import the GitHub repo and set **Root Directory** to `web` (Vercel usually suggests it). `web/vercel.json` installs with `npm ci`, builds, and serves `dist/`. Leave the other build settings alone. Every push to `main` redeploys.
 
 **Updating the live site:** re-export (`make export-final`), then commit the changed files in `web/public/assets/` (and `Untitled.blend`) and push.
 
