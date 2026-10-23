@@ -86,3 +86,15 @@ export function skyDiffuse(c: Climate, utcMillis: number, elevation: number, dif
 export function skyScale(diffuse: number, wattsToScene: number, bakedIrradiance: number): number {
   return (diffuse * wattsToScene) / bakedIrradiance;
 }
+
+/** Share of clear-sky sunlight the month's typical day delivers: sum of (beam + diffuse) over the sum of clear-sky global, whole percent. */
+export function clearSkyShare(m: ClimateMonth): number {
+  let actual = 0;
+  let clear = 0;
+  for (const h of m.hours) {
+    if (h.gcs <= 0) continue;
+    actual += h.gb + h.gd;
+    clear += h.gcs;
+  }
+  return clear > 0 ? Math.round((100 * actual) / clear) : 0;
+}

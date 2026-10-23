@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ClimateMonth } from '../src/climate';
+import { clearSkyShare, type ClimateMonth } from '../src/climate';
 import {
   compassName, dayOfYear, daysInYear, formatClock, formatReadout, parseSunParam, SunClock, sunKeyAction,
 } from '../src/sun-clock';
@@ -81,8 +81,21 @@ describe('calendar helpers', () => {
   });
 });
 
+describe('clearSkyShare', () => {
+  it('ignores hours without clear-sky light and rounds to a whole percent', () => {
+    const hours = Array.from({ length: 24 }, (_, k) => ({ utcHour: k + 0.5, gb: 0, gd: 5, gcs: 0 }));
+    hours[12] = { utcHour: 12.5, gb: 100, gd: 50, gcs: 300 };
+    expect(clearSkyShare({ month: 6, hours, sunshineHours: 0, cloudCover: 0 })).toBe(50);
+    expect(clearSkyShare({ month: 6, hours: hours.map((h) => ({ ...h, gcs: 0 })), sunshineHours: 0, cloudCover: 0 })).toBe(0);
+  });
+});
+
 describe('readout', () => {
-  const june: ClimateMonth = { month: 6, hours: [], sunshineHours: 10.94, cloudCover: 30 };
+  // Night hours (gcs 0) add nothing; the day hours give (300 + 100 + 200 + 100) / 1000 = 70%.
+  const hours = Array.from({ length: 24 }, (_, k) => ({ utcHour: k + 0.5, gb: 0, gd: 0, gcs: 0 }));
+  hours[10] = { utcHour: 10.5, gb: 300, gd: 100, gcs: 500 };
+  hours[11] = { utcHour: 11.5, gb: 200, gd: 100, gcs: 500 };
+  const june: ClimateMonth = { month: 6, hours, sunshineHours: 10.94, cloudCover: 30 };
   const l = { year: 2026, month: 6, day: 21, hour: 18, minute: 5 };
   it('formats the clock and compass', () => {
     expect(formatClock(l)).toBe('21 Jun · 18:05');
@@ -92,8 +105,8 @@ describe('readout', () => {
   });
   it('describes the sun and the typical month', () => {
     expect(formatReadout(l, { azimuth: 278, elevation: 27.4 }, june))
-      .toBe('21 Jun · 18:05 · Sun 27° high, west · typical June: 10.9 h of sunshine a day');
+      .toBe('21 Jun · 18:05 · Sun 27° high, west · typical June: 70% of clear-sky sunlight');
     expect(formatReadout(l, { azimuth: 300, elevation: -1 }, june))
-      .toBe('21 Jun · 18:05 · Sun below the horizon · typical June: 10.9 h of sunshine a day');
+      .toBe('21 Jun · 18:05 · Sun below the horizon · typical June: 70% of clear-sky sunlight');
   });
 });

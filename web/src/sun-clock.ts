@@ -1,4 +1,4 @@
-import type { ClimateMonth } from './climate';
+import { clearSkyShare, type ClimateMonth } from './climate';
 import { CONFIG } from './config';
 import { fromLocal, type LocalDate, type LocalTime, type SunPosition, toLocal } from './sun';
 
@@ -122,5 +122,5 @@ export function formatReadout(l: LocalTime, sun: SunPosition, month: ClimateMont
   const where = sun.elevation > 0
     ? `Sun ${Math.round(sun.elevation)}° high, ${compassName(sun.azimuth)}`
     : 'Sun below the horizon';
-  return `${formatClock(l)} · ${where} · typical ${MONTH_NAMES[l.month - 1]}: ${month.sunshineHours.toFixed(1)} h of sunshine a day`;
+  return `${formatClock(l)} · ${where} · typical ${MONTH_NAMES[l.month - 1]}: ${clearSkyShare(month)}% of clear-sky sunlight`;
 }
