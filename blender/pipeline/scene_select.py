@@ -29,6 +29,11 @@ def _forced(obj):
     return any(c.name.startswith(config.FORCE_INCLUDE_COLLECTION_PREFIXES) for c in obj.users_collection)
 
 
+def dropped_collections():
+    roots = [c for c in bpy.data.collections if c.name.startswith(config.DROP_COLLECTION_PREFIXES)]
+    return set(roots) | {ch for c in roots for ch in c.children_recursive}
+
+
 def _placeholder_material():
     mat = bpy.data.materials.get("Web default")
     if mat is None:
@@ -121,9 +126,11 @@ def prepare_scene(scene, view_layer):
     visible = visible_collections(view_layer)
     lights = [o for o in scene.objects if o.type == "LIGHT"]
     day_lights = sorted(o.name for o in lights if is_render_visible(o, visible))
+    dropped = dropped_collections()
     keep = [
         o for o in scene.objects
         if o.type == "MESH" and o.name not in config.DROP_OBJECT_NAMES
+        and not any(c in dropped for c in o.users_collection)
         and (is_render_visible(o, visible) or _forced(o))
     ]
     keep_set = set(keep)
