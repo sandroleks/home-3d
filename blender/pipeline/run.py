@@ -3,7 +3,7 @@ import os
 
 import bpy
 
-from . import (bake, chunks, checks, collision, config, debug_map, doors, export, manifest,
+from . import (bake, chunks, checks, collision, config, debug_map, doors, export, lamps, manifest,
                openings, proc_materials, rooms, scene_select, state, surroundings, switches, uvs)
 
 
@@ -44,6 +44,19 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
     if stop_after == "switches":
         return ctx
 
+    ceilings = {r["light"] for r in room_list if r["light"]}
+    found_lamps, lost_lamps = lamps.room_lamps(scene, floor_index, ctx["day_lights"], ceilings)
+    found_glows, lost_glows = lamps.split_emitters(static, floor_index)  # before chunking joins the meshes
+    switched = {r["id"] for r in room_list if r["light"]}
+    lost = [f"{n} (in no room)" for n in lost_lamps + lost_glows]
+    lost += [f"{n} (in {room}, which has no ceiling light)"
+             for found in (found_lamps, found_glows) for room, names in sorted(found.items())
+             if room not in switched for n in names]
+    room_lights = {r["id"]: [r["light"]] + found_lamps.get(r["id"], []) for r in room_list if r["light"]}
+    room_emitters = {k: v for k, v in found_glows.items() if k in switched}
+    for msg in lost:
+        print(f"[lamps] WARNING: {msg} is never lit", flush=True)
+
     chunk_list = chunks.build_chunks(static, floor_index)
     ctx["chunks"] = chunk_list
     if stop_after == "chunks":
@@ -59,6 +72,8 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
         "rooms": room_list, "switches": sw, "doors": door_specs, "chunks": chunk_list,
         "door_lightmap_size": quality.door_lightmap, "day_lights": day_lights,
         "spawn": export.spawn_from(scene, room_list), "viewpoints": export.viewpoints(scene),
+        "room_lights": room_lights, "room_emitters": room_emitters, "lost_lamps": lost,
+        "windows": [], "sky_irradiance": bake.sky_irradiance(scene),
     }
     state.save(scene, st)
     switch_points = [(bpy.data.objects[n].location.x, -bpy.data.objects[n].location.y) for n in sw.values()]

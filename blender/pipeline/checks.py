@@ -108,4 +108,6 @@ def check_scene(state):
         bx, by = geom.from_three_xz(*d["hinge"])
         if abs(loc.x - bx) > 1e-3 or abs(loc.y - by) > 1e-3:
             errors.append(f"{d['node']}: origin is not at its hinge")
+    for msg in state.get("lost_lamps", []):
+        errors.append(f"lamp or glowing object {msg}: move it into a room with a ceiling light")
     return errors
