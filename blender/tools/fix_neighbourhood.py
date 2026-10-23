@@ -37,7 +37,8 @@ for v in bm.verts:
         v.co.x = -3.6
     elif abs(v.co.x - (3.6 + SHIFT)) < 0.02:  # and its +X side to x = 3.6
         v.co.x = 3.6
-degenerate = [f for f in bm.faces if f.calc_area() < 1e-6]  # the old front piece between the gap and the bend
+# The old front piece between the gap and the bend collapses to a sliver a few mm wide (the bend sat at x = 11.044).
+degenerate = [f for f in bm.faces if f.calc_area() < 0.1]
 bmesh.ops.delete(bm, geom=degenerate, context="FACES")
 bm.to_mesh(block.data)
 bm.free()
