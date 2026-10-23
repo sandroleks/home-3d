@@ -23,9 +23,10 @@ Give the walkthrough sound: doors, light switches, footsteps, per-room ambience,
 - Files:
   - `door-open.mp3`, `door-close.mp3` (creak / swing), `door-latch.mp3` (thud when a door finishes closing)
   - `switch.mp3`
-  - `step-1.mp3` … `step-4.mp3` (one surface, several variations)
+  - `step-1.mp3` … `step-5.mp3` (one surface, several variations; Kenney has five wood footsteps)
   - `ambience-outdoor.mp3` (birds, distant street), `ambience-kitchen.mp3` (appliance hum), `ambience-room.mp3` (quiet room tone, faint city)
   - `music.mp3` (seamless loop)
+- BigSoundBank blocks scripted downloads and no CC0 fridge hum or room tone was found, so `ambience-kitchen` and `ambience-room` are generated with ffmpeg and `ambience-outdoor` layers generated rumble under CC0 birdsong. The script that builds every file is `web/scripts/build-audio.sh`.
 
 Audio is not part of the 30 MB first-view budget: it loads after the start click.
 
