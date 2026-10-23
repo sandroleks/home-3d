@@ -33,7 +33,7 @@ SWITCH_SIZE = (0.08, 0.01, 0.08)
 SPAWN_CAMERA = "Cam_Entrada"
 VIEWPOINT_CAMERAS = ("Cam_Sala", "Cam_Kitchen", "Cam_Bedroom")
 FIRST_VIEW_BUDGET_BYTES = 30 * 1024 * 1024
-EXPECTED_DOOR_COUNT = 9  # 10 leaves; leaf 5 sits on the infilled opening 20 and is removed
+EXPECTED_DOOR_COUNT = 9  # leaf 5 (infilled opening 20) was deleted from the model; a leaf on an infilled opening is still dropped
 # Chunking: faces over a wall (no floor below) join the nearest room within this distance;
 # meshes with faces larger than DICE_MAX_FACE_AREA m² are first cut on a DICE_CELL grid.
 ROOM_ASSIGN_MAX_DIST = 0.2
