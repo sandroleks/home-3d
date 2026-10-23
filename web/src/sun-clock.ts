@@ -12,7 +12,8 @@ const COMPASS = [
 ];
 
 /** Physical keys (e.code), so they sit in the same place on Portuguese and other layouts. */
-export function sunKeyAction(code: string, shift: boolean): SunKey | null {
+export function sunKeyAction(code: string, shift: boolean, modified = false): SunKey | null {
+  if (modified) return null; // Cmd/Ctrl/Alt chords (print, Cmd+,) are not ours
   const sign = code === 'Comma' ? -1 : code === 'Period' ? 1 : 0;
   if (sign) return shift ? { days: sign * CONFIG.sun.nudgeDays } : { minutes: sign * CONFIG.sun.nudgeMinutes };
   return code === 'KeyP' ? 'play' : null;

@@ -174,7 +174,7 @@ async function run(): Promise<void> {
   });
   window.addEventListener('keydown', (e) => {
     if (!started || paused) return;
-    const sunKey = sunKeyAction(e.code, e.shiftKey);
+    const sunKey = sunKeyAction(e.code, e.shiftKey, e.metaKey || e.ctrlKey || e.altKey);
     if (sunKey) {
       if (sunKey !== 'play' || !e.repeat) clock.apply(sunKey); // holding , or . keeps scrolling
       return;

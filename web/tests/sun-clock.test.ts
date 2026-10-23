@@ -28,6 +28,11 @@ describe('sunKeyAction', () => {
     expect(sunKeyAction('KeyP', false)).toBe('play');
     expect(sunKeyAction('KeyL', false)).toBeNull();
   });
+
+  it('ignores presses with Cmd, Ctrl or Alt held', () => {
+    expect(sunKeyAction('KeyP', false, true)).toBeNull();
+    expect(sunKeyAction('Comma', true, true)).toBeNull();
+  });
 });
 
 describe('SunClock', () => {
