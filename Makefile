@@ -22,7 +22,7 @@ export-preview export-final: export-%:
 
 render-refs:
 	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && mkdir -p $(STAGE)/ref
-	for cam in Cam_Sala Cam_Kitchen Cam_Bedroom; do $(IN_STAGE) -b --factory-startup source.blend --python-expr "import bpy; s=bpy.context.scene; s.camera=bpy.data.objects['$$cam']; s.render.resolution_percentage=50; s.render.filepath='$(STAGE)/ref/$$cam'" -f 1 || exit 1; done
+	for cam in Cam_Sala Cam_Kitchen Cam_Bedroom; do $(IN_STAGE) -b --factory-startup source.blend --python-expr "import bpy; s=bpy.context.scene; s.camera=bpy.data.objects['$$cam']; s.render.resolution_percentage=50; s.frame_set(s.frame_end); s.render.filepath='$(STAGE)/ref/$$cam.png'; s.render.image_settings.file_format='PNG'; bpy.ops.render.render(write_still=True)" || exit 1; done
 	mkdir -p $(BUILD)/ref && rsync -a $(STAGE)/ref/ $(BUILD)/ref/
 
 web-test:

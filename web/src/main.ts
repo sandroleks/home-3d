@@ -1,5 +1,5 @@
 import {
-  AgXToneMapping, BufferGeometry, Mesh, MeshStandardMaterial, PerspectiveCamera, PMREMGenerator,
+  AgXToneMapping, BufferGeometry, Color, Mesh, MeshStandardMaterial, PerspectiveCamera, PMREMGenerator,
   Scene, SRGBColorSpace, WebGLRenderer,
 } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
@@ -31,6 +31,7 @@ async function boot(): Promise<void> {
   renderer.toneMappingExposure = CONFIG.exposure;
 
   const scene = new Scene();
+  scene.background = new Color(CONFIG.skyColor);
   scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = CONFIG.envIntensity;
 

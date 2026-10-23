@@ -12,6 +12,8 @@ export const CONFIG = {
   /** Cycles' diffuse light pass is outgoing/albedo; three.js wants irradiance (×π). */
   lightmapScale: Math.PI,
   envIntensity: 0.2,
+  /** Flat daylight sky seen through the windows. */
+  skyColor: '#cfdbe6',
   verticalFov: 70,
   /** Optional display names by room id, e.g. { sala: 'Living room' }. */
   roomNames: {} as Record<string, string>,
