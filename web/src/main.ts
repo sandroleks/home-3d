@@ -103,6 +103,7 @@ async function run(): Promise<void> {
   const doorsBefore = world.doors.map((d) => ({ target: d.state.target, progress: d.state.progress }));
 
   const start = () => {
+    if (started) return;
     ui.hideStart();
     ui.showHud();
     started = true;
@@ -116,7 +117,10 @@ async function run(): Promise<void> {
   };
   ui.setReady();
   ui.onStart(start);
-  ui.onResume(() => canvas.requestPointerLock());
+  ui.onResume(() => {
+    sound?.setPaused(false); // resume inside the click: Safari only allows it in a gesture
+    canvas.requestPointerLock();
+  });
   if (autostart) start();
   let paused = false;
   document.addEventListener('pointerlockchange', () => {

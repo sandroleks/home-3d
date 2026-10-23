@@ -30,11 +30,11 @@ export class Sound {
   constructor(camera: Camera) {
     camera.add(this.listener);
     this.ctx = this.listener.context;
-    void this.ctx.resume();
+    this.ctx.resume().catch(() => {});
     const master = this.listener.getInput();
     this.effects = this.bus(CONFIG.audio.effects, master);
     this.steps = this.bus(CONFIG.audio.steps, master);
-    this.music = this.bus(CONFIG.audio.music, master);
+    this.music = this.bus(0, master);
     const ambience = this.bus(CONFIG.audio.ambience, master);
     for (const name of AMBIENCES) this.ambience.set(name, this.bus(0, ambience));
   }
@@ -52,6 +52,7 @@ export class Sound {
     }));
     for (const [name, gain] of this.ambience) this.loop(`ambience-${name}`, gain);
     this.loop('music', this.music);
+    this.ramp(this.music.gain, CONFIG.audio.music, CONFIG.audio.ambienceFade);
   }
 
   door(node: Object3D, sound: DoorSound): void {
@@ -80,7 +81,7 @@ export class Sound {
   }
 
   setPaused(paused: boolean): void {
-    void (paused ? this.ctx.suspend() : this.ctx.resume());
+    (paused ? this.ctx.suspend() : this.ctx.resume()).catch(() => {});
   }
 
   private bus(level: number, to: AudioNode): GainNode {
