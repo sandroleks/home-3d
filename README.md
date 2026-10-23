@@ -80,14 +80,15 @@ make render-refs     # Cycles reference renders in build/ref/ to compare against
 
 ## Deploy
 
-```
-cd web && npm run build    # static site in web/dist/
-```
+The repo is self-contained: the exported assets in `web/public/assets/` (about 36 MB) and the source `Untitled.blend` are committed, so a host can build straight from GitHub.
 
-- `web/public/assets/` is git-ignored, so deploy from the machine that ran the export.
-- Any static host works (for example Cloudflare Pages).
-- Serve it from a URL ending in `/`, because asset paths are relative.
-- File names are stable, so after re-exporting purge the CDN cache, or use short cache times for `assets/manifest.json`, `assets/*.glb` and `assets/lightmaps/*`.
+**Vercel:** import the GitHub repo and leave the settings alone. `vercel.json` tells Vercel to install and build inside `web/` and to serve `web/dist/`. Every push to `main` redeploys.
+
+**Updating the live site:** re-export (`make export-final`), then commit the changed files in `web/public/assets/` (and `Untitled.blend`) and push.
+
+**Building locally:** `cd web && npm run build` writes the static site to `web/dist/`. Any static host works. Serve it from a URL ending in `/`, because asset paths are relative.
+
+File names are stable across exports. Vercel revalidates static files on every visit, so that's fine there. On another CDN, purge the cache after re-exporting, or use short cache times for `assets/manifest.json`, `assets/*.glb` and `assets/lightmaps/*`.
 
 ## Known limits
 
