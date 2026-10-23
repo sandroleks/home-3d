@@ -35,7 +35,7 @@ These came out of probing the real file and Blender 5.1. Task 1 records them in 
 6. **Emissive materials** (LED, Linen shade, Mirror LED, Screen, Wall light shade) are muted during room-light bakes so their glow isn't counted twice.
 7. **Denoising:** 512 samples plus a masked Gaussian blur (σ = 1 px), not OIDN. The Blender 5 compositor can't easily denoise a bake image.
 8. **Highlighting:** the hovered object gets an emissive tint, not an outline.
-9. **Reflections** come from three.js `RoomEnvironment` at intensity 0.2, not a sky-derived map.
+9. **Reflections** come from three.js `RoomEnvironment`, not a sky-derived map. Intensity 0.08, tuned in Task 19 against the Cycles references: 0.2 added a flat grey wash over the baked light.
 10. **Manifest:** the room floor is a flat triangle list `[x0,z0,x1,z1,x2,z2,…]`, and there's no "light colour" field because colour is already in the bake.
 11. **Chunking** first cuts large faces (ceiling, slab, walls) on a 25 cm grid, and assigns faces over interior walls to the nearest room within 0.2 m. Otherwise one big ceiling face could land in a single room's chunk and light up with the wrong switch.
 
@@ -3427,7 +3427,7 @@ export const CONFIG = {
   exposure: Math.pow(2, 0.5),
   /** Cycles' diffuse light pass is outgoing/albedo; three.js wants irradiance (×π). */
   lightmapScale: Math.PI,
-  envIntensity: 0.2,
+  envIntensity: 0.08,
   verticalFov: 70,
   /** Optional display names by room id, e.g. { sala: 'Living room' }. */
   roomNames: {} as Record<string, string>,
