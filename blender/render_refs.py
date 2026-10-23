@@ -36,9 +36,14 @@ def light_for(scene, when, climate):
     bg = next(n for n in tree.nodes if n.type == "BACKGROUND")
     for link in [l for l in tree.links if l.to_socket == bg.inputs["Color"]]:
         tree.links.remove(link)
+    baked = bg.inputs["Strength"].default_value
     bg.inputs["Color"].default_value = (*config.SKY_BAKE_COLOR, 1.0)
     r, g, b = config.SKY_BAKE_COLOR
     bg.inputs["Strength"].default_value = diffuse * config.WATTS_TO_SCENE / (math.pi * (0.2126 * r + 0.7152 * g + 0.0722 * b))
+    # The window-fill portal lights are part of the sky layer in the viewer: they scale with the sky.
+    for o in scene.objects:
+        if o.type == "LIGHT" and lamps.is_day_fill(o):
+            o.data.energy *= bg.inputs["Strength"].default_value / baked
     for mat in bpy.data.materials:
         for n in (mat.node_tree.nodes if mat.node_tree else []):
             if n.type == "BSDF_PRINCIPLED":

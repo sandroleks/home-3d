@@ -1,7 +1,7 @@
 import { Color } from 'three';
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
-import { casterPositions, enteringLight, paneSamples, roomFill, skyColor, sunColor, sunFade } from '../src/daylight';
+import { casterPositions, enteringLight, envIntensityFor, gainedSkyScale, paneSamples, roomFill, skyColor, sunColor, sunFade } from '../src/daylight';
 import type { WindowInfo } from '../src/manifest';
 
 const pane: WindowInfo = { room: 'sala', center: [0, 1.5, 0], normal: [0, 0, 1], width: 2, height: 1 };
@@ -52,5 +52,18 @@ describe('windows', () => {
   it('spreads it over the floor', () => {
     expect(roomFill(8, 20, 0.2)).toBeCloseTo(0.08);
     expect(roomFill(8, 0, 0.2)).toBe(0);
+  });
+});
+
+describe('sky calibration', () => {
+  it('applies the sky gain', () => {
+    expect(gainedSkyScale(2)).toBeCloseTo(2 * CONFIG.sun.skyGain);
+    expect(gainedSkyScale(0)).toBe(0);
+  });
+
+  it('scales the environment with the gained sky and caps it', () => {
+    expect(envIntensityFor(0)).toBe(0);
+    expect(envIntensityFor(0.5)).toBeCloseTo(CONFIG.envIntensity * 0.5);
+    expect(envIntensityFor(10)).toBeCloseTo(CONFIG.envIntensity * 1.5);
   });
 });

@@ -13,8 +13,8 @@ export const CONFIG = {
   exposure: Math.pow(2, 0.5),
   /** Cycles' diffuse light pass is outgoing/albedo; three.js wants irradiance (×π). */
   lightmapScale: Math.PI,
-  // Tuned against the Cycles references: higher values wash out the baked light.
-  envIntensity: 0.08,
+  // The room-environment reflections, scaled by the sky; higher values add light Cycles doesn't have.
+  envIntensity: 0.0015,
   /** Flat daylight sky seen through the windows. */
   skyColor: '#cfdbe6',
   /** Near/far of the surroundings pass: the building's own facade is just below the windows, the sea kilometres out. */
@@ -33,8 +33,10 @@ export const CONFIG = {
     shadowReach: 200,
     shadowBias: -0.00002,
     shadowNormalBias: 0.01,
-    /** Share of the sunlight entering a room that comes back as an even fill, per m² of floor. Tuned against Cycles. */
-    bounce: 0.2,
+    /** Share of the sunlight entering a room that comes back as an even fill, per m² of floor. Tuned against Cycles references: winter-morning bedroom and summer-evening Sala within about 1%. */
+    bounce: 0.04,
+    /** The baked sky layer reads about 2.6x brighter in the viewer than Cycles renders the same sky; tuned against the references. */
+    skyGain: 0.38,
     /** The sun's colour at the horizon; white above 30 degrees. */
     warmColor: '#ffb070',
     sunsetSky: '#f2a46b',

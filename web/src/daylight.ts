@@ -1,5 +1,5 @@
 import {
-  Box3, BufferGeometry, Color, DirectionalLight, Float32BufferAttribute, Mesh, MeshBasicMaterial, Object3D,
+  Box3, BufferGeometry, Color, DirectionalLight, DoubleSide, Float32BufferAttribute, Mesh, MeshBasicMaterial, Object3D,
   PCFSoftShadowMap, Raycaster, type Scene, Sphere, Vector3, type WebGLRenderer,
 } from 'three';
 import { type Climate, skyDiffuse, skyScale, sunStrength, typicalIrradiance } from './climate';
@@ -69,6 +69,16 @@ export function enteringLight(w: WindowInfo, dir: Vec3, visible: number, strengt
   return cos > 0 ? w.width * w.height * cos * visible * strength : 0;
 }
 
+/** The baked sky layer's brightness: the physical scale times the viewer-to-Cycles gain. */
+export function gainedSkyScale(scale: number, gain = CONFIG.sun.skyGain): number {
+  return scale * gain;
+}
+
+/** Room-environment reflections follow the (gained) sky, capped so a bright sky adds no more. */
+export function envIntensityFor(gainedScale: number): number {
+  return CONFIG.envIntensity * Math.min(gainedScale, 1.5);
+}
+
 /** Flat irradiance that the sunlight entering a room adds to all its surfaces. */
 export function roomFill(entering: number, area: number, bounce = CONFIG.sun.bounce): number {
   return area > 0 ? (bounce * entering) / area : 0;
@@ -126,7 +136,7 @@ export class Daylight {
   /** Shadow-only copies of the neighbourhood within reach: drawn into the shadow map, invisible otherwise. */
   addCasters(root: Object3D): void {
     root.updateMatrixWorld(true);
-    const material = new MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+    const material = new MeshBasicMaterial({ colorWrite: false, depthWrite: false, shadowSide: DoubleSide });
     const size = new Vector3();
     root.traverse((o) => {
       const m = o as Mesh;
@@ -176,13 +186,12 @@ export class Daylight {
     const l = this.light;
     l.color.copy(color);
     l.intensity = strength;
-    l.visible = strength > 0;
     l.position.set(this.centre.x + dir[0] * this.distance, this.centre.y + dir[1] * this.distance, this.centre.z + dir[2] * this.distance);
 
     const d = skyDiffuse(this.climate, utc, sun.elevation, diffuse);
-    const scale = skyScale(d, sky.wattsToScene, sky.irradiance);
+    const scale = gainedSkyScale(skyScale(d, sky.wattsToScene, sky.irradiance));
     this.world.sky.value = scale;
-    this.scene.environmentIntensity = CONFIG.envIntensity * Math.min(scale, 1.5);
+    this.scene.environmentIntensity = envIntensityFor(scale);
 
     this.surroundings.setSky(skyColor(sun.elevation));
     const s = this.surroundings.light;
