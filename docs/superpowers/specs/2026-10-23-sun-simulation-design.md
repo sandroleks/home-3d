@@ -80,7 +80,7 @@ New module `web/src/climate.ts`, pure and unit-tested:
 
 - **`typicalIrradiance(climate, utcMillis)`** returns `{ beam, diffuse }` in W/m² on a horizontal surface. It interpolates linearly between hours, and between the middles of neighbouring months.
 - **`sunStrength(beam, elevation)`** returns the direct-normal irradiance, `beam / sin(elevation)`. Elevation is clamped to at least 3° to avoid dividing by near-zero. The result is 0 when the sun is below the horizon.
-- **One exposure constant, `CONFIG.wattsToScene = 4 / 900`,** converts real W/m² into the scene's light units. 900 W/m² of direct sun equals the old Blender sun lamp (strength 4). The old sky (strength 0.3) happens to sit on the same scale, so the existing calibration carries over. The constant is tuned against Cycles references (see Testing).
+- **One exposure constant, `WATTS_TO_SCENE = 4 / 900`,** converts real W/m² into the scene's light units. It lives in `blender/pipeline/config.py` and reaches the viewer as `manifest.sky.wattsToScene`, so the viewer and the Cycles reference renders share it. 900 W/m² of direct sun equals the old Blender sun lamp (strength 4). The old sky (strength 0.3) happens to sit on the same scale, so the existing calibration carries over. The constant is tuned against Cycles references (see Testing).
 - **`skyScale(diffuse)`** = `diffuse × wattsToScene / manifest.sky.irradiance`, where `sky.irradiance` is the irradiance that the baked sky delivers to an upward-facing surface, in scene units. The pipeline works it out from the world's background colour and strength and writes it to the manifest.
 - **Twilight:** PVGIS returns 0 at night. Between sunset and the end of civil twilight (sun 6° below the horizon), the sky keeps a small floor that fades out: 2% of the day's maximum `Gd`, falling to 0. That keeps dusk from cutting to black.
 
@@ -88,7 +88,7 @@ New module `web/src/climate.ts`, pure and unit-tested:
 
 ### Pipeline (bake) changes
 
-- **The day layer becomes sky-only.** `Lighting.day()` hides every sun lamp, every ceiling light and every other lamp, and sets all emission strengths to 0. Only the world background and the daylight portals stay. The layer's name and files are unchanged (`<chunk>_day.webp`); the manifest records that the layer is sky-only.
+- **The day layer becomes sky-only.** `Lighting.day()` hides every sun lamp, every ceiling light and every other lamp, and sets all emission strengths to 0. Only the world background and the `Portal …` window fill lights stay (they are ordinary area lights at the windows). The world's Sky Texture has its own sun built in, so for this bake the world colour is a flat sky colour (`SKY_BAKE_COLOR`) at the world's own strength, which gives a known sky irradiance. The layer's name and files are unchanged (`<chunk>_day.webp`); the manifest records that the layer is sky-only.
 - **Each room's light layer gains that room's lamps and glowing materials.** Today they are baked into the day layer, so they glow at noon. A new step, `lamps.room_lamps(scene, floor_index)`, assigns each render-visible lamp other than a sun to the room whose floor polygon contains it. It does the same for each object with an emissive material, using the object's bounding-box centre. `Lighting.room(id)` then turns on that room's ceiling light, its lamps and its emitters.
   - Emissive materials shared between rooms are duplicated per object on the staged copy, so their emission can be switched per room.
   - Lamps outside every room (none expected) are reported by the export checks.
@@ -98,7 +98,7 @@ New module `web/src/climate.ts`, pure and unit-tested:
   - `sky: { irradiance }`;
   - `windows`: each exterior glass pane as `{ room, center, normal, width, height }` in three.js space, read from the `… glass` objects of openings whose name includes `Exterior`;
   - for each room, its floor area.
-- **The neighbourhood export (`surroundings.py`) stops baking the sun into vertex colours.** It exports the meshes with their normals and drops the `Shade` attribute and `SHADE_STORE_SCALE`. `SURROUNDINGS_SKY_IRRADIANCE` moves to the viewer's config.
+- **The neighbourhood export (`surroundings.py`) stops baking the sun into vertex colours.** It exports the meshes with their normals and drops the `Shade` attribute and `SHADE_STORE_SCALE`. `SURROUNDINGS_SKY_IRRADIANCE` goes away: the viewer lights the neighbourhood with the typical diffuse light × `wattsToScene`.
 - **The scene's `Sun` lamp stays in the .blend.** The bake ignores it. `make render-refs SUN=…` uses it (see Testing).
 
 ### Viewer
@@ -184,7 +184,7 @@ A small date-and-time label (`21 Jun · 18:30`) sits in the bottom-right corner,
 | `web/src/manifest.ts` | parse version 2 |
 | `web/src/ui.ts`, `index.html`, `style.css` | panel, HUD readout, controls list |
 | `web/src/main.ts` | wiring: clock, keys, panel, daylight update, night start |
-| `web/src/config.ts` | `sun: { playRate, nudgeMinutes, nudgeDays }`, `wattsToScene`, `bounce`, `surroundingsSkyIrradiance`, night and sunset colours |
+| `web/src/config.ts` | `sun: { playRate, nudgeMinutes, nudgeDays, shadowMapSize, shadowReach, shadowBias, shadowNormalBias, bounce, warmColor, sunsetSky, nightSky }`; `surroundingsShadeScale` removed |
 | `web/scripts/fetch-climate.mjs` (new) | builds `climate.json` |
 | `web/public/assets/climate.json` (new) | typical month data |
 | `web/public/assets/DATA-SOURCES.md` (new) | climate data sources and licences |
@@ -213,7 +213,7 @@ A small date-and-time label (`21 Jun · 18:30`) sits in the bottom-right corner,
 **Comparison with Cycles:**
 - `make render-refs SUN=2026-12-21T10:00` (and similar) points the `Sun` lamp from the site constants and the NOAA position, using a small Python port of the same equations in the pipeline, tested against the same NREL case.
 - The sun's strength comes from the same typical-month data: the Python side reads `climate.json`.
-- Compare Cam_Bedroom on a winter morning and Cam_Sala on a summer evening with the viewer at the same `?sun=`. Sun patches must land in the same place. `wattsToScene` and `bounce` are tuned on these renders.
+- Compare Cam_Bedroom on a winter morning and Cam_Sala on a summer evening with the viewer at the same `?sun=`. Sun patches must land in the same place. `CONFIG.sun.bounce` is tuned on these renders; `WATTS_TO_SCENE` only changes if every view is off by the same factor.
 
 **In the browser:**
 - Open the site and check that it starts at the current Porto time.
