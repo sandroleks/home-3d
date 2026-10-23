@@ -22,7 +22,7 @@
 - The pipeline never writes to a source `.blend`.
 - Site: latitude **41.117327**, longitude **−8.653914**, time zone **Europe/Lisbon**, Blender +Y at compass bearing **142.1°**.
 - Neighbourhood fix: move by **−7.44 m along Blender X**, except `Building lower facade N/S/E/W`. `Exterior block brick` keeps its gap at x −3.6…3.6.
-- Real W/m² × **4/900** = scene light units (`WATTS_TO_SCENE`).
+- Real W/m² × **32/900** = scene light units (`WATTS_TO_SCENE`; originally 4/900, calibrated 8× up against Cycles).
 - Twilight: the sky has a floor of **2%** of the month's peak diffuse light, fading to 0 by **−6°**. The sun's elevation is clamped to at least **3°** for direct-normal irradiance.
 - Time-lapse: **1 hour of sun per 2 s**. Keys: `Comma` / `Period` move the time **±15 min**; with `Shift` they move the date **±7 days**; `KeyP` plays or pauses. Use physical `e.code`.
 - `?sun=YYYY-MM-DDTHH:MM` is read in Lisbon time.

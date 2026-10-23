@@ -1,7 +1,7 @@
 # Sun Simulation — Design
 
 **Date:** 2026-10-23
-**Status:** Draft
+**Status:** Implemented
 
 ## Goal
 
@@ -80,7 +80,7 @@ New module `web/src/climate.ts`, pure and unit-tested:
 
 - **`typicalIrradiance(climate, utcMillis)`** returns `{ beam, diffuse }` in W/m² on a horizontal surface. It interpolates linearly between hours, and between the middles of neighbouring months.
 - **`sunStrength(beam, elevation)`** returns the direct-normal irradiance, `beam / sin(elevation)`. Elevation is clamped to at least 3° to avoid dividing by near-zero. The result is 0 when the sun is below the horizon.
-- **One exposure constant, `WATTS_TO_SCENE = 4 / 900`,** converts real W/m² into the scene's light units. It lives in `blender/pipeline/config.py` and reaches the viewer as `manifest.sky.wattsToScene`, so the viewer and the Cycles reference renders share it. 900 W/m² of direct sun equals the old Blender sun lamp (strength 4). The old sky (strength 0.3) happens to sit on the same scale, so the existing calibration carries over. The constant is tuned against Cycles references (see Testing).
+- **One exposure constant, `WATTS_TO_SCENE = 32 / 900`,** converts real W/m² into the scene's light units. It lives in `blender/pipeline/config.py` and reaches the viewer as `manifest.sky.wattsToScene`, so the viewer and the Cycles reference renders share it. The original 4/900 (900 W/m² of direct sun equal to the old Blender sun lamp, strength 4) was calibrated against Cycles references and came out 8× too dark, so the scale is now 8× that. Further calibration: `CONFIG.sun.skyGain` = 0.38 scales the baked sky layer, because the bake world shines from below the horizon too and the baked scene has no ground (Cycles references render the full .blend, where ground and neighbours block that light); the proper fix is a horizon in the bake world, then a re-bake and re-fit. `CONFIG.sun.bounce` = 0.04 and `CONFIG.envIntensity` = 0.0015.
 - **`skyScale(diffuse)`** = `diffuse × wattsToScene / manifest.sky.irradiance`, where `sky.irradiance` is the irradiance that the baked sky delivers to an upward-facing surface, in scene units. The pipeline works it out from the world's background colour and strength and writes it to the manifest.
 - **Twilight:** PVGIS returns 0 at night. Between sunset and the end of civil twilight (sun 6° below the horizon), the sky keeps a small floor that fades out: 2% of the day's maximum `Gd`, falling to 0. That keeps dusk from cutting to black.
 
