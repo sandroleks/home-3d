@@ -11,7 +11,8 @@ export const CONFIG = {
   exposure: Math.pow(2, 0.5),
   /** Cycles' diffuse light pass is outgoing/albedo; three.js wants irradiance (×π). */
   lightmapScale: Math.PI,
-  envIntensity: 0.2,
+  // Tuned against the Cycles references: higher values wash out the baked light.
+  envIntensity: 0.08,
   /** Flat daylight sky seen through the windows. */
   skyColor: '#cfdbe6',
   verticalFov: 70,
