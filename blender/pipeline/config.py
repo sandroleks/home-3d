@@ -41,9 +41,11 @@ DICE_CELL = 0.25
 DICE_MAX_FACE_AREA = 0.5
 
 DROP_OBJECT_NAMES = ("Walls (backup before finishes)",)
-# Render-visible collections (and their sub-collections) kept out of the web: the kilometre-scale
-# neighbourhood is for Blender renders; dicing and lightmapping it would never finish.
-DROP_COLLECTION_PREFIXES = ("Exterior - neighbourhood",)
+# Collections (and their sub-collections) seen through the windows. They are kilometre-scale, so
+# instead of being chunked and lightmapped they go to surroundings.glb, shaded per vertex by the
+# day's sun lamps and a sky of this irradiance (on an upward face, in the units of a sun's strength).
+SURROUNDINGS_COLLECTION_PREFIXES = ("Exterior - neighbourhood",)
+SURROUNDINGS_SKY_IRRADIANCE = 1.0
 FORCE_INCLUDE_COLLECTION_PREFIXES = ("Ceiling",)
 PASSABLE_NAME_PATTERN = r"^Glazed Door .* (glass|mullion|rail)(\.\d+)?$"
 

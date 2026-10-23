@@ -11,6 +11,8 @@ export interface LoadedAssets {
   scene: Group;
   day: Map<string, LoadedMap>;
   light: Promise<Map<string, LoadedMap>>;
+  /** The neighbourhood outside the windows; null when the export has none or it fails to load. */
+  surroundings: Promise<Group | null>;
 }
 
 /** Mid-grey RGBM (0.5 × π irradiance): flat lighting when a lightmap fails to load. */
@@ -67,6 +69,14 @@ export async function loadAssets(onProgress: (fraction: number) => void): Promis
     }
   };
 
+  // Not part of the first view: the windows show the flat sky until it arrives.
+  const surroundings = gltfLoader.loadAsync(`${base}surroundings.glb`).then(
+    (g) => g.scene,
+    (err) => {
+      console.warn('surroundings.glb failed to load; the windows show only the sky.', err);
+      return null;
+    },
+  );
   const gltfPromise = gltfLoader.loadAsync(`${base}apartment.glb`, (e) => {
     if (e.total) {
       glbFraction = e.loaded / e.total;
@@ -89,5 +99,5 @@ export async function loadAssets(onProgress: (fraction: number) => void): Promis
   const light = Promise.all(lightRefs.map(async (ref) => [ref.file, await loadMap(ref)] as const)).then(
     (entries) => new Map(entries),
   );
-  return { manifest, collision, scene: gltf.scene, day: new Map(dayEntries), light };
+  return { manifest, collision, scene: gltf.scene, day: new Map(dayEntries), light, surroundings };
 }

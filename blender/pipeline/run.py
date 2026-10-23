@@ -4,7 +4,7 @@ import os
 import bpy
 
 from . import (bake, chunks, checks, collision, config, debug_map, doors, export, manifest,
-               openings, proc_materials, rooms, scene_select, state, switches, uvs)
+               openings, proc_materials, rooms, scene_select, state, surroundings, switches, uvs)
 
 
 def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
@@ -13,6 +13,7 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
     # First action: switch to a copy so the source .blend is never written.
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(build_dir, "web-export.blend"))
 
+    surroundings.export_surroundings(scene, bpy.context.view_layer, quality, out_dir)  # before prepare_scene deletes them
     meshes, day_lights = scene_select.prepare_scene(scene, bpy.context.view_layer)
     floor_index, room_list = rooms.collect_rooms(meshes, scene)
     ctx = {"meshes": meshes, "day_lights": day_lights, "floor_index": floor_index, "rooms": room_list}

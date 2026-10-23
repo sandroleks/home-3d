@@ -4,6 +4,7 @@ Run it through the Makefile, never by pointing Blender at files in ~/Documents:
 
     make export-preview     # about 1 minute
     make export-final       # about 35 minutes on the GPU
+    make export-surroundings  # about 1 minute: only the neighbourhood seen through the windows
 
 The Makefile stages a copy of the code and the .blend in /private/tmp and runs Blender there with
 factory settings (--factory-startup), so personal add-ons never load. Baking uses the GPU; set
@@ -21,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bpy  # noqa: E402
 
-from pipeline import config, run  # noqa: E402
+from pipeline import checks, config, run, surroundings  # noqa: E402
 
 
 def parse_args(argv):
@@ -29,7 +30,7 @@ def parse_args(argv):
     p.add_argument("--quality", choices=sorted(config.QUALITY), default="preview")
     p.add_argument("--out", default="web/public/assets")
     p.add_argument("--build", default="build")
-    p.add_argument("--stage", choices=("all", "bake", "export"), default="all")
+    p.add_argument("--stage", choices=("all", "bake", "export", "surroundings"), default="all")
     return p.parse_args(argv)
 
 
@@ -43,6 +44,9 @@ def main():
     scene = bpy.context.scene
     if args.stage == "all":
         errors = run.run_all(args.quality, out_dir, build_dir)
+    elif args.stage == "surroundings":
+        names = surroundings.export_surroundings(scene, bpy.context.view_layer, quality, out_dir)
+        errors = checks.check_surroundings(out_dir) if names else [f"no meshes in {config.SURROUNDINGS_COLLECTION_PREFIXES}"]
     else:
         if args.stage == "bake":
             run.bake_stage(scene, quality, out_dir)
