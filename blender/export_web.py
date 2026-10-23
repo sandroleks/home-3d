@@ -1,7 +1,17 @@
-"""Export the apartment for the web walkthrough.
+"""Export the apartment for the web walkthrough (Blender 5.1 or newer).
 
-    blender -b <file.blend> --python-exit-code 1 --python blender/export_web.py -- --quality preview
-    blender -b build/web-export.blend --python blender/export_web.py -- --stage bake --quality final
+Run it through the Makefile, never by pointing Blender at files in ~/Documents:
+
+    make export-preview     # about 1 minute
+    make export-final       # about 35 minutes on the GPU
+
+The Makefile stages a copy of the code and the .blend in /private/tmp and runs Blender there with
+factory settings (--factory-startup), so personal add-ons never load. Baking uses the GPU; set
+WEB_BAKE_DEVICE=CPU to force the (much slower) CPU, e.g. `WEB_BAKE_DEVICE=CPU make export-final`.
+
+Underlying command, as run inside the staging folder:
+
+    blender -b --factory-startup source.blend --python-exit-code 1 --python blender/export_web.py -- --quality preview
 """
 import argparse
 import os
@@ -24,6 +34,9 @@ def parse_args(argv):
 
 
 def main():
+    if tuple(bpy.app.version) < (5, 1, 0):
+        print("This pipeline needs Blender 5.1 or newer; found %d.%d.%d" % tuple(bpy.app.version))
+        sys.exit(1)
     args = parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
     out_dir, build_dir = os.path.abspath(args.out), os.path.abspath(args.build)
     quality = config.QUALITY[args.quality]
