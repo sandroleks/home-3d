@@ -1,4 +1,14 @@
 """Assemble and validate manifest.json (pure)."""
+from . import config
+
+
+def floor_area(floor):
+    """Area of a flat [x0, z0, x1, z1, x2, z2, ...] triangle list."""
+    a = 0.0
+    for k in range(0, len(floor) - 5, 6):
+        x0, z0, x1, z1, x2, z2 = floor[k:k + 6]
+        a += abs((x1 - x0) * (z2 - z0) - (x2 - x0) * (z1 - z0)) / 2
+    return round(a, 3)
 
 
 def build_manifest(state, ranges, eye_height):
@@ -7,7 +17,8 @@ def build_manifest(state, ranges, eye_height):
         return {"file": f"lightmaps/{name}.webp", "range": ranges[name]} if name in ranges else None
 
     rooms = [
-        {"id": r["id"], "name": r["name"], "floor": r["floor"], "switch": state["switches"].get(r["id"])}
+        {"id": r["id"], "name": r["name"], "floor": r["floor"], "switch": state["switches"].get(r["id"]),
+         "area": floor_area(r["floor"])}
         for r in state["rooms"]
     ]
     chunks = [
@@ -19,15 +30,18 @@ def build_manifest(state, ranges, eye_height):
         for d in state["doors"]
     ]
     return {
-        "version": 1, "eyeHeight": eye_height, "spawn": state["spawn"],
+        "version": 2, "eyeHeight": eye_height, "spawn": state["spawn"],
         "rooms": rooms, "chunks": chunks, "doors": doors, "viewpoints": state["viewpoints"],
+        "site": dict(config.SITE),
+        "sky": {"irradiance": round(state["sky_irradiance"], 5), "wattsToScene": config.WATTS_TO_SCENE},
+        "windows": state["windows"],
     }
 
 
 def validate_manifest(m):
     errors = []
-    if m.get("version") != 1:
-        errors.append("version must be 1")
+    if m.get("version") != 2:
+        errors.append("version must be 2")
     switched = {r["id"] for r in m["rooms"] if r["switch"]}
     for i, c in enumerate(m["chunks"]):
         label = f"chunks[{i}] ({c['node']})"
@@ -48,4 +62,12 @@ def validate_manifest(m):
     for k in ("x", "z", "yaw"):
         if not isinstance(m["spawn"].get(k), (int, float)):
             errors.append(f"spawn.{k} must be a number")
+    room_ids = {r["id"] for r in m["rooms"]}
+    if not m["windows"]:
+        errors.append("no exterior windows: name the glass 'Window N (Exterior / Room) glass'")
+    for i, w in enumerate(m["windows"]):
+        if w["room"] not in room_ids:
+            errors.append(f"windows[{i}]: unknown room {w['room']}")
+    if not m["sky"]["irradiance"] > 0:
+        errors.append("sky.irradiance must be positive")
     return errors

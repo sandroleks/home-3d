@@ -13,6 +13,8 @@ STATE = {
     "doors": [{"node": "Door_1", "key": "door-1", "hinge": [0, 0], "dir": [0, 1], "width": 0.76, "openAngle": -1.5}],
     "spawn": {"x": 0.0, "z": 0.0, "yaw": 0.0},
     "viewpoints": [],
+    "windows": [{"room": "alpha", "center": [0.5, 1.5, 0.0], "normal": [0.0, 0.0, 1.0], "width": 1.0, "height": 1.2}],
+    "sky_irradiance": 0.6467,
 }
 RANGES = {"alpha_day": 4.0, "alpha_light": 2.0, "door-1_day": 2.5}
 

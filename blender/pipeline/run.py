@@ -4,7 +4,7 @@ import os
 import bpy
 
 from . import (bake, chunks, checks, collision, config, debug_map, doors, export, lamps, manifest,
-               openings, proc_materials, rooms, scene_select, state, surroundings, switches, uvs)
+               openings, proc_materials, rooms, scene_select, state, surroundings, switches, uvs, windows)
 
 
 def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
@@ -47,6 +47,7 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
     ceilings = {r["light"] for r in room_list if r["light"]}
     found_lamps, lost_lamps = lamps.room_lamps(scene, floor_index, ctx["day_lights"], ceilings)
     found_glows, lost_glows = lamps.split_emitters(static, floor_index)  # before chunking joins the meshes
+    window_list = windows.exterior_windows(static, floor_index)  # also before chunking
     switched = {r["id"] for r in room_list if r["light"]}
     lost = [f"{n} (in no room)" for n in lost_lamps + lost_glows]
     lost += [f"{n} (in {room}, which has no ceiling light)"
@@ -73,7 +74,7 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
         "door_lightmap_size": quality.door_lightmap, "day_lights": day_lights,
         "spawn": export.spawn_from(scene, room_list), "viewpoints": export.viewpoints(scene),
         "room_lights": room_lights, "room_emitters": room_emitters, "lost_lamps": lost,
-        "windows": [], "sky_irradiance": bake.sky_irradiance(scene),
+        "windows": window_list, "sky_irradiance": bake.sky_irradiance(scene),
     }
     state.save(scene, st)
     switch_points = [(bpy.data.objects[n].location.x, -bpy.data.objects[n].location.y) for n in sw.values()]
