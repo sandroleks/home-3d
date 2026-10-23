@@ -98,7 +98,7 @@ export async function loadAssets(onProgress: (fraction: number) => void): Promis
   glbFraction = 1;
   report();
 
-  const lightRefs = [...manifest.chunks.flatMap((c) => (c.light ? [c.light] : [])), ...manifest.doors.flatMap((d) => d.lights)];
+  const lightRefs = [...manifest.chunks.flatMap((c) => [...(c.light ? [c.light] : []), ...c.lights]), ...manifest.doors.flatMap((d) => d.lights)];
   const light = Promise.all(lightRefs.map(async (ref) => [ref.file, await loadMap(ref)] as const)).then(
     (entries) => new Map(entries),
   );

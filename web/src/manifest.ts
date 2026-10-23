@@ -3,7 +3,14 @@ import { rleDecode } from './rle';
 export interface LightmapRef { file: string; range: number }
 export interface Spawn { x: number; z: number; yaw: number }
 export interface RoomInfo { id: string; name: string; floor: number[]; switch: string | null; area: number }
-export interface ChunkInfo { node: string; room: string | null; day: LightmapRef; light: LightmapRef | null }
+export interface ChunkInfo {
+  node: string;
+  room: string | null;
+  day: LightmapRef;
+  light: LightmapRef | null;
+  /** Lamp light baked onto the chunk from an open-plan neighbour (the kitchen's lamps on the living room). */
+  lights: LampLayer[];
+}
 export interface DoorInfo {
   node: string;
   hinge: [number, number];
@@ -12,9 +19,10 @@ export interface DoorInfo {
   openAngle: number;
   lightmap: LightmapRef;
   /** Lamp light baked onto the leaf from each room it faces that has lights. */
-  lights: DoorLight[];
+  lights: LampLayer[];
 }
-export interface DoorLight extends LightmapRef { room: string }
+/** A lamp layer that follows another room's switch. */
+export interface LampLayer extends LightmapRef { room: string }
 export interface Viewpoint { name: string; position: [number, number, number]; yaw: number; pitch: number; hfov: number }
 export interface SiteInfo { lat: number; lon: number; timeZone: string; yBearing: number }
 /** The baked sky's irradiance on an upward face, and the factor from real W/m² to the scene's light units. */
@@ -76,6 +84,14 @@ function lightmap(v: unknown, path: string): LightmapRef {
   return { file: str(o.file, `${path}.file`), range: num(o.range, `${path}.range`) };
 }
 
+/** Older exports have no lamp layers. */
+function lampLayers(v: unknown, path: string): LampLayer[] {
+  return (v === undefined ? [] : arr(v, path)).map((l, k) => {
+    const p = `${path}[${k}]`;
+    return { room: str(obj(l, p).room, `${p}.room`), ...lightmap(l, p) };
+  });
+}
+
 export function parseManifest(json: unknown): Manifest {
   const m = obj(json, 'manifest');
   if (m.version !== 2) throw new ManifestError(`version: expected 2, got ${String(m.version)}`);
@@ -101,6 +117,7 @@ export function parseManifest(json: unknown): Manifest {
         room: strOrNull(c.room, `chunks[${i}].room`),
         day: lightmap(c.day, `chunks[${i}].day`),
         light: c.light === null ? null : lightmap(c.light, `chunks[${i}].light`),
+        lights: lampLayers(c.lights, `chunks[${i}].lights`),
       };
     }),
     doors: arr(m.doors, 'doors').map((v, i) => {
@@ -112,10 +129,7 @@ export function parseManifest(json: unknown): Manifest {
         width: num(d.width, `doors[${i}].width`),
         openAngle: num(d.openAngle, `doors[${i}].openAngle`),
         lightmap: lightmap(d.lightmap, `doors[${i}].lightmap`),
-        lights: (d.lights === undefined ? [] : arr(d.lights, `doors[${i}].lights`)).map((l, k) => {
-          const path = `doors[${i}].lights[${k}]`;
-          return { room: str(obj(l, path).room, `${path}.room`), ...lightmap(l, path) };
-        }),
+        lights: lampLayers(d.lights, `doors[${i}].lights`),
       };
     }),
     viewpoints: arr(m.viewpoints, 'viewpoints').map((v, i) => {

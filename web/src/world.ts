@@ -66,8 +66,11 @@ export function buildWorld(assets: LoadedAssets, scene: Scene): World {
     const n = node(root, chunk.node);
     const d = day.get(chunk.day.file)!;
     const intensity = chunk.room && lights.has(chunk.room) ? lights.uniform(chunk.room) : { value: 0 };
+    // An open-plan neighbour's lamps (the kitchen's, on the living room) take the second layer, on the neighbour's switch.
+    const extra = chunk.lights.find((l) => lights.has(l.room));
     const mats = prepareMeshes(n, {
       day: d.texture, dayRange: d.range, light: BLACK_LIGHTMAP, lightRange: 0, intensity,
+      light2: { texture: BLACK_LIGHTMAP, range: 0, intensity: extra ? lights.uniform(extra.room) : { value: 0 } },
       sky, fill: (chunk.room && fills.get(chunk.room)) || noFill,
     });
     lightmapped.push(...mats);
@@ -77,6 +80,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene): World {
       }
     }
     if (chunk.light) awaitLight(chunk.light.file, mats, 1);
+    if (extra) awaitLight(extra.file, mats, 2);
     n.traverse((o) => {
       if ((o as Mesh).isMesh) (o as Mesh).geometry.computeBoundsTree?.();
     });

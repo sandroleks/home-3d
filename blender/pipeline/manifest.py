@@ -21,13 +21,17 @@ def build_manifest(state, ranges, eye_height):
          "area": floor_area(r["floor"])}
         for r in state["rooms"]
     ]
+    def lamp_layers(key, rooms_):
+        return [{"room": r, **ref(key, f"light-{r}")} for r in rooms_ if ref(key, f"light-{r}")]
+
     chunks = [
-        {"node": c["node"], "room": c["room"], "day": ref(c["key"], "day"), "light": ref(c["key"], "light")}
+        {"node": c["node"], "room": c["room"], "day": ref(c["key"], "day"), "light": ref(c["key"], "light"),
+         "lights": lamp_layers(c["key"], c.get("neighbours", []))}
         for c in state["chunks"]
     ]
     doors = [
         {**{k: d[k] for k in ("node", "hinge", "dir", "width", "openAngle")}, "lightmap": ref(d["key"], "day"),
-         "lights": [{"room": r, **ref(d["key"], f"light-{r}")} for r in d.get("rooms", []) if ref(d["key"], f"light-{r}")]}
+         "lights": lamp_layers(d["key"], d.get("rooms", []))}
         for d in state["doors"]
     ]
     return {
@@ -50,6 +54,9 @@ def validate_manifest(m):
             errors.append(f"{label}: missing day lightmap")
         if c["room"] in switched and c["light"] is None:
             errors.append(f"{label}: room has a switch but no light lightmap")
+    for i, c in enumerate(m["chunks"]):
+        if len(c.get("lights", [])) > 1:
+            errors.append(f"chunks[{i}] ({c['node']}): lit from {len(c['lights'])} neighbours; the viewer binds one")
     for i, d in enumerate(m["doors"]):
         if d["lightmap"] is None:
             errors.append(f"doors[{i}] ({d['node']}): missing lightmap")

@@ -220,6 +220,8 @@ def bake_all(scene, state, quality, out_dir):
             for c in state["chunks"]:
                 if c["room"] == room:
                     run(c["node"], c["key"], "light", c["size"])
+                elif room in c.get("neighbours", []):  # an open-plan neighbour's lamps reach this room too
+                    run(c["node"], c["key"], f"light-{room}", c["size"])
             for d in state["doors"]:  # a door is lit from both its rooms, each switched on its own
                 if room in d.get("rooms", []):
                     run(d["node"], d["key"], f"light-{room}", state["door_lightmap_size"])

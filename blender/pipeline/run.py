@@ -61,6 +61,11 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
         print(f"[lamps] WARNING: {msg} is never lit", flush=True)
 
     chunk_list = chunks.build_chunks(static, floor_index)
+    open_plan = geom.open_neighbours({r["id"]: r["floor"] for r in room_list}, floor_index.locate_many)
+    for c in chunk_list:  # lamps in an open-plan neighbour light this room too, on the neighbour's switch
+        c["neighbours"] = [r for r in open_plan.get(c["room"], []) if r in room_lights]
+        if c["neighbours"]:
+            print(f"[chunks] {c['node']}: also lit from {', '.join(c['neighbours'])} (open plan)", flush=True)
     ctx["chunks"] = chunk_list
     if stop_after == "chunks":
         return ctx

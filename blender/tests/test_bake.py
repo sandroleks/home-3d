@@ -91,6 +91,9 @@ class BakeAllTests(unittest.TestCase):
         for c in chunk_list:
             c["size"] = uvs.add_lightmap_uvs(bpy.data.objects[c["node"]], q.lightmap_texels_per_m, q.lightmap_min, q.lightmap_max)
         uvs.add_lightmap_uvs(leaf, 0, q.door_lightmap, q.door_lightmap)
+        for c in chunk_list:  # as if beta were open to alpha (the fixture has a wall between them)
+            if c["room"] == "beta":
+                c["neighbours"] = ["alpha"]
         state = {"rooms": room_list, "chunks": chunk_list, "day_lights": day,
                  "room_lights": {"alpha": ["Ceiling light Alpha", "Desk lamp light"], "beta": ["Ceiling light Beta"]},
                  "room_emitters": {},
@@ -101,7 +104,7 @@ class BakeAllTests(unittest.TestCase):
 
     def test_files_and_ranges(self):
         expected = {"alpha_day", "beta_day", "exterior_day", "door-1_day", "alpha_light", "beta_light",
-                    "door-1_light-alpha", "door-1_light-beta"}
+                    "door-1_light-alpha", "door-1_light-beta", "beta_light-alpha"}
         self.assertEqual(set(self.ranges), expected)
         for key in expected:
             self.assertTrue(os.path.exists(os.path.join(self.out, "lightmaps", f"{key}.webp")), key)

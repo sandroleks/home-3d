@@ -54,6 +54,22 @@ class FloorIndexTests(unittest.TestCase):
         self.assertEqual(geom.door_rooms((5, 5), (1, 0), 0.8, self.index.locate), [])
 
 
+class OpenNeighbourTests(unittest.TestCase):
+    square = staticmethod(lambda x0, z0, x1, z1: [x0, z0, x1, z0, x1, z1, x0, z0, x1, z1, x0, z1])
+
+    def test_floors_that_meet_are_neighbours_both_ways(self):
+        rooms = {"kitchen": self.square(0, 0, 2, 3), "living": self.square(2, 0, 6, 3), "bed": self.square(0, 3.2, 2, 6)}
+        index = geom.FloorIndex(rooms)
+        # kitchen and living share 3 m; the bedroom sits behind a 0.2 m wall
+        self.assertEqual(geom.open_neighbours(rooms, index.locate_many), {"kitchen": ["living"], "living": ["kitchen"]})
+
+    def test_a_short_touch_is_not_open_plan(self):
+        rooms = {"a": self.square(0, 0, 1, 1), "b": self.square(1, 0.8, 2, 2)}  # corners overlap along 0.2 m
+        index = geom.FloorIndex(rooms)
+        self.assertEqual(geom.open_neighbours(rooms, index.locate_many), {})
+        self.assertEqual(geom.open_neighbours(rooms, index.locate_many, min_shared=0.1), {"a": ["b"], "b": ["a"]})
+
+
 class PrincipalFrameTests(unittest.TestCase):
     def test_rotated_rectangle(self):
         a = math.radians(30)

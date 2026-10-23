@@ -25,6 +25,13 @@ describe('parseManifest', () => {
     expect(() => parseManifest(raw)).toThrow('doors[0].lights[0].room');
   });
 
+  it('reads the lamp layers an open-plan neighbour bakes onto a chunk, and none from an older manifest', () => {
+    const raw = sampleManifest() as { chunks: Record<string, unknown>[] };
+    expect(parseManifest(raw).chunks[1].lights).toEqual([]);
+    raw.chunks[1].lights = [{ room: 'alpha', file: 'lightmaps/beta_light-alpha.webp', range: 1 }];
+    expect(parseManifest(raw).chunks[1].lights).toEqual([{ room: 'alpha', file: 'lightmaps/beta_light-alpha.webp', range: 1 }]);
+  });
+
   it('names the path of a broken field', () => {
     const bad = sampleManifest() as { chunks: { day: unknown }[] };
     bad.chunks[0].day = null;

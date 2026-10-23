@@ -10,7 +10,7 @@ STATE = {
     "switches": {"alpha": "Switch_alpha"},
     "chunks": [
         {"node": "Room_alpha", "room": "alpha", "key": "alpha", "size": 64},
-        {"node": "Room_porch", "room": "porch", "key": "porch", "size": 64},
+        {"node": "Room_porch", "room": "porch", "key": "porch", "size": 64, "neighbours": ["alpha"]},
         {"node": "Room_exterior", "room": None, "key": "exterior", "size": 64},
     ],
     "doors": [{"node": "Door_1", "key": "door-1", "hinge": [3.1, -1.78], "dir": [0, 1], "width": 0.76, "openAngle": -1.5708,
@@ -21,7 +21,7 @@ STATE = {
     "sky_irradiance": 0.6467,
 }
 RANGES = {"alpha_day": 4.0, "alpha_light": 2.0, "porch_day": 3.0, "exterior_day": 8.0, "door-1_day": 2.5,
-          "door-1_light-alpha": 1.5}
+          "door-1_light-alpha": 1.5, "porch_light-alpha": 1.0}
 
 
 class ManifestTests(unittest.TestCase):
@@ -36,6 +36,9 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(m["rooms"][1]["switch"], None)
         self.assertEqual(m["chunks"][0]["light"], {"file": "lightmaps/alpha_light.webp", "range": 2.0})
         self.assertIsNone(m["chunks"][1]["light"])
+        # the porch is open to alpha, so alpha's lamps are baked onto it too
+        self.assertEqual(m["chunks"][1]["lights"], [{"room": "alpha", "file": "lightmaps/porch_light-alpha.webp", "range": 1.0}])
+        self.assertEqual(m["chunks"][0]["lights"], [])
         self.assertEqual(m["doors"][0]["lightmap"], {"file": "lightmaps/door-1_day.webp", "range": 2.5})
         self.assertNotIn("key", m["doors"][0])
         # porch has no lights, so only alpha's layer is listed

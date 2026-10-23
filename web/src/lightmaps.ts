@@ -8,7 +8,7 @@ export interface LightmapBinding {
   light: Texture;
   lightRange: number;
   intensity: { value: number };
-  /** A second lamp layer: a door's leaf is lit from the rooms on both sides. Chunks leave it out. */
+  /** A second lamp layer on another room's switch: a door's leaf is lit from the rooms on both sides, an open-plan room from its neighbour. */
   light2?: { texture: Texture; range: number; intensity: { value: number } };
   /** Shared by every lightmapped material: how bright the baked sky is right now. */
   sky: { value: number };
