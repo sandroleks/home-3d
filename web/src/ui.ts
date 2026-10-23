@@ -94,6 +94,12 @@ export class UI {
     if (walking) (this.doc.activeElement as HTMLElement | null)?.blur?.(); // a focused slider would eat the arrow keys
   }
 
+  /** Tab: the mouse is free for the sun panel while the keys keep walking. */
+  setCursor(cursor: boolean): void {
+    this.doc.body.classList.toggle('cursor', cursor);
+    if (!cursor) (this.doc.activeElement as HTMLElement | null)?.blur?.();
+  }
+
   setMuted(muted: boolean): void {
     this.el('muted').hidden = !muted;
   }
@@ -120,6 +126,10 @@ export class UI {
     this.el('sun-play').addEventListener('click', () => h.play());
     const real = this.el<HTMLInputElement>('sun-real');
     real.addEventListener('change', () => h.real(real.checked));
+    // A slider left focused would also take the arrow keys the visitor walks with
+    this.el('sun-panel').addEventListener('pointerup', () => {
+      if (this.doc.body.classList.contains('cursor')) (this.doc.activeElement as HTMLElement | null)?.blur?.();
+    });
   }
 
   setSunPanel(s: SunPanelState): void {

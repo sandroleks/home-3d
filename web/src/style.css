@@ -50,15 +50,20 @@ kbd {
   stroke-linecap: round; stroke-linejoin: round;
 }
 
-/* The sun panel stays on screen, bottom left. While walking the mouse is captured, so it only shows;
-   with the walkthrough paused (Esc) it sits above the pause veil and takes clicks. */
+/* The sun panel stays on screen, bottom left. While walking the mouse is captured, so it only shows.
+   Tab frees the mouse without pausing, so the panel takes clicks while the keys keep walking; with
+   the walkthrough paused (Esc) it sits above the pause veil and takes clicks too. */
 #sun-panel {
   position: fixed; left: 16px; bottom: 16px; z-index: 10; width: min(300px, calc(100vw - 32px));
   box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: rgba(30, 28, 25, 0.78);
   text-align: left; display: flex; flex-direction: column; gap: 8px; font-size: 13px;
 }
 body.walking #sun-panel { pointer-events: none; opacity: 0.8; }
-body:not(.walking) .sun-hint { display: none; }
+body.cursor #sun-panel { box-shadow: 0 0 0 1px rgba(232, 194, 122, 0.45); }
+body.cursor #crosshair, body.cursor #prompt { display: none; } /* a click on the view only looks again */
+body.cursor #view { cursor: pointer; }
+body:not(.walking):not(.cursor) .sun-hint { display: none; }
+body.walking .sun-hint-cursor, body.cursor .sun-hint-walking { display: none; }
 .sun-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 #sun-clock { margin: 0; font-size: 14px; font-weight: 500; letter-spacing: 0.03em; }
 .sun-real { display: flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }

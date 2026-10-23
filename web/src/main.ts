@@ -172,21 +172,47 @@ async function run(): Promise<void> {
   });
   if (autostart) start();
   let paused = false;
-  document.addEventListener('pointerlockchange', () => {
-    paused = started && !autostart && document.pointerLockElement !== canvas;
-    ui.setPaused(paused);
-    ui.setWalking(document.pointerLockElement === canvas);
-    sound?.setPaused(paused);
-    if (paused) {
+  let cursor = false; // Tab frees the mouse for the sun panel and keeps walking; Esc pauses
+  let freeing = false; // the next unlock is Tab's, not Esc's
+  const setPausedState = (on: boolean) => {
+    paused = on;
+    ui.setPaused(on);
+    sound?.setPaused(on);
+    if (on) {
       for (const k of Object.keys(player.keys) as (keyof typeof player.keys)[]) player.keys[k] = false;
     }
+  };
+  document.addEventListener('pointerlockchange', () => {
+    const locked = document.pointerLockElement === canvas;
+    cursor = started && !autostart && !locked && freeing;
+    freeing = false;
+    ui.setWalking(locked);
+    ui.setCursor(cursor);
+    setPausedState(started && !autostart && !locked && !cursor);
   });
   window.addEventListener('mousedown', (e) => {
+    if (cursor && e.button === 0 && e.target === canvas) return void canvas.requestPointerLock(); // a click on the view looks around again
     if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
     const t = interactions.click();
     if (t?.kind === 'switch') sound?.click(t.node); // doors sound from the frame loop as they move
   });
   window.addEventListener('keydown', (e) => {
+    if (e.code === 'Tab') {
+      e.preventDefault(); // Tab toggles the free mouse, never focus cycling
+      if (!started || paused || autostart || e.repeat) return;
+      if (cursor) canvas.requestPointerLock();
+      else {
+        freeing = true;
+        document.exitPointerLock();
+      }
+      return;
+    }
+    if (cursor && e.code === 'Escape') {
+      cursor = false;
+      ui.setCursor(false);
+      setPausedState(true);
+      return;
+    }
     if (!started || paused) return;
     const sunKey = sunKeyAction(e.code, e.shiftKey, e.metaKey || e.ctrlKey || e.altKey);
     if (sunKey) {
