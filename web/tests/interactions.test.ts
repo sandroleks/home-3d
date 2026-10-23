@@ -1,7 +1,7 @@
-import { Color, Mesh, MeshStandardMaterial, Object3D, BoxGeometry } from 'three';
+import { Color, Mesh, MeshStandardMaterial, Object3D, BoxGeometry, PerspectiveCamera } from 'three';
 import { describe, expect, it } from 'vitest';
 import { DoorState } from '../src/doors';
-import { activate, findTarget, promptFor, setHighlight, type Target } from '../src/interactions';
+import { activate, findTarget, Interactions, promptFor, setHighlight, type Target } from '../src/interactions';
 import { RoomLights } from '../src/lightmaps';
 
 const doorInfo = { node: 'Door_1', hinge: [0, 0] as [number, number], dir: [1, 0] as [number, number], width: 0.8, openAngle: 1.5, lightmap: { file: 'x', range: 1 } };
@@ -41,5 +41,18 @@ describe('interactions', () => {
     expect(mat.emissive.r).toBeGreaterThan(0.1);
     setHighlight(mesh, false);
     expect(mat.emissive.r).toBeCloseTo(0.1);
+  });
+  it('click returns the activated target, or null when nothing is aimed at', () => {
+    const lights = new RoomLights(['sala']);
+    const node = new Mesh(new BoxGeometry(), new MeshStandardMaterial());
+    node.position.set(0, 0, -1);
+    node.updateMatrixWorld();
+    const t: Target = { kind: 'switch', room: 'sala', node };
+    const camera = new PerspectiveCamera();
+    const interactions = new Interactions(camera, [node], new Map([[node as Object3D, t]]), lights);
+    expect(interactions.click()).toBeNull();
+    interactions.update();
+    expect(interactions.click()).toBe(t);
+    expect(lights.isOn('sala')).toBe(true);
   });
 });

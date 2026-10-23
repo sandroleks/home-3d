@@ -68,6 +68,10 @@ export class UI {
     this.el('pause').hidden = !paused;
   }
 
+  setMuted(muted: boolean): void {
+    this.el('muted').hidden = !muted;
+  }
+
   onResume(cb: () => void): void {
     this.el('pause').addEventListener('click', cb);
   }

@@ -13,6 +13,7 @@ export interface World {
   lights: RoomLights;
   doors: DoorRuntime[];
   targets: Map<Object3D, Target>;
+  switches: Map<string, Object3D>;
   pickables: Object3D[];
   rooms: RoomLocator;
   collision: Collision;
@@ -76,14 +77,16 @@ export function buildWorld(assets: LoadedAssets, scene: Scene): World {
     return { state, node: n, base: n.quaternion.clone() };
   });
 
+  const switches = new Map<string, Object3D>();
   for (const room of manifest.rooms) {
     if (!room.switch) continue;
     const n = node(root, room.switch);
     prepareMeshes(n, null);
     targets.set(n, { kind: 'switch', room: room.id, node: n });
+    switches.set(room.id, n);
     pickables.push(n);
   }
 
   const collision = new Collision(assets.collision, () => doors.map((d) => d.state.segment()));
-  return { lights, doors, targets, pickables, rooms: new RoomLocator(manifest.rooms), collision, lightmapped };
+  return { lights, doors, targets, switches, pickables, rooms: new RoomLocator(manifest.rooms), collision, lightmapped };
 }

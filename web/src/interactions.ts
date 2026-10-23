@@ -65,7 +65,9 @@ export class Interactions {
     return t;
   }
 
-  click(): void {
+  /** Activates what the crosshair is on, if anything, and returns it. */
+  click(): Target | null {
     if (this.current) activate(this.current, this.lights);
+    return this.current;
   }
 }

@@ -60,13 +60,17 @@ When the automatic choice is wrong, adjust the tables in `blender/pipeline/confi
 - `QUALITY`: bake resolution and samples for preview and final.
 - `SURROUNDINGS_COLLECTION_PREFIXES`: which collections make the view through the windows. `SURROUNDINGS_SKY_IRRADIANCE`: how much the sky brightens it besides the sun.
 
+## Sound
+
+The audio lives in `web/public/assets/audio/`: doors, switches and footsteps from Kenney's CC0 packs, birdsong and music from CC0 OpenGameArt uploads, and two generated room-tone loops. `CREDITS.md` there lists every source. To rebuild the files (needs ffmpeg), download the sources it lists into one folder, unzip the Kenney packs next to their zips, and run `web/scripts/build-audio.sh <folder>`. Levels, fades, footstep spacing and which rooms sound outdoors or like a kitchen are in `CONFIG.audio` and `CONFIG.roomAmbience` (`web/src/config.ts`).
+
 ## Run and test
 
 ```
 cd web && npm run dev      # http://localhost:5173
 ```
 
-Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors and use switches, L toggles the current room's light, Esc pauses.
+Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors and use switches, L toggles the current room's light, M mutes sound, Esc pauses.
 
 Handy URL options:
 
