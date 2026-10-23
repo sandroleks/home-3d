@@ -93,8 +93,14 @@ export class UI {
   /** Resumes on Keep exploring, or on a click anywhere on the pause screen outside the sun panel. */
   onResume(cb: () => void): void {
     const panel = this.el('sun-panel');
-    this.el('pause').addEventListener('click', (e) => {
-      if (!panel.contains(e.target as Node)) cb();
+    const pause = this.el('pause');
+    let pressInPanel = false; // a drag that starts on a slider and ends outside the panel clicks #pause
+    pause.addEventListener('pointerdown', (e) => {
+      pressInPanel = panel.contains(e.target as Node);
+    });
+    pause.addEventListener('click', (e) => {
+      if (!pressInPanel && !panel.contains(e.target as Node)) cb();
+      pressInPanel = false;
     });
     this.el('resume-button').addEventListener('click', cb);
   }
