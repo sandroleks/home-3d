@@ -1,6 +1,6 @@
 # Apartment Walkthrough
 
-A first-person web walkthrough of the apartment, built from the Blender model. Visitors walk around with the keyboard and mouse, open doors and flip the light switches.
+A first-person web walkthrough of the apartment, built from the Blender model. Visitors walk around with the keyboard and mouse, or by touch on phones and tablets, open doors and flip the light switches.
 
 It has two halves: `blender/` turns the .blend into web assets (headless Blender, run through the Makefile), and `web/` is the viewer (Vite, TypeScript, three.js).
 
@@ -89,6 +89,8 @@ cd web && npm run dev      # http://localhost:5173
 
 Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors and use switches, L toggles the current room's light, M mutes sound, `,` and `.` move the time back and forward 15 minutes (hold to keep going), Shift + `,` and `.` move the date a week, P plays the day (one hour of sun every two seconds), R turns the real sun and sky on or off, and Esc pauses. The sun panel at the bottom left is always on screen. Press Tab to free the mouse and use it while you keep walking with WASD; press Tab again, or click the view, to look around. It also works while paused.
 
+On phones and tablets (no mouse): drag on the left half of the screen to walk (a stick appears under your thumb; push past its ring to walk faster), drag on the right half to look around, and tap doors and switches. Both thumbs work at once. The buttons at the top right open the sun panel, toggle the room's light, mute and pause. Android goes fullscreen on start; iPhones can't. Tuning (stick size, dead zone, look speed, tap timing) is in `CONFIG.touch`. To try it on a desktop, use the browser's device toolbar with a phone selected and reload.
+
 Handy URL options:
 
 - `?view=Cam_Sala&autostart`: jump to a viewpoint and skip the start screen.
@@ -117,7 +119,7 @@ File names are stable across exports. Vercel revalidates static files on every v
 
 ## Known limits
 
-- Desktop only (keyboard and mouse); phones and tablets see a notice.
+- Phones get a lighter load to fit their GPU memory: lightmaps larger than 1024 px are halved on the GPU as they load (the 2048 px rooms, about 290 MB down to 140 MB), and the sun's shadow map is 2048 px instead of 4096 (`CONFIG.touch`). A touch laptop, or an iPad with a trackpad, counts as a desktop.
 - Light from one room doesn't spill through doorways into the next. Rooms open to each other with no wall between them (the kitchen and the living room) do share lamp light: each one's lamps are baked onto the other as well, on the other's switch.
 - An open door keeps the lighting it was baked with closed.
 - No moon or stars at night.
