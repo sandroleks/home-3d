@@ -39,6 +39,27 @@ export const CONFIG = {
   /** Surroundings meshes thinner than this (m) are ground layers that share one plane. */
   surroundingsFlatHeight: 0.01,
   verticalFov: 70,
+  /** Degrees. Tall screens (a phone held upright) widen the vertical field of view so at least this much shows across. */
+  minHorizontalFov: 50,
+  /** Phones and tablets (no mouse): drag the left side to walk, the right side to look, tap to use. */
+  touch: {
+    /** Share of the screen's width, from the left, where a touch becomes the walking stick. */
+    stickArea: 0.5,
+    /** CSS px from the stick's centre to its ring: a push to the ring walks at full speed. */
+    stickRadius: 56,
+    /** Share of the radius that does nothing, so a resting thumb doesn't drift. */
+    deadZone: 0.12,
+    /** Pushing past this many radii runs. */
+    runPush: 1.5,
+    /** Radians of turn per CSS px dragged. */
+    lookSensitivity: 0.005,
+    /** A touch that moves less than this (CSS px) and lifts within tapTime (ms) is a tap. */
+    tapSlop: 10,
+    tapTime: 300,
+    /** Phones have far less GPU memory than desktops: lightmaps above this size are halved on load, and the sun's shadow map is smaller. */
+    maxLightmapSize: 1024,
+    shadowMapSize: 2048,
+  },
   sun: {
     /** Seconds of sun per real second while playing: one hour every two seconds. */
     playRate: 1800,

@@ -24,6 +24,11 @@ export const FALLBACK_LIGHTMAP = (() => {
   return t;
 })();
 
+/** Once on the GPU a lightmap's decoded pixels aren't needed again (lightmaps never re-upload), and phones run short of memory holding both. */
+function releaseImage(t: Texture): void {
+  if (typeof ImageBitmap !== 'undefined' && t.image instanceof ImageBitmap) t.image.close();
+}
+
 export function configureLightmap(t: Texture): void {
   t.flipY = false; // glTF UV convention
   t.colorSpace = NoColorSpace; // RGBM data, not colour
@@ -31,6 +36,7 @@ export function configureLightmap(t: Texture): void {
   t.generateMipmaps = false;
   t.minFilter = LinearFilter;
   t.magFilter = LinearFilter;
+  t.onUpdate = () => releaseImage(t);
   t.needsUpdate = true;
 }
 
@@ -40,7 +46,10 @@ async function fetchJson(url: string): Promise<unknown> {
   return res.json();
 }
 
-export async function loadAssets(onProgress: (fraction: number) => void): Promise<LoadedAssets> {
+/** `prepare` gets each lightmap as it arrives and returns the one to use (phones shrink the large ones). */
+export async function loadAssets(
+  onProgress: (fraction: number) => void, prepare: (m: LoadedMap) => LoadedMap = (m) => m,
+): Promise<LoadedAssets> {
   const base = CONFIG.assetsBase;
   const manifest = parseManifest(await fetchJson(`${base}manifest.json`));
   const collision = parseCollision(await fetchJson(`${base}collision.json`));
@@ -65,7 +74,7 @@ export async function loadAssets(onProgress: (fraction: number) => void): Promis
     try {
       const t = new Texture(await bitmapLoader.loadAsync(base + ref.file));
       configureLightmap(t);
-      return { texture: t, range: ref.range };
+      return prepare({ texture: t, range: ref.range });
     } catch (err) {
       console.warn(`Lightmap ${ref.file} failed to load; that surface uses flat lighting.`, err);
       return { texture: FALLBACK_LIGHTMAP, range: 1 };

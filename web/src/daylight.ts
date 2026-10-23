@@ -125,6 +125,7 @@ export class Daylight {
     private manifest: Manifest,
     private climate: Climate,
     private surroundings: Surroundings,
+    shadowMapSize = CONFIG.sun.shadowMapSize,
   ) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFSoftShadowMap;
@@ -135,7 +136,7 @@ export class Daylight {
     this.distance = CONFIG.sun.shadowReach + this.radius;
     const l = this.light;
     l.castShadow = true;
-    l.shadow.mapSize.set(CONFIG.sun.shadowMapSize, CONFIG.sun.shadowMapSize);
+    l.shadow.mapSize.set(shadowMapSize, shadowMapSize);
     l.shadow.bias = CONFIG.sun.shadowBias;
     l.shadow.normalBias = CONFIG.sun.shadowNormalBias;
     const cam = l.shadow.camera;

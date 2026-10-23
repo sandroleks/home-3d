@@ -1,6 +1,6 @@
 import {
   AgXToneMapping, BufferGeometry, Mesh, MeshStandardMaterial, PerspectiveCamera, PMREMGenerator,
-  Scene, SRGBColorSpace, WebGLRenderer,
+  Scene, SRGBColorSpace, Vector2, WebGLRenderer,
 } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -9,14 +9,16 @@ import { doorSound, loadMuted, saveMuted, StepTimer } from './audio';
 import { CONFIG } from './config';
 import { Interactions, promptFor } from './interactions';
 import { LIGHT_SPILL } from './lightmaps';
-import { loadAssets, type LoadedAssets } from './loader';
+import { loadAssets, type LoadedAssets, type LoadedMap } from './loader';
 import { addMirrors } from './mirrors';
-import { Player, vfovFromHfov } from './player';
+import { Player, screenFov, vfovFromHfov } from './player';
+import { shrinkLightmap } from './shrink';
 import { Sound } from './sound';
 import { Daylight, loadRealLighting, saveRealLighting } from './daylight';
 import { Surroundings } from './surroundings';
 import { solarPosition, sunTimes } from './sun';
 import { dayOfYear, daysInYear, formatClock, formatReadout, parseSunParam, SunClock, sunKeyAction } from './sun-clock';
+import { TouchControls } from './touch';
 import { COPY, isTouchOnly, UI } from './ui';
 import { applyDoorRotation, applyGlows, buildWorld } from './world';
 import './style.css';
@@ -26,6 +28,8 @@ Mesh.prototype.raycast = acceleratedRaycast;
 
 const params = new URLSearchParams(location.search);
 const ui = new UI(document);
+/** No mouse: touch controls instead of pointer lock, and a lighter load for the GPU. */
+const touch = isTouchOnly((q) => window.matchMedia(q));
 
 function fail(message: string, err: unknown): void {
   console.error(err);
@@ -33,7 +37,7 @@ function fail(message: string, err: unknown): void {
 }
 
 async function boot(): Promise<void> {
-  if (isTouchOnly((q) => window.matchMedia(q))) return ui.showNotice(COPY.mobile);
+  if (touch) ui.setTouch();
   if (!WebGL.isWebGL2Available()) return ui.showNotice(COPY.noWebGL);
   try {
     await run();
@@ -64,21 +68,25 @@ async function run(): Promise<void> {
   const camera = new PerspectiveCamera(CONFIG.verticalFov, 1, 0.05, 60);
   let fixedHfov: number | null = null;
   const resize = () => {
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
-    camera.aspect = window.innerWidth / window.innerHeight;
-    if (fixedHfov !== null) camera.fov = vfovFromHfov(fixedHfov, camera.aspect);
+    // The canvas's own size: on phones the window's lags behind rotation and the browser bars
+    const w = canvas.clientWidth || window.innerWidth;
+    const h = canvas.clientHeight || window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.fov = fixedHfov !== null ? vfovFromHfov(fixedHfov, camera.aspect) : screenFov(camera.aspect);
     camera.updateProjectionMatrix();
   };
   resize();
-  window.addEventListener('resize', resize);
+  new ResizeObserver(resize).observe(canvas);
 
-  const assets: LoadedAssets = await loadAssets((f) => ui.setProgress(f));
+  const shrink = touch ? (m: LoadedMap) => shrinkLightmap(renderer, m, CONFIG.touch.maxLightmapSize) : undefined;
+  const assets: LoadedAssets = await loadAssets((f) => ui.setProgress(f), shrink);
 
   const world = buildWorld(assets, scene);
   addMirrors(world.root, surroundings);
   const site = assets.manifest.site;
   const clock = new SunClock(parseSunParam(params.get('sun'), site.timeZone) ?? Date.now(), site.timeZone);
-  const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings);
+  const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings, touch ? CONFIG.touch.shadowMapSize : undefined);
   let real = loadRealLighting(() => localStorage);
   daylight.setReal(real);
   assets.surroundings.then((root) => {
@@ -131,7 +139,8 @@ async function run(): Promise<void> {
     sound.setRoom(currentRoom);
     ui.setMuted(muted);
     void sound.load();
-    canvas.requestPointerLock();
+    if (touch) fullscreen();
+    else canvas.requestPointerLock();
   };
   ui.setReady();
   ui.onStart(start);
@@ -168,7 +177,10 @@ async function run(): Promise<void> {
   };
   ui.onResume(() => {
     sound?.setPaused(false); // resume inside the click: Safari only allows it in a gesture
-    canvas.requestPointerLock();
+    if (touch) {
+      setPausedState(false); // no pointer lock to wait for
+      fullscreen();
+    } else canvas.requestPointerLock();
   });
   if (autostart) start();
   let paused = false;
@@ -180,8 +192,43 @@ async function run(): Promise<void> {
     sound?.setPaused(on);
     if (on) {
       for (const k of Object.keys(player.keys) as (keyof typeof player.keys)[]) player.keys[k] = false;
+      controls?.reset();
     }
   };
+  const toggleRoomLight = () => {
+    if (!currentRoom || !world.lights.has(currentRoom)) return;
+    world.lights.toggle(currentRoom);
+    sound?.click(world.switches.get(currentRoom));
+  };
+  const toggleMute = () => {
+    if (!sound) return;
+    muted = !muted;
+    saveMuted(() => localStorage, muted);
+    sound.setMuted(muted);
+    ui.setMuted(muted);
+  };
+  const controls = touch ? new TouchControls(canvas, document.getElementById('stick')!, document.getElementById('stick-knob')!, {
+    stick: (s) => { player.stick = s; },
+    look: (dx, dy) => {
+      if (started && !paused && !player.frozen) player.look(dx, dy, CONFIG.touch.lookSensitivity);
+    },
+    tap: (x, y) => {
+      if (!started || paused) return;
+      const r = canvas.getBoundingClientRect();
+      const t = interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2));
+      if (t?.kind === 'switch') sound?.click(t.node); // doors sound from the frame loop as they move
+    },
+  }) : null;
+  ui.bindTouchBar({
+    light: toggleRoomLight,
+    mute: toggleMute,
+    pause: () => {
+      if (started && !autostart) setPausedState(true);
+    },
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (touch && document.hidden && started && !autostart) setPausedState(true); // with a mouse, losing the pointer lock pauses
+  });
   document.addEventListener('pointerlockchange', () => {
     const locked = document.pointerLockElement === canvas;
     cursor = started && !autostart && !locked && freeing;
@@ -191,6 +238,7 @@ async function run(): Promise<void> {
     setPausedState(started && !autostart && !locked && !cursor);
   });
   window.addEventListener('mousedown', (e) => {
+    if (touch) return; // taps are handled by the touch controls
     if (cursor && e.button === 0 && e.target === canvas) return void canvas.requestPointerLock(); // a click on the view looks around again
     if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
     const t = interactions.click();
@@ -199,7 +247,7 @@ async function run(): Promise<void> {
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') {
       e.preventDefault(); // Tab toggles the free mouse, never focus cycling
-      if (!started || paused || autostart || e.repeat) return;
+      if (touch || !started || paused || autostart || e.repeat) return;
       if (cursor) canvas.requestPointerLock();
       else {
         freeing = true;
@@ -207,6 +255,7 @@ async function run(): Promise<void> {
       }
       return;
     }
+    if (touch && e.code === 'Escape' && started && !autostart) return setPausedState(true); // a tablet's keyboard
     if (cursor && e.code === 'Escape') {
       cursor = false;
       ui.setCursor(false);
@@ -221,16 +270,8 @@ async function run(): Promise<void> {
     }
     if (e.repeat) return;
     if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey && !e.altKey) setReal(!real);
-    if (e.code === 'KeyL' && currentRoom && world.lights.has(currentRoom)) {
-      world.lights.toggle(currentRoom);
-      sound?.click(world.switches.get(currentRoom));
-    }
-    if (e.code === 'KeyM' && sound) {
-      muted = !muted;
-      saveMuted(() => localStorage, muted);
-      sound.setMuted(muted);
-      ui.setMuted(muted);
-    }
+    if (e.code === 'KeyL') toggleRoomLight();
+    if (e.code === 'KeyM') toggleMute();
   });
 
   let last = performance.now();
@@ -252,14 +293,15 @@ async function run(): Promise<void> {
       const x = player.x;
       const z = player.z;
       player.update(dt);
-      if (sound && steps.update(Math.hypot(player.x - x, player.z - z), player.keys.run)) sound.step();
+      if (sound && steps.update(Math.hypot(player.x - x, player.z - z), player.running)) sound.step();
     }
     if (!player.frozen && world.collision.isBlocked(player.x, player.z)) player.resolve();
     currentRoom = world.rooms.locate(player.x, player.z, currentRoom);
     sound?.setRoom(currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');
     const target = started ? interactions.update() : null;
-    ui.setPrompt(target ? promptFor(target, world.lights) : null);
+    ui.setPrompt(target ? promptFor(target, world.lights, touch ? 'Tap' : 'Click') : null);
+    ui.setRoomLight(currentRoom && world.lights.has(currentRoom) ? world.lights.isOn(currentRoom) : null);
     clock.tick(dt);
     daylight.update(clock.utc, clock.version, doorsMoved);
     if (clock.version !== shownVersion) {
@@ -274,6 +316,11 @@ async function run(): Promise<void> {
     renderer.clearDepth();
     renderer.render(scene, camera);
   });
+}
+
+/** Android browsers go fullscreen from a tap, hiding their bars; iPhones can't, and nothing happens. */
+function fullscreen(): void {
+  document.documentElement.requestFullscreen?.()?.catch(() => {});
 }
 
 boot().catch((err) => fail(COPY.loadError, err));
