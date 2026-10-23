@@ -6,6 +6,24 @@ from pipeline import rooms, scene_select
 from tests import fixture_scene
 
 
+class DroppedCollectionTests(unittest.TestCase):
+    def test_render_visible_neighbourhood_is_left_out(self):
+        fixture_scene.build()
+        scene = bpy.context.scene
+        top = bpy.data.collections.new("Exterior - neighbourhood")
+        sub = bpy.data.collections.new("Exterior - neighbourhood trees")
+        scene.collection.children.link(top)
+        top.children.link(sub)
+        for name, coll in (("Exterior grass", top), ("Exterior pine", sub)):
+            me = bpy.data.meshes.new(name)
+            me.from_pydata([(0, 0, 0), (100, 0, 0), (100, 100, 0)], [], [(0, 1, 2)])
+            coll.objects.link(bpy.data.objects.new(name, me))
+        names = {o.name for o in scene_select.prepare_scene(scene, bpy.context.view_layer)[0]}
+        self.assertNotIn("Exterior grass", names)
+        self.assertNotIn("Exterior pine", names)
+        self.assertIn("Walls", names)
+
+
 class SceneSelectTests(unittest.TestCase):
     def setUp(self):
         fixture_scene.build()

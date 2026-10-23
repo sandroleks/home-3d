@@ -41,6 +41,9 @@ DICE_CELL = 0.25
 DICE_MAX_FACE_AREA = 0.5
 
 DROP_OBJECT_NAMES = ("Walls (backup before finishes)",)
+# Render-visible collections (and their sub-collections) kept out of the web: the kilometre-scale
+# neighbourhood is for Blender renders; dicing and lightmapping it would never finish.
+DROP_COLLECTION_PREFIXES = ("Exterior - neighbourhood",)
 FORCE_INCLUDE_COLLECTION_PREFIXES = ("Ceiling",)
 PASSABLE_NAME_PATTERN = r"^Glazed Door .* (glass|mullion|rail)(\.\d+)?$"
 
