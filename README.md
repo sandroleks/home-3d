@@ -76,7 +76,7 @@ The sun is live: its position comes from the NOAA solar equations for the flat's
 - Where the flat is: `SITE` in `blender/pipeline/config.py` (Blender's origin and the compass bearing of +Y).
 - Refresh the climate data: `cd web && node scripts/fetch-climate.mjs 41.117327 -8.653914`.
 - Compare with Cycles: `make render-refs SUN=2026-12-21T10:00` renders the viewpoints lit by the same sun into `build/ref/`.
-- Tuning: `CONFIG.sun` in `web/src/config.ts` (bounce, shadow bias, colours, time-lapse speed).
+- Tuning: `CONFIG.sun` in `web/src/config.ts` (bounce, skyGain, shadow bias, colours, time-lapse speed).
 
 ## Run and test
 
@@ -116,3 +116,5 @@ File names are stable across exports. Vercel revalidates static files on every v
 
 - Desktop only (keyboard and mouse); phones and tablets see a notice.
 - Light from one room doesn't spill through doorways into the next.
+- The baked sky light comes from below the horizon too, compensated globally by `CONFIG.sun.skyGain`, so ceilings near windows read a little bright and up-facing outdoor surfaces (balcony floor, sills) a little dark.
+- The bounce fill is a flat approximation: rooms without exterior glass of their own (e.g. the kitchen, lit through the glazed doors) get none and read darker than Cycles.

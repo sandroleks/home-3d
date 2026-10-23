@@ -35,7 +35,7 @@ export const CONFIG = {
     shadowNormalBias: 0.01,
     /** Share of the sunlight entering a room that comes back as an even fill, per m² of floor. Tuned against Cycles references: winter-morning bedroom and summer-evening Sala within about 1%. */
     bounce: 0.04,
-    /** The baked sky layer reads about 2.6x brighter in the viewer than Cycles renders the same sky; tuned against the references. */
+    /** Global scale on the baked sky layer, fitted against Cycles (0.38). Not a double pi: bake.Lighting._sky swaps the Sky Texture for a flat colour, so the bake world shines from every direction, including below the horizon, and the baked scene has no ground (prepare_scene removes the neighbourhood and building). Windows therefore get full sky radiance in their lower half, while the Cycles references render the full .blend, where ground and neighbours block it. The proper fix is a horizon in the bake world (sky above, black below), then a re-bake and re-fit. */
     skyGain: 0.38,
     /** The sun's colour at the horizon; white above 30 degrees. */
     warmColor: '#ffb070',
