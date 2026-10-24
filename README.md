@@ -134,7 +134,7 @@ Drawers and cupboard doors are baked open, so their insides are lit; the rooms a
 
 Lit bulbs, shades and ceiling diffusers get a soft halo (`src/halos.ts`, `CONFIG.halos`): one depth-tested sprite each, much cheaper than a full-screen bloom. The TV's and monitor's light is baked like a lamp's, for an all-white picture (`SCREEN_LIGHT_WATTS` in `blender/pipeline/config.py`); the viewer scales it by the picture's brightness and tints it with its colour.
 
-Keep the frame cheap: every live light (three.js light) is paid for by every pixel of every lit surface, and a full-screen pass costs about as much as one. Bake what can be baked.
+Keep the frame cheap: every live light (three.js light) is paid for by every pixel of every lit surface, and a full-screen pass costs about as much as one. Bake what can be baked. And keep it smooth: stutters, not slow frames, are what feel laggy. At load every shader is compiled in the background (`src/warmup.ts`), including the screens' pictures, the halos and the variants a mirror needs, and lightmaps go up to the GPU two per frame instead of when a room first comes into view. Mirrors draw at half resolution (`CONFIG.mirrorScale`). Drawers and cupboards don't redraw the sun's shadow map as they move; doors still do.
 
 ## Known limits
 

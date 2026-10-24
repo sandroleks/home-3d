@@ -59,6 +59,11 @@ export class Screen {
     });
   }
 
+  /** The picture's material, for shader warm-up before it is first shown. */
+  get pictureMaterial(): MeshBasicMaterial {
+    return this.onMaterial;
+  }
+
   get isTv(): boolean {
     return this.info.kind === 'tv';
   }

@@ -1,6 +1,6 @@
 import {
   AgXToneMapping, BufferGeometry, Mesh, MeshStandardMaterial, PerspectiveCamera, PMREMGenerator,
-  Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer,
+  Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -11,6 +11,7 @@ import { Interactions, promptFor } from './interactions';
 import { LIGHT_SPILL } from './lightmaps';
 import { loadAssets, type LoadedAssets, type LoadedMap } from './loader';
 import { addMirrors } from './mirrors';
+import { lightmapTextures, UploadQueue, warmUpShaders } from './warmup';
 import { applyMovable } from './movables';
 import { Player, screenFov, vfovFromHfov } from './player';
 import { shrinkLightmap } from './shrink';
@@ -85,7 +86,7 @@ async function run(): Promise<void> {
   const assets: LoadedAssets = await loadAssets((f) => ui.setProgress(f), shrink);
 
   const world = buildWorld(assets, scene);
-  addMirrors(world.root, surroundings);
+  const mirrors = addMirrors(world.root, surroundings);
   const halos = new Halos(world.glows);
   world.root.add(halos.root);
   const site = assets.manifest.site;
@@ -93,11 +94,24 @@ async function run(): Promise<void> {
   const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings, touch ? CONFIG.touch.shadowMapSize : undefined);
   let real = loadRealLighting(() => localStorage);
   daylight.setReal(real);
+  const mirrorTarget = mirrors.userData.target as WebGLRenderTarget | undefined;
   assets.surroundings.then((root) => {
     if (!root) return;
     surroundings.add(root);
     daylight.addCasters(root);
+    warmUpShaders(renderer, surroundings.scene, camera, [], mirrorTarget ? [mirrorTarget] : []).catch(() => {});
   });
+  // Nothing should stall mid-walk: every shader compiles now, in the background, and the lightmaps go up to the GPU a
+  // few per frame instead of when a room first comes into view.
+  const uploads = new UploadQueue(renderer);
+  uploads.add(lightmapTextures(world.lightmapped));
+  assets.light.then(() => uploads.add(lightmapTextures(world.lightmapped))).catch(() => {});
+  if (mirrorTarget) { // sized now, not on the first frame a mirror is in view
+    const size = renderer.getDrawingBufferSize(new Vector2()).multiplyScalar(CONFIG.mirrorScale).round();
+    mirrorTarget.setSize(size.x, size.y);
+  }
+  warmUpShaders(renderer, scene, camera, world.screens.map((s) => s.pictureMaterial), mirrorTarget ? [mirrorTarget] : [])
+    .catch((err) => console.warn('Shader warm-up failed; shaders compile when first needed.', err));
   const names = new Map(assets.manifest.rooms.map((r) => [r.id, CONFIG.roomNames[r.id] ?? r.name]));
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
@@ -302,7 +316,6 @@ async function run(): Promise<void> {
       const before = movablesBefore[i];
       const s = doorSound(before, m.state);
       if (s) sound?.movable(m.node, s, m.state.info.kind === 'slide');
-      if (m.state.progress !== before.progress) doorsMoved = true;
       before.target = m.state.target;
       before.progress = m.state.progress;
     });
@@ -336,6 +349,7 @@ async function run(): Promise<void> {
     halos.update(world.lights, camera);
     applyPacks(world);
     surroundings.sky.tick(now / 1000);
+    uploads.tick();
     renderer.clear();
     surroundings.render(renderer, camera);
     renderer.clearDepth();

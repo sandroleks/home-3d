@@ -2,6 +2,7 @@ import {
   Box3, Color, Group, HalfFloatType, type Material, Matrix4, Mesh, type Object3D, PerspectiveCamera, Plane, PlaneGeometry,
   Raycaster, ShaderMaterial, Vector2, Vector3, Vector4, WebGLRenderTarget, type WebGLRenderer,
 } from 'three';
+import { CONFIG } from './config';
 import type { Surroundings } from './surroundings';
 
 export function isMirror(m: Material): boolean {
@@ -124,7 +125,7 @@ export class Mirror extends Mesh {
       p[10] = clip.z + 1;
       p[14] = clip.w;
 
-      renderer.getDrawingBufferSize(bufferSize);
+      renderer.getDrawingBufferSize(bufferSize).multiplyScalar(CONFIG.mirrorScale).round();
       if (target.width !== bufferSize.x || target.height !== bufferSize.y) target.setSize(bufferSize.x, bufferSize.y);
       const previous = renderer.getRenderTarget();
       all.visible = false;
@@ -150,7 +151,8 @@ export function addMirrors(root: Object3D, surroundings: Surroundings): Group {
   const all = new Group();
   all.name = 'Mirrors';
   if (slabs.length === 0) return all;
-  const target = new WebGLRenderTarget(1, 1, { samples: 4, type: HalfFloatType });
+  const target = new WebGLRenderTarget(1, 1, { samples: 2, type: HalfFloatType });
+  all.userData.target = target; // for shader warm-up: the scene drawn into it needs its own shader variants
   for (const slab of slabs) {
     const face = mirrorFace(slab, [root]);
     if (!face) {

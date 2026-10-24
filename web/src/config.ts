@@ -10,6 +10,8 @@ export const CONFIG = {
   /** Seconds for a drawer or cupboard door to open or close. */
   movableDuration: 0.45,
   lightFadeDuration: 0.4,
+  /** Mirrors draw their reflection at this share of the screen's resolution: a whole second view of the flat. */
+  mirrorScale: 0.5,
   /** Packed lamp textures one lightmapped material can take (the pipeline's MAX_PACKS). */
   maxPacks: 3,
   /** Share of each room's own baked lamp light that is always there, lights off or not: light spilling in from elsewhere, so unlit rooms keep their shape rather than going flat or black. */

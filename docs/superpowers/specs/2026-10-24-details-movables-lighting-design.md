@@ -72,6 +72,8 @@ Objects with `web_move` are exported as their own nodes (`Move_<slug>`), origin 
 
 A first version used live `RectAreaLight`s for the screens and a full-screen bloom (half-float, multisampled target). Measured at 2400×1780 in the Sala: 13.1 ms a frame against 3.6 ms before this work; the area lights cost about 3 ms even while off (every lit pixel evaluates them), the bloom about 5 ms (2 ms even when bloomed from a copy of the finished frame, which forces the antialiasing to resolve mid-frame). Baking the screen light and replacing bloom with halos brought it to 4.2 ms; the rest is the packed lamp layers (about 0.6 ms).
 
+What still felt laggy were stutters, measured in headless Chrome on the GPU with the real animation loop: the first view of the entrance mirror (437 ms, then 40 fps: the reflection redrew the flat at full resolution with 4x MSAA and compiled a second set of shaders), the TV's first picture (393 ms, its shader), each room's first appearance (30 to 35 ms, lightmap uploads), drawers redrawing the 4096 px sun shadow map every frame as they moved, and the halos' first showing. Now every shader is compiled in the background at load, lightmaps upload two per frame, the mirror draws at half resolution with 2x MSAA into a target sized at load, and drawers leave the shadow map alone: every interaction stays within 20 ms a frame at 60 Hz, the first mirror frame at 33 ms.
+
 ## Costs
 
 - Bake: roughly double the current final export (about 35 minutes) for the extra layers, spill and movables.
