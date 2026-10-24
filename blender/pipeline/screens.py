@@ -1,6 +1,9 @@
 """Screens (`web_screen = "tv" | "monitor" | "laptop"`): their own nodes with planar UVs, u to the viewer's right and
-v up, so the viewer can show a picture on them."""
+v up, so the viewer can show a picture on them. The light a screen casts is baked: an area light over the screen
+(SCREEN_LIGHT_WATTS, a white picture) in the screen's lamp group, which the viewer scales and tints by the picture."""
+import bpy
 import numpy as np
+from mathutils import Matrix, Vector
 
 from . import bpyutil, config, geom
 
@@ -11,7 +14,9 @@ def find(meshes):
     return [o for o in meshes if o.get(config.SCREEN_PROP)]
 
 
-def prepare_screens(objs, floor_index, group_ids):
+def prepare_screens(objs, floor_index):
+    """Specs in three.js space ("group" is filled in once the light groups are known), with the Blender centre and
+    normal under "blender" for add_lights."""
     specs = []
     for o in sorted(objs, key=lambda o: o.name):
         kind = str(o[config.SCREEN_PROP])
@@ -42,11 +47,42 @@ def prepare_screens(objs, floor_index, group_ids):
         uv.foreach_set("uv", uvs.ravel())
         name = f"Screen_{room}-{geom.slugify(kind)}"
         o.name = name
-        group = f"{room}/{geom.slugify(kind)}"
         specs.append({
-            "node": name, "room": room, "kind": kind, "group": group if group in group_ids else None,
+            "node": name, "room": room, "kind": kind, "group": None,
             "center": [round(x, 4) + 0.0 for x in geom.to_three(tuple(c))],
             "normal": [round(x, 4) + 0.0 for x in geom.to_three(tuple(n))],
             "width": round(width, 4), "height": round(height, 4),
+            "blender": {"center": [float(x) for x in c], "normal": [float(x) for x in n], "up": [float(x) for x in up]},
         })
     return specs
+
+
+def add_lights(specs, collection):
+    """An area light just in front of each screen that lights its room, in lamp group `<kind>`. Returns their names."""
+    names = []
+    for s in specs:
+        watts = config.SCREEN_LIGHT_WATTS.get(s["kind"], 0)
+        if watts <= 0:
+            continue
+        data = bpy.data.lights.new(f"Screen light {s['node']}", "AREA")
+        data.shape = "RECTANGLE"
+        data.size, data.size_y = s["width"], s["height"]
+        data.energy = watts
+        data.use_temperature = True
+        data.temperature = 6500
+        obj = bpy.data.objects.new(data.name, data)
+        n, up = Vector(s["blender"]["normal"]), Vector(s["blender"]["up"])
+        # An area light shines down its local -Z; its local Y runs up the screen.
+        obj.matrix_world = Matrix.Translation(Vector(s["blender"]["center"]) + n * 0.01) @ bpyutil.basis(
+            up.cross(-n), up, -n).to_4x4()
+        obj[config.LAMP_PROP] = s["kind"]
+        collection.objects.link(obj)
+        names.append(obj.name)
+    bpy.context.view_layer.update()
+    return names
+
+
+def set_groups(specs, group_ids):
+    for s in specs:
+        group = f"{s['room']}/{geom.slugify(s['kind'])}"
+        s["group"] = group if group in group_ids else None

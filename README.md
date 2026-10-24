@@ -132,14 +132,16 @@ Each room's wall switch turns on its ceiling light and every lamp without a lamp
 
 Drawers and cupboard doors are baked open, so their insides are lit; the rooms are baked with them taken away, so the hollow carcasses get light inside and no open front leaves a shadow behind.
 
-What's brighter than white (bulbs, lit shades, screens, sunlit patches) blooms (`src/bloom.ts`, `CONFIG.bloom`). The TV and monitor light the room with the colour of their picture (`CONFIG.screens`).
+Lit bulbs, shades and ceiling diffusers get a soft halo (`src/halos.ts`, `CONFIG.halos`): one depth-tested sprite each, much cheaper than a full-screen bloom. The TV's and monitor's light is baked like a lamp's, for an all-white picture (`SCREEN_LIGHT_WATTS` in `blender/pipeline/config.py`); the viewer scales it by the picture's brightness and tints it with its colour.
+
+Keep the frame cheap: every live light (three.js light) is paid for by every pixel of every lit surface, and a full-screen pass costs about as much as one. Bake what can be baked.
 
 ## Known limits
 
 - Phones get a lighter load to fit their GPU memory: lightmaps larger than 1024 px are halved on the GPU as they load (the 2048 px rooms, about 290 MB down to 140 MB), and the sun's shadow map is 2048 px instead of 4096 (`CONFIG.touch`). A touch laptop, or an iPad with a trackpad, counts as a desktop.
 - Light through a door is one layer per door and room: it follows the room's overall brightness, not which of its lamps are on, and lights only the rooms, not the door leaves or drawers. Sun and sky don't come through open doors.
 - An open door keeps the lighting it was baked with closed; a drawer or cupboard keeps the lighting it was baked with open, and doesn't shade its neighbours.
-- The TV and monitor light casts no shadows.
+- The TV's and monitor's light takes the picture's average colour, the same everywhere in the room.
 - No moon or stars at night.
 - The baked sky light comes from below the horizon too, compensated globally by `CONFIG.sun.skyGain`, so ceilings near windows read a little bright and up-facing outdoor surfaces (balcony floor, sills) a little dark.
 - The bounce fill is a flat approximation: rooms without exterior glass of their own (e.g. the kitchen, lit through the glazed doors) get none and read darker than Cycles.

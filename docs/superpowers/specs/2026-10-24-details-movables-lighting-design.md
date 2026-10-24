@@ -65,8 +65,12 @@ Objects with `web_move` are exported as their own nodes (`Move_<slug>`), origin 
 - `LightGroups` replaces `RoomLights`: one fading level per group. `L` and the wall switch toggle the room's switch group; clicking a fixture toggles its lamp group.
 - The lightmap shader sums day, switch and up to three packs: `irradiance += tints * (pow(texel.rgb, 2.2) * gains)`, with gains = range × level per channel, updated each frame.
 - Movables animate like doors (eased, 0.45 s); targets prompt "open drawer", "close cupboard".
-- Screens: a canvas texture per screen (`screen-content.ts`: TV channels, desktop), unlit while off (a dark glossy panel). Clicking the TV turns it on, then steps through the channels, then off; the monitor and laptop toggle. The TV and monitor carry a `RectAreaLight` the colour of the picture, zero while off. Desktop only: the light count never changes, so nothing recompiles.
-- Bloom: the frame renders into a half-float target, `UnrealBloomPass` picks out what is brighter than white (lit shades, bulbs, screens, sunlit sky), then `OutputPass` tone-maps. Phones run it at half resolution (`CONFIG.bloom`).
+- Screens: a canvas texture per screen (`screen-content.ts`: TV channels, desktop), unlit while off (a dark glossy panel). Clicking the TV turns it on, then steps through the channels, then off; the monitor and laptop toggle. Their light is baked: the pipeline puts an area light over each (a white picture, `SCREEN_LIGHT_WATTS`) in the screen's lamp group, and the viewer scales that layer by the picture's brightness and sets its tint to the picture's colour each frame.
+- Halos: a depth-tested, additive sprite at each small glowing fixture, fading with its lamp (`halos.ts`).
+
+### Performance
+
+A first version used live `RectAreaLight`s for the screens and a full-screen bloom (half-float, multisampled target). Measured at 2400×1780 in the Sala: 13.1 ms a frame against 3.6 ms before this work; the area lights cost about 3 ms even while off (every lit pixel evaluates them), the bloom about 5 ms (2 ms even when bloomed from a copy of the finished frame, which forces the antialiasing to resolve mid-frame). Baking the screen light and replacing bloom with halos brought it to 4.2 ms; the rest is the packed lamp layers (about 0.6 ms).
 
 ## Costs
 

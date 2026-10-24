@@ -1,6 +1,5 @@
 import {
-  CanvasTexture, Color, LinearFilter, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, RectAreaLight,
-  SRGBColorSpace, Vector3,
+  CanvasTexture, Color, LinearFilter, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, SRGBColorSpace,
 } from 'three';
 import { CONFIG } from './config';
 import { fadeToward } from './lightmaps';
@@ -16,12 +15,18 @@ export const domCanvas: CanvasFactory = (width, height) => {
   return c;
 };
 
-/** A TV, monitor or laptop screen: a dark glossy panel while off, a generated picture (and the light it casts) while on. */
+/**
+ * A TV, monitor or laptop screen: a dark glossy panel while off, a generated picture while on. The light it casts is
+ * baked (in its lamp group, for a white picture): `brightness` scales it and `tint` colours it like the picture.
+ */
 export class Screen {
   on = false;
   /** Fades the picture and its light in and out. */
   level = 0;
-  readonly light: RectAreaLight | null;
+  /** The picture's mean luminance (linear, 0..1). */
+  brightness = 0;
+  /** The picture's mean colour, scaled to unit luminance. */
+  readonly tint = new Color(1, 1, 1);
   private content: TvContent | DesktopContent;
   private texture: CanvasTexture | null = null;
   private onMaterial: MeshBasicMaterial;
@@ -52,15 +57,6 @@ export class Screen {
       mesh.castShadow = false;
       this.meshes.push(mesh);
     });
-    const strength = CONFIG.screens.light[info.kind] ?? 0;
-    if (strength > 0) {
-      const light = new RectAreaLight(0xffffff, 0, info.width, info.height);
-      const c = new Vector3(...info.center);
-      const n = new Vector3(...info.normal);
-      light.position.copy(c).addScaledVector(n, 0.02);
-      light.lookAt(c.clone().add(n));
-      this.light = light;
-    } else this.light = null;
   }
 
   get isTv(): boolean {
@@ -95,12 +91,9 @@ export class Screen {
       if (this.texture) this.texture.needsUpdate = true;
       const [r, g, b] = this.content.average();
       this.average.setRGB(r, g, b);
+      this.brightness = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      if (this.brightness > 1e-4) this.tint.copy(this.average).multiplyScalar(1 / this.brightness);
     }
     this.onMaterial.color.setScalar(CONFIG.screens.brightness * this.level);
-    if (this.light) {
-      const strength = CONFIG.screens.light[this.info.kind] ?? 0;
-      this.light.color.copy(this.average);
-      this.light.intensity = strength * this.level;
-    }
   }
 }

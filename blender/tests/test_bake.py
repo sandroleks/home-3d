@@ -110,9 +110,9 @@ class BakeAllTests(unittest.TestCase):
             return [layers.layer_key(l) for p in self.baked["packs"].get(surface, []) for l in p["layers"]]
 
         self.assertEqual(keys("alpha"), ["alpha/desk-lamp", "spill-1-beta"])
-        self.assertEqual(keys("beta"), ["spill-1-alpha"])
-        self.assertEqual(keys("door-1"), ["alpha", "alpha/desk-lamp", "beta"])
-        self.assertEqual(keys("movables-beta"), ["beta"])
+        self.assertEqual(keys("beta"), ["beta/tv", "spill-1-alpha"])  # the TV's light is baked like a lamp's
+        self.assertEqual(keys("door-1"), ["alpha", "alpha/desk-lamp", "beta", "beta/tv"])
+        self.assertEqual(keys("movables-beta"), ["beta", "beta/tv"])
         for surface, ps in self.baked["packs"].items():
             for p in ps:
                 self.assertTrue(os.path.exists(os.path.join(self.out, p["file"])), p["file"])

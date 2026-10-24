@@ -35,7 +35,9 @@ class EndToEndTests(unittest.TestCase):
         self.assertAlmostEqual(m["spawn"]["yaw"], -1.5708, places=3)  # Cam_Entrada looks +X
         self.assertEqual([v["name"] for v in m["viewpoints"]], ["Cam_Sala"])
         self.assertEqual(m["version"], 3)
-        self.assertEqual([g["id"] for g in m["groups"]], ["alpha", "alpha/desk-lamp", "beta"])
+        self.assertEqual([g["id"] for g in m["groups"]], ["alpha", "alpha/desk-lamp", "beta", "beta/tv"])
+        self.assertEqual(m["screens"][0]["group"], "beta/tv")
+        self.assertNotIn("blender", m["screens"][0])
         self.assertEqual(m["groups"][1]["target"], "Lamp_alpha-desk-lamp")
         self.assertEqual(sorted(mv["node"] for mv in m["movables"]), ["Move_cabinet-door", "Move_cabinet-drawer"])
         self.assertEqual([s["node"] for s in m["screens"]], ["Screen_beta-tv"])

@@ -10,6 +10,7 @@ export function sampleManifest(): unknown {
     groups: [
       { id: 'alpha', room: 'alpha', kind: 'switch', name: 'light', power: 100, target: 'Switch_alpha' },
       { id: 'alpha/desk-lamp', room: 'alpha', kind: 'lamp', name: 'desk-lamp', power: 10, target: 'Lamp_alpha-desk-lamp' },
+      { id: 'beta/tv', room: 'beta', kind: 'lamp', name: 'tv', power: 60, target: null },
     ],
     chunks: [
       {
@@ -18,7 +19,7 @@ export function sampleManifest(): unknown {
       },
       {
         node: 'Room_beta', room: 'beta', day: { file: 'lightmaps/beta_day.webp', range: 3 }, light: null,
-        packs: [{ file: 'lightmaps/beta_pack0.webp', layers: [{ spill: { opening: 1, from: 'alpha' }, range: 0.5, tint: [1, 1, 1] }] }],
+        packs: [{ file: 'lightmaps/beta_pack0.webp', layers: [{ spill: { opening: 1, from: 'alpha' }, range: 0.5, tint: [1, 1, 1] }, { group: 'beta/tv', range: 2, tint: [1, 1, 1] }] }],
       },
       { node: 'Room_exterior', room: null, day: { file: 'lightmaps/exterior_day.webp', range: 8 }, light: null, packs: [] },
     ],
@@ -39,7 +40,7 @@ export function sampleManifest(): unknown {
       },
     ],
     screens: [
-      { node: 'Screen_beta-tv', room: 'beta', kind: 'tv', group: null, center: [4.8, 1.2, -0.003], normal: [0, 0, -1], width: 0.8, height: 0.45 },
+      { node: 'Screen_beta-tv', room: 'beta', kind: 'tv', group: 'beta/tv', center: [4.8, 1.2, -0.003], normal: [0, 0, -1], width: 0.8, height: 0.45 },
     ],
     glows: [{ node: 'Glow_desk-lamp-bulb', group: 'alpha/desk-lamp' }],
     viewpoints: [{ name: 'Cam_Sala', position: [4.5, 1.6, -1.5], yaw: 1.5708, pitch: 0, hfov: 1.5708 }],

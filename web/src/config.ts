@@ -101,27 +101,26 @@ export const CONFIG = {
     'bar-shelves': 'shelf lights', workbench: 'workbench light', 'bedside-left': 'bedside lamp', 'bedside-right': 'bedside lamp',
     'screen-bar': 'monitor light', 'wall-lights': 'wall lights',
   } as Record<string, string>,
-  /** The TV, monitor and laptop: picture size in px, brightness, and the light they cast while on. */
+  /** The TV, monitor and laptop: picture size in px and brightness. The light they cast is baked (SCREEN_LIGHT_WATTS). */
   screens: {
     sizes: { tv: [512, 288], monitor: [512, 288], laptop: [384, 240] } as Record<string, [number, number]>,
     /** Multiplies the picture: above 1 the brightest parts bloom. */
     brightness: 1.25,
-    /** RectAreaLight intensity per m² of screen at full white; each screen's light takes the picture's mean colour. */
-    light: { tv: 2.2, monitor: 2.5, laptop: 0 } as Record<string, number>,
     /** Pictures redraw this often (per second), and only within this distance (m). */
     fps: 30,
     maxDistance: 10,
     fade: 0.25,
   },
-  /** Glow around what is brighter than white: bulbs, lit shades, screens, sunlit patches. */
-  bloom: {
-    enabled: true,
-    /** Linear light (before exposure) where bloom starts, and the width of its soft start. */
-    threshold: 1.2,
-    knee: 0.6,
-    strength: 0.45,
-    /** Phones run the bloom chain at this share of the screen's resolution. */
-    touchScale: 0.5,
+  /** Soft glow around small lit fixtures (bulbs, lampshades, ceiling diffusers): one camera-facing sprite each. */
+  halos: {
+    /** Brightness, times the fixture's glow colour and its lamp's level. */
+    strength: 0.35,
+    /** Sprite size relative to the fixture, and its limits in m. */
+    size: 2.2,
+    minSize: 0.25,
+    maxSize: 1.1,
+    /** Glowing surfaces larger than this (m) get no halo: LED strips, a pair of wall lights sharing a material. */
+    maxFixture: 0.7,
   },
   /** Rooms whose ambience isn't the default quiet room tone. */
   roomAmbience: { varanda: 'outdoor', marquise: 'outdoor', cozinha: 'kitchen', lavandaria: 'kitchen' } as Record<string, Ambience>,

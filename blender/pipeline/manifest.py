@@ -54,7 +54,8 @@ def build_manifest(state, baked, eye_height, proxies=None):
     return {
         "version": VERSION, "eyeHeight": eye_height, "spawn": state["spawn"],
         "rooms": rooms, "groups": groups, "chunks": chunks, "doors": doors, "movables": movables,
-        "screens": state.get("screens", []), "glows": state.get("glows", []), "viewpoints": state["viewpoints"],
+        "screens": [{k: v for k, v in s.items() if k != "blender"} for s in state.get("screens", [])],
+        "glows": state.get("glows", []), "viewpoints": state["viewpoints"],
         "site": dict(config.SITE),
         "sky": {"irradiance": round(state["sky_irradiance"], 5), "wattsToScene": config.WATTS_TO_SCENE},
         "windows": state["windows"],

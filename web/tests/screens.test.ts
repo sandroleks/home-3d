@@ -32,10 +32,9 @@ describe('Screen', () => {
     expect(s.lastChannel).toBe(false); // back on the first channel
   });
 
-  it('toggles a monitor, swaps the material and fades its light', () => {
+  it('toggles a monitor and swaps the material', () => {
     const { s, mesh } = screen('monitor');
     const off = mesh.material;
-    expect(s.light).not.toBeNull();
     s.click(0);
     s.update(0, 1, world, true);
     expect(s.level).toBe(1);
@@ -44,10 +43,11 @@ describe('Screen', () => {
     s.update(1, 1, world, true);
     expect(s.level).toBe(0);
     expect(mesh.material).toBe(off);
-    expect(s.light!.intensity).toBe(0);
   });
 
-  it('gives the laptop no light of its own', () => {
-    expect(screen('laptop').s.light).toBeNull();
+  it('starts dark and white-tinted, for its baked light', () => {
+    const { s } = screen('tv');
+    expect(s.brightness).toBe(0);
+    expect(s.tint.toArray()).toEqual([1, 1, 1]);
   });
 });

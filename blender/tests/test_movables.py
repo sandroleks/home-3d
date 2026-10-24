@@ -34,8 +34,9 @@ class PrepareTests(unittest.TestCase):
         objs = movables.find(meshes)
         cls.names = sorted(o.name for o in objs)
         cls.specs = {s["source"]: s for s in movables.prepare_movables(objs, cls.index)}
-        groups, _ = lamps.collect_groups(bpy.context.scene, room_list, cls.index, [])
-        cls.screens = screens.prepare_screens(screens.find(meshes), cls.index, {"beta", "beta/tv"})
+        cls.screens = screens.prepare_screens(screens.find(meshes), cls.index)
+        cls.lights = screens.add_lights(cls.screens, bpy.context.scene.collection)
+        screens.set_groups(cls.screens, {"beta", "beta/tv"})
 
     def test_found_and_renamed(self):
         self.assertEqual(self.names, ["Cabinet door", "Cabinet drawer"])
@@ -82,6 +83,16 @@ class PrepareTests(unittest.TestCase):
         (s,) = self.screens
         self.assertEqual((s["node"], s["room"], s["kind"], s["group"]), ("Screen_beta-tv", "beta", "tv", "beta/tv"))
         self.assertEqual(s["normal"], [0.0, 0.0, -1.0])  # faces into Beta (Blender +Y)
+        # Its baked light: just in front, the screen's size, shining into the room (-Z local is Blender +Y), group tv.
+        light = bpy.data.objects[self.lights[0]]
+        self.assertEqual(light["web_lamp"], "tv")
+        self.assertAlmostEqual(light.location.y, 0.0125, places=3)
+        self.assertAlmostEqual(light.data.size, 0.8, places=3)
+        self.assertAlmostEqual(light.data.size_y, 0.45, places=3)
+        shine = light.matrix_world.to_3x3() @ Vector((0.0, 0.0, -1.0))
+        self.assertAlmostEqual(shine.y, 1.0, places=4)
+        up = light.matrix_world.to_3x3() @ Vector((0.0, 1.0, 0.0))
+        self.assertAlmostEqual(up.z, 1.0, places=4)
         self.assertAlmostEqual(s["width"], 0.8, places=3)
         self.assertAlmostEqual(s["height"], 0.45, places=3)
         o = bpy.data.objects["Screen_beta-tv"]

@@ -3,11 +3,9 @@ import {
   Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer,
 } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
-import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { doorSound, loadMuted, saveMuted, StepTimer } from './audio';
-import { Bloom } from './bloom';
 import { CONFIG } from './config';
 import { Interactions, promptFor } from './interactions';
 import { LIGHT_SPILL } from './lightmaps';
@@ -17,6 +15,7 @@ import { applyMovable } from './movables';
 import { Player, screenFov, vfovFromHfov } from './player';
 import { shrinkLightmap } from './shrink';
 import { Sound } from './sound';
+import { Halos } from './halos';
 import { Daylight, loadRealLighting, saveRealLighting } from './daylight';
 import { Surroundings } from './surroundings';
 import { solarPosition, sunTimes } from './sun';
@@ -63,8 +62,6 @@ async function run(): Promise<void> {
     fail(COPY.contextLost, new Error('WebGL context lost'));
   });
 
-  RectAreaLightUniformsLib.init(); // the TV and monitor light the room
-  const bloom = CONFIG.bloom.enabled ? new Bloom(renderer, touch ? CONFIG.bloom.touchScale : 1, touch ? 0 : 4) : null;
   const scene = new Scene();
   const surroundings = new Surroundings();
   scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
@@ -89,6 +86,8 @@ async function run(): Promise<void> {
 
   const world = buildWorld(assets, scene);
   addMirrors(world.root, surroundings);
+  const halos = new Halos(world.glows);
+  world.root.add(halos.root);
   const site = assets.manifest.site;
   const clock = new SunClock(parseSunParam(params.get('sun'), site.timeZone) ?? Date.now(), site.timeZone);
   const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings, touch ? CONFIG.touch.shadowMapSize : undefined);
@@ -103,7 +102,7 @@ async function run(): Promise<void> {
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
-  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, CONFIG, LIGHT_SPILL } }); // tuning from the console
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, CONFIG, LIGHT_SPILL } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;
@@ -334,12 +333,9 @@ async function run(): Promise<void> {
     }
     world.lights.update(dt);
     applyGlows(world.glows, world.lights);
+    halos.update(world.lights, camera);
     applyPacks(world);
     surroundings.sky.tick(now / 1000);
-    if (bloom) {
-      bloom.render(() => surroundings.render(renderer, camera), scene, camera);
-      return;
-    }
     renderer.clear();
     surroundings.render(renderer, camera);
     renderer.clearDepth();

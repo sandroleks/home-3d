@@ -102,8 +102,11 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
     if stop_after == "switches":
         return ctx
 
+    screen_specs = screens.prepare_screens(screen_objs, floor_index)
+    ctx["day_lights"] = sorted(ctx["day_lights"] + screens.add_lights(screen_specs, bpy.data.collections["WEB_LIGHTS"]))
     groups, lost_lamps = lamps.collect_groups(scene, room_list, floor_index, ctx["day_lights"])
     gids = {g["id"] for g in groups}
+    screens.set_groups(screen_specs, gids)
     emitters, lost_glows = lamps.split_emitters(static + glow_objs, floor_index, gids)  # before chunking joins them
     fixtures = lamps.fixture_boxes(static + glow_objs, floor_index, gids)
     lost = lost_lamps + lost_glows
@@ -112,7 +115,6 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
     for g in groups:
         print(f"[lamps] {g['id']}: {', '.join(g['lights'])}", flush=True)
     movable_specs = movables.prepare_movables(movable_objs, floor_index)
-    screen_specs = screens.prepare_screens(screen_objs, floor_index, gids)
     glows = glow_specs(glow_objs)
 
     chunk_list = chunks.build_chunks(static, floor_index)
@@ -142,8 +144,8 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
 
     st = {
         "rooms": room_list, "switches": sw, "doors": door_specs, "chunks": chunk_list,
-        "door_lightmap_size": quality.door_lightmap, "day_lights": day_lights,
-        "spawn": export.spawn_from(scene, room_list), "viewpoints": export.viewpoints(scene),
+        "door_lightmap_size": quality.door_lightmap,
+        "spawn": export.spawn_from(scene, room_list), "viewpoints": export.viewpoints(scene), "day_lights": ctx["day_lights"],
         "groups": groups, "group_emitters": emitters, "fixtures": fixtures, "lost_lamps": lost,
         "movables": movable_specs, "movable_atlas": atlas, "screens": screen_specs, "glows": glows, "layers": plan,
         "windows": window_list, "sky_irradiance": bake.sky_irradiance(scene),

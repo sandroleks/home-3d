@@ -37,7 +37,7 @@ describe('applyGlows', () => {
   it('dims a glowing material with its group', () => {
     const lights = new LightGroups(['sala/floor-lamp'], 0.4);
     const material = new MeshStandardMaterial({ emissive: 0xffeecc, emissiveIntensity: 3 });
-    const glows = [{ group: 'sala/floor-lamp', material, base: 3 }];
+    const glows = [{ group: 'sala/floor-lamp', material, base: 3, mesh: new Mesh(new BoxGeometry(), material) }];
     applyGlows(glows, lights);
     expect(material.emissiveIntensity).toBe(0);
     lights.toggle('sala/floor-lamp');
@@ -81,6 +81,21 @@ describe('buildWorld', () => {
     expect(spill.gains.value.x).toBeCloseTo(0.5 * 100 / 110); // range x alpha's share of the room's lamp power
     const own = world.packs[0];
     expect(own.gains.value.x).toBeCloseTo(1.5 * 0.02); // the desk lamp is off: only the spill floor
+  });
+
+  it("scales and tints a screen's baked light by its picture", () => {
+    const { world } = build();
+    const tv = world.screens[0];
+    const pack = world.packs[1];
+    tv.on = true;
+    world.lights.set('beta/tv', true);
+    world.lights.update(10);
+    tv.brightness = 0.25;
+    tv.tint.setRGB(0.5, 1.2, 1.5);
+    applyPacks(world);
+    expect(pack.gains.value.y).toBeCloseTo(2 * 0.25);
+    expect(pack.tints.value[1].toArray()).toEqual([0.5, 1.2, 1.5]);
+    expect(pack.tints.value[0].toArray()).toEqual([1, 1, 1]); // the spill keeps its own colour
   });
 
   it('makes lamp boxes invisible click targets, and drawers and screens targets', () => {

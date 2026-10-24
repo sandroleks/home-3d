@@ -55,6 +55,8 @@ LAMP_PROP = "web_lamp"  # on a light and its fixtures: the lamp group, switched 
 SCREEN_PROP = "web_screen"  # "tv" | "monitor" | "laptop"
 MOVE_PROP = "web_move"  # "slide" (web_dir, web_dist) | "hinge" (web_pivot, web_axis, web_angle)
 LEAF_PROP = "web_leaf"  # a part joined into the named door leaf (French door glass)
+# The light a screen casts, baked for an all-white picture (W); the viewer scales it by the picture's brightness.
+SCREEN_LIGHT_WATTS = {"tv": 100.0, "monitor": 20.0}
 # Movables baked together must be at least this far apart (m), so one open front doesn't shade the other's bake.
 MOVABLE_PASS_DISTANCE = 0.8
 # Packed lamp layers: three to a texture, at most this many textures on one surface.

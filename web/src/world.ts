@@ -13,7 +13,7 @@ import { type CanvasFactory, domCanvas, Screen } from './screens';
 
 export interface DoorRuntime { state: DoorState; node: Object3D; base: Quaternion }
 /** A glowing material (lampshade, bulb, LED strip) that follows its light group. */
-export interface Glow { group: string; material: MeshStandardMaterial; base: number }
+export interface Glow { group: string; material: MeshStandardMaterial; base: number; mesh: Mesh }
 export interface World {
   root: Object3D;
   lights: LightGroups;
@@ -35,6 +35,8 @@ export interface World {
   packs: PackBinding[];
   /** How much of a packed layer's light is on: its group's level, or a spill's door and room. */
   layerLevel: (layer: PackLayer) => number;
+  /** Pack channels lit by a screen: their colour follows the picture. */
+  screenTints: { tint: Vector3; screen: Screen }[];
   /** Meshes that block sunlight: everything except glass. */
   occluders: Mesh[];
 }
@@ -84,12 +86,13 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
   const off = { value: 0 };
   const fills = new Map(manifest.rooms.map((r) => [r.id, { value: new Color(0, 0, 0) }] as const));
   const glows: Glow[] = [];
-  const collectGlows = (mats: MeshStandardMaterial[]) => {
-    for (const m of mats) {
-      const group = glowGroup(m.name);
-      if (group && lights.has(group) && m.emissive.r + m.emissive.g + m.emissive.b > 0) glows.push({ group, material: m, base: m.emissiveIntensity });
-    }
-  };
+  const collectGlows = (n: Object3D) => n.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    const m = mesh.material as MeshStandardMaterial;
+    const group = glowGroup(m.name);
+    if (group && lights.has(group) && m.emissive && m.emissive.r + m.emissive.g + m.emissive.b > 0) glows.push({ group, material: m, base: m.emissiveIntensity, mesh });
+  });
   const lightmap = (n: Object3D, dayRef: LightmapRef, packs: Pack[], room: string | null, switched: LightmapRef | null) => {
     const d = day.get(dayRef.file)!;
     const hasSwitch = room !== null && switched !== null && lights.has(room);
@@ -98,7 +101,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
       packs: bindPacks(packs), sky, fill: (room && fills.get(room)) || noFill,
     });
     lightmapped.push(...mats);
-    collectGlows(mats);
+    collectGlows(n);
     if (hasSwitch) awaitMap(switched.file, (m) => mats.forEach((mat) => setLightTexture(mat, m.texture, m.range)));
     n.traverse((o) => {
       if ((o as Mesh).isMesh) (o as Mesh).geometry.computeBoundsTree?.();
@@ -152,14 +155,13 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
       if (!mesh.isMesh) return;
       mesh.castShadow = false;
       const m = mesh.material as MeshStandardMaterial;
-      if (m.emissive && lights.has(g.group)) glows.push({ group: g.group, material: m, base: m.emissiveIntensity });
+      if (m.emissive && lights.has(g.group)) glows.push({ group: g.group, material: m, base: m.emissiveIntensity, mesh });
     });
   }
 
   const screens = manifest.screens.map((info) => {
     const n = node(root, info.node);
     const s = new Screen(info, n, canvas);
-    if (s.light) scene.add(s.light);
     targets.set(n, { kind: 'screen', screen: s, node: n });
     pickables.push(n);
     return s;
@@ -181,7 +183,11 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
     const total = gs.reduce((a, g) => a + g.share, 0) || 1;
     for (const g of gs) g.share /= total;
   }
+  // A screen's baked light is for a white picture: it follows the picture's brightness, and its colour (below).
+  const screenOf = new Map(screens.filter((s) => s.info.group).map((s) => [s.info.group!, s] as const));
   const layerLevel = (layer: PackLayer): number => {
+    const screen = layer.group !== undefined ? screenOf.get(layer.group) : undefined;
+    if (screen) return lights.uniform(layer.group!).value * screen.brightness;
     if (layer.group !== undefined) return lights.has(layer.group) ? Math.max(lights.uniform(layer.group).value, LIGHT_SPILL.value) : 0;
     const { opening, from } = layer.spill!;
     const ls = leaves.get(opening) ?? [];
@@ -195,9 +201,13 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
   root.traverseVisible((o) => {
     if ((o as Mesh).isMesh && o.castShadow) occluders.push(o as Mesh);
   });
+  const screenTints = allPacks.flatMap((p) => p.layers.flatMap((l, i) => {
+    const s = l.group !== undefined ? screenOf.get(l.group) : undefined;
+    return s ? [{ tint: p.tints.value[i], screen: s }] : [];
+  }));
   return {
     root, lights, doors, movables, screens, targets, switches, pickables, rooms: new RoomLocator(manifest.rooms), collision,
-    lightmapped, sky, fills, glows, packs: allPacks, layerLevel, occluders,
+    lightmapped, sky, fills, glows, packs: allPacks, layerLevel, screenTints, occluders,
   };
 }
 
@@ -208,5 +218,6 @@ export function applyGlows(glows: Glow[], lights: LightGroups): void {
 
 /** Each frame: every packed lamp layer's gains from its group or door. */
 export function applyPacks(world: World): void {
+  for (const { tint, screen } of world.screenTints) tint.set(screen.tint.r, screen.tint.g, screen.tint.b);
   updatePacks(world.packs, world.layerLevel);
 }
