@@ -59,6 +59,11 @@ export class Sound {
     this.play(DOOR_FILES[sound], this.effects, node);
   }
 
+  /** A drawer or cupboard: the door sounds, quicker and quieter. */
+  movable(node: Object3D, sound: DoorSound, slide: boolean): void {
+    this.play(DOOR_FILES[sound], this.effects, node, slide ? 1.5 : 1.25, slide ? 0.45 : 0.6);
+  }
+
   /** A light switch's click, from the switch itself when there is one. */
   click(node?: Object3D): void {
     this.play('switch', this.effects, node);

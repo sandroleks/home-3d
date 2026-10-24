@@ -2,13 +2,16 @@ import { Color, Mesh, MeshStandardMaterial, Object3D, BoxGeometry, PerspectiveCa
 import { describe, expect, it } from 'vitest';
 import { DoorState } from '../src/doors';
 import { activate, findTarget, Interactions, promptFor, setHighlight, type Target } from '../src/interactions';
-import { RoomLights } from '../src/lightmaps';
+import { LightGroups } from '../src/lightmaps';
+import { MovableState } from '../src/movables';
+import type { MovableInfo } from '../src/manifest';
 
-const doorInfo = { node: 'Door_1', hinge: [0, 0] as [number, number], dir: [1, 0] as [number, number], width: 0.8, openAngle: 1.5, lightmap: { file: 'x', range: 1 }, lights: [] };
+const doorInfo = { node: 'Door_1', hinge: [0, 0] as [number, number], dir: [1, 0] as [number, number], width: 0.8, openAngle: 1.5, opening: 1, lightmap: { file: 'x', range: 1 }, packs: [] };
+const drawer: MovableInfo = { node: 'Move_front-s3-prep-drawers-0', room: 'cozinha', kind: 'slide', dir: [1, 0, 0], distance: 0.4, lightmap: { file: 'x', range: 1 }, packs: [] };
 
 describe('interactions', () => {
   it('prompts and activates doors', () => {
-    const lights = new RoomLights([]);
+    const lights = new LightGroups([]);
     const t: Target = { kind: 'door', door: new DoorState(doorInfo), node: new Object3D() };
     expect(promptFor(t, lights)).toBe('Click: open door');
     activate(t, lights);
@@ -16,12 +19,29 @@ describe('interactions', () => {
   });
 
   it('prompts and activates switches', () => {
-    const lights = new RoomLights(['sala']);
+    const lights = new LightGroups(['sala']);
     const t: Target = { kind: 'switch', room: 'sala', node: new Object3D() };
     expect(promptFor(t, lights)).toBe('Click: turn light on');
     activate(t, lights);
     expect(promptFor(t, lights)).toBe('Click: turn light off');
     expect(promptFor(t, lights, 'Tap')).toBe('Tap: turn light off');
+  });
+
+  it('prompts and activates drawers and lamps', () => {
+    const lights = new LightGroups(['sala', 'sala/floor-lamp', 'sala/bar-shelves']);
+    const d: Target = { kind: 'movable', movable: new MovableState(drawer), node: new Object3D() };
+    expect(promptFor(d, lights)).toBe('Click: open drawer');
+    activate(d, lights);
+    expect(promptFor(d, lights, 'Tap')).toBe('Tap: close drawer');
+    const fridge: Target = { kind: 'movable', movable: new MovableState({ ...drawer, node: 'Move_fridge-door-upper', kind: 'hinge' }), node: new Object3D() };
+    expect(promptFor(fridge, lights)).toBe('Click: open fridge');
+    const lamp: Target = { kind: 'lamp', group: 'sala/floor-lamp', name: 'floor-lamp', node: new Object3D() };
+    expect(promptFor(lamp, lights)).toBe('Click: turn floor lamp on');
+    activate(lamp, lights);
+    expect(lights.isOn('sala/floor-lamp')).toBe(true);
+    expect(lights.isOn('sala')).toBe(false);
+    expect(promptFor(lamp, lights)).toBe('Click: turn floor lamp off');
+    expect(promptFor({ kind: 'lamp', group: 'sala/bar-shelves', name: 'bar-shelves', node: new Object3D() }, lights)).toBe('Click: turn shelf lights on');
   });
 
   it('finds the target through parent nodes', () => {
@@ -44,7 +64,7 @@ describe('interactions', () => {
     expect(mat.emissive.r).toBeCloseTo(0.1);
   });
   it('click returns the activated target, or null when nothing is aimed at', () => {
-    const lights = new RoomLights(['sala']);
+    const lights = new LightGroups(['sala']);
     const node = new Mesh(new BoxGeometry(), new MeshStandardMaterial());
     node.position.set(0, 0, -1);
     node.updateMatrixWorld();
@@ -57,7 +77,7 @@ describe('interactions', () => {
     expect(lights.isOn('sala')).toBe(true);
   });
   it('tap activates what is under the tapped point, not the crosshair', () => {
-    const lights = new RoomLights(['sala']);
+    const lights = new LightGroups(['sala']);
     const node = new Mesh(new BoxGeometry(0.2, 0.2, 0.2), new MeshStandardMaterial());
     node.position.set(0.5, 0, -1); // right of centre
     node.updateMatrixWorld();

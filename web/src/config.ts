@@ -7,7 +7,11 @@ export const CONFIG = {
   runSpeed: 2.8,
   mouseSensitivity: 0.0022,
   doorDuration: 0.6,
+  /** Seconds for a drawer or cupboard door to open or close. */
+  movableDuration: 0.45,
   lightFadeDuration: 0.4,
+  /** Packed lamp textures one lightmapped material can take (the pipeline's MAX_PACKS). */
+  maxPacks: 3,
   /** Share of each room's own baked lamp light that is always there, lights off or not: light spilling in from elsewhere, so unlit rooms keep their shape rather than going flat or black. */
   lightSpill: 0.02,
   interactDistance: 2.5,
@@ -92,6 +96,33 @@ export const CONFIG = {
   },
   /** Optional display names by room id, e.g. { sala: 'Living room' }. */
   roomNames: {} as Record<string, string>,
+  /** How prompts name each lamp group ("Click: turn floor lamp on"); otherwise its name with spaces for hyphens. */
+  lampNames: {
+    'bar-shelves': 'shelf lights', workbench: 'workbench light', 'bedside-left': 'bedside lamp', 'bedside-right': 'bedside lamp',
+    'screen-bar': 'monitor light', 'wall-lights': 'wall lights',
+  } as Record<string, string>,
+  /** The TV, monitor and laptop: picture size in px, brightness, and the light they cast while on. */
+  screens: {
+    sizes: { tv: [512, 288], monitor: [512, 288], laptop: [384, 240] } as Record<string, [number, number]>,
+    /** Multiplies the picture: above 1 the brightest parts bloom. */
+    brightness: 1.25,
+    /** RectAreaLight intensity per m² of screen at full white; each screen's light takes the picture's mean colour. */
+    light: { tv: 2.2, monitor: 2.5, laptop: 0 } as Record<string, number>,
+    /** Pictures redraw this often (per second), and only within this distance (m). */
+    fps: 30,
+    maxDistance: 10,
+    fade: 0.25,
+  },
+  /** Glow around what is brighter than white: bulbs, lit shades, screens, sunlit patches. */
+  bloom: {
+    enabled: true,
+    /** Linear light (before exposure) where bloom starts, and the width of its soft start. */
+    threshold: 1.2,
+    knee: 0.6,
+    strength: 0.45,
+    /** Phones run the bloom chain at this share of the screen's resolution. */
+    touchScale: 0.5,
+  },
   /** Rooms whose ambience isn't the default quiet room tone. */
   roomAmbience: { varanda: 'outdoor', marquise: 'outdoor', cozinha: 'kitchen', lavandaria: 'kitchen' } as Record<string, Ambience>,
   audio: {

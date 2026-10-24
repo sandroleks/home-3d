@@ -4,7 +4,7 @@ import type { DoorInfo } from '../src/manifest';
 
 const info: DoorInfo = {
   node: 'Door_1', hinge: [3.1, -1.78], dir: [0, 1], width: 0.76, openAngle: -Math.PI / 2,
-  lightmap: { file: 'x', range: 1 }, lights: [],
+  opening: 1, lightmap: { file: 'x', range: 1 }, packs: [],
 };
 
 describe('rotY', () => {
