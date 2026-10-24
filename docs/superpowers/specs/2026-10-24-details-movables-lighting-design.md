@@ -1,7 +1,7 @@
 # Details, Movables, Lamps and Screens — Design
 
 **Date:** 2026-10-24
-**Status:** In progress
+**Status:** Implemented
 
 ## Goal
 
