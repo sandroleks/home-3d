@@ -5,7 +5,7 @@ import numpy as np
 
 from . import bpyutil, geom
 
-GLASS_RE = re.compile(r"^(?:Glazed Door|Window) \d+ \((?P<a>[^/]+?) / (?P<b>[^)]+?)\) glass$")
+GLASS_RE = re.compile(r"^(?:Glazed Door|Window) \d+ \((?P<a>[^/]+?) / (?P<b>[^)]+?)\) glass(?:\.\d+)?$")  # .001: French doors
 EXTERIOR = "Exterior"
 PROBE = 0.4  # m from the pane: on the room's side this point lies on the room's floor
 

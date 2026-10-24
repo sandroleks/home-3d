@@ -8,28 +8,50 @@ describe('parseManifest', () => {
     expect(m.rooms.map((r) => r.id)).toEqual(['alpha', 'beta']);
     expect(m.chunks[1].light).toBeNull();
     expect(m.doors[0].hinge).toEqual([3.1, -1.78]);
+    expect(m.doors[0].opening).toBe(1);
     expect(m.viewpoints[0].name).toBe('Cam_Sala');
-    expect(m.version).toBe(2);
+    expect(m.version).toBe(3);
     expect(m.rooms[0].area).toBe(9);
     expect(m.site.timeZone).toBe('Europe/Lisbon');
     expect(m.sky.irradiance).toBeCloseTo(0.6467);
     expect(m.windows[0].normal).toEqual([0, 0, 1]);
+    expect(m.groups[1]).toEqual({ id: 'alpha/desk-lamp', room: 'alpha', kind: 'lamp', name: 'desk-lamp', power: 10, target: 'Lamp_alpha-desk-lamp' });
+    expect(m.glows).toEqual([{ node: 'Glow_desk-lamp-bulb', group: 'alpha/desk-lamp' }]);
+    expect(m.screens[0].kind).toBe('tv');
   });
 
-  it('reads the lamp layers baked onto a door, and none from an older manifest', () => {
+  it('reads packed lamp layers: a group or a spill through a door', () => {
+    const m = parseManifest(sampleManifest());
+    expect(m.chunks[0].packs[0].layers[0]).toEqual({ group: 'alpha/desk-lamp', range: 1.5, tint: [1.2, 0.95, 0.7] });
+    expect(m.chunks[1].packs[0].layers[0]).toEqual({ spill: { opening: 1, from: 'alpha' }, range: 0.5, tint: [1, 1, 1] });
+    const raw = sampleManifest() as { chunks: { packs: { layers: Record<string, unknown>[] }[] }[] };
+    raw.chunks[1].packs[0].layers[0] = { range: 1, tint: [1, 1, 1] };
+    expect(() => parseManifest(raw)).toThrow('chunks[1].packs[0].layers[0].spill');
+  });
+
+  it('reads movables by kind', () => {
+    const m = parseManifest(sampleManifest());
+    expect(m.movables[0]).toMatchObject({ kind: 'slide', dir: [0, 0, 1], distance: 0.35 });
+    expect(m.movables[1]).toMatchObject({ kind: 'hinge', pivot: [4.42, 0.2, -2.55], axis: [0, 1, 0], angle: -1.7 });
+    const raw = sampleManifest() as { movables: Record<string, unknown>[] };
+    raw.movables[0].kind = 'roll';
+    expect(() => parseManifest(raw)).toThrow('movables[0].kind');
+    const spin = sampleManifest() as { movables: Record<string, unknown>[] };
+    spin.movables[1] = { ...spin.movables[1], kind: 'spin', axis: [0, -1, 0], rpm: 33.333 };
+    delete spin.movables[1].angle;
+    expect(parseManifest(spin).movables[1]).toMatchObject({ kind: 'spin', axis: [0, -1, 0], rpm: 33.333 });
+    const raw2 = sampleManifest() as { movables: Record<string, unknown>[] };
+    delete raw2.movables[1].axis;
+    expect(() => parseManifest(raw2)).toThrow('movables[1].axis');
+  });
+
+  it('reads a sliding door, and none from a hinged one', () => {
     const raw = sampleManifest() as { doors: Record<string, unknown>[] };
-    expect(parseManifest(raw).doors[0].lights).toEqual([]);
-    raw.doors[0].lights = [{ room: 'alpha', file: 'lightmaps/door-1_light-alpha.webp', range: 1.5 }];
-    expect(parseManifest(raw).doors[0].lights).toEqual([{ room: 'alpha', file: 'lightmaps/door-1_light-alpha.webp', range: 1.5 }]);
-    raw.doors[0].lights = [{ file: 'x.webp', range: 1 }];
-    expect(() => parseManifest(raw)).toThrow('doors[0].lights[0].room');
-  });
-
-  it('reads the lamp layers an open-plan neighbour bakes onto a chunk, and none from an older manifest', () => {
-    const raw = sampleManifest() as { chunks: Record<string, unknown>[] };
-    expect(parseManifest(raw).chunks[1].lights).toEqual([]);
-    raw.chunks[1].lights = [{ room: 'alpha', file: 'lightmaps/beta_light-alpha.webp', range: 1 }];
-    expect(parseManifest(raw).chunks[1].lights).toEqual([{ room: 'alpha', file: 'lightmaps/beta_light-alpha.webp', range: 1 }]);
+    expect(parseManifest(raw).doors[0].slide).toBeUndefined();
+    raw.doors[0].slide = { dir: [-1, 0], distance: 0.62 };
+    expect(parseManifest(raw).doors[0].slide).toEqual({ dir: [-1, 0], distance: 0.62 });
+    raw.doors[0].slide = { dir: [-1, 0] };
+    expect(() => parseManifest(raw)).toThrow('doors[0].slide.distance');
   });
 
   it('names the path of a broken field', () => {
@@ -40,7 +62,7 @@ describe('parseManifest', () => {
   });
 
   it('rejects other versions', () => {
-    expect(() => parseManifest({ ...(sampleManifest() as object), version: 1 })).toThrow('version');
+    expect(() => parseManifest({ ...(sampleManifest() as object), version: 2 })).toThrow('version');
   });
 
   it('names a broken window field', () => {

@@ -34,11 +34,21 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual({c["node"] for c in m["chunks"]}, {"Room_alpha", "Room_beta", "Room_exterior"})
         self.assertAlmostEqual(m["spawn"]["yaw"], -1.5708, places=3)  # Cam_Entrada looks +X
         self.assertEqual([v["name"] for v in m["viewpoints"]], ["Cam_Sala"])
+        self.assertEqual(m["version"], 3)
+        self.assertEqual([g["id"] for g in m["groups"]], ["alpha", "alpha/desk-lamp", "beta", "beta/tv"])
+        self.assertEqual(m["screens"][0]["group"], "beta/tv")
+        self.assertNotIn("blender", m["screens"][0])
+        self.assertEqual(m["groups"][1]["target"], "Lamp_alpha-desk-lamp")
+        self.assertEqual(sorted(mv["node"] for mv in m["movables"]), ["Move_cabinet-door", "Move_cabinet-drawer"])
+        self.assertEqual([s["node"] for s in m["screens"]], ["Screen_beta-tv"])
+        self.assertEqual(m["glows"], [{"node": "Glow_desk-lamp-bulb", "group": "alpha/desk-lamp"}])
+        alpha = next(c for c in m["chunks"] if c["room"] == "alpha")
+        self.assertEqual([l.get("group") for p in alpha["packs"] for l in p["layers"]][:1], ["alpha/desk-lamp"])
 
     def test_glb_nodes_have_identity_transforms(self):
         gltf = checks.read_glb_json(os.path.join(self.out, "apartment.glb"))
         for n in gltf["nodes"]:
-            if n["name"].startswith(("Room_", "Door_")):
+            if n["name"].startswith(("Room_", "Door_", "Move_")):
                 for v, ident in ((n.get("scale"), [1, 1, 1]), (n.get("rotation"), [0, 0, 0, 1])):
                     if v is not None:
                         self.assertTrue(all(abs(a - b) < 1e-4 for a, b in zip(v, ident)), n)
@@ -46,8 +56,9 @@ class EndToEndTests(unittest.TestCase):
     def test_glb_has_lightmap_uvs(self):
         gltf = checks.read_glb_json(os.path.join(self.out, "apartment.glb"))
         names = {n["name"] for n in gltf["nodes"]}
-        self.assertTrue({"Room_alpha", "Door_1", "Switch_alpha"} <= names)
-        for name in ("Room_alpha", "Room_beta", "Room_exterior", "Door_1"):
+        self.assertTrue({"Room_alpha", "Door_1", "Switch_alpha", "Screen_beta-tv", "Glow_desk-lamp-bulb",
+                         "Lamp_alpha-desk-lamp"} <= names)
+        for name in ("Room_alpha", "Room_beta", "Room_exterior", "Door_1", "Move_cabinet-drawer", "Move_cabinet-door"):
             node = next(n for n in gltf["nodes"] if n["name"] == name)
             prims = gltf["meshes"][node["mesh"]]["primitives"]
             self.assertTrue(prims, name)

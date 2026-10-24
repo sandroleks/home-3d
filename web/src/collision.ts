@@ -1,6 +1,7 @@
 import type { CollisionData } from './manifest';
 
-export interface Segment { ax: number; az: number; bx: number; bz: number }
+/** `radius`: how close the player may come; the player's own radius when left out. */
+export interface Segment { ax: number; az: number; bx: number; bz: number; radius?: number }
 
 export function segmentDistance(px: number, pz: number, s: Segment): number {
   const dx = s.bx - s.ax;
@@ -23,7 +24,7 @@ export class Collision {
 
   isBlocked(x: number, z: number): boolean {
     if (this.gridBlocked(x, z)) return true;
-    for (const s of this.segments()) if (segmentDistance(x, z, s) < this.grid.radius) return true;
+    for (const s of this.segments()) if (segmentDistance(x, z, s) < (s.radius ?? this.grid.radius)) return true;
     return false;
   }
 

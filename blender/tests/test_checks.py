@@ -9,34 +9,41 @@ from pipeline import checks, manifest
 STATE = {
     "rooms": [{"id": "alpha", "name": "Alpha", "floor": [0, 0, 1, 0, 1, 1], "light": "L"}],
     "switches": {"alpha": "Switch_alpha"},
+    "groups": [{"id": "alpha", "room": "alpha", "kind": "switch", "name": "light", "lights": ["L"], "power": 1.0}],
     "chunks": [{"node": "Room_alpha", "room": "alpha", "key": "alpha", "size": 64}],
-    "doors": [{"node": "Door_1", "key": "door-1", "hinge": [0, 0], "dir": [0, 1], "width": 0.76, "openAngle": -1.5}],
+    "doors": [{"node": "Door_1", "key": "door-1", "hinge": [0, 0], "dir": [0, 1], "width": 0.76, "openAngle": -1.5,
+               "opening": 1}],
+    "movables": [{"node": "Move_drawer", "room": "alpha", "kind": "slide", "dir": [0, 0, 1], "distance": 0.3}],
     "spawn": {"x": 0.0, "z": 0.0, "yaw": 0.0},
     "viewpoints": [],
     "windows": [{"room": "alpha", "center": [0.5, 1.5, 0.0], "normal": [0.0, 0.0, 1.0], "width": 1.0, "height": 1.2}],
     "sky_irradiance": 0.6467,
 }
-RANGES = {"alpha_day": 4.0, "alpha_light": 2.0, "door-1_day": 2.5}
+BAKED = {"rgbm": {"alpha_day": 4.0, "alpha_light": 2.0, "door-1_day": 2.5, "movables-alpha_day": 1.0},
+         "packs": {"door-1": [{"file": "lightmaps/door-1_pack0.webp",
+                               "layers": [{"group": "alpha", "range": 1.0, "tint": [1, 1, 1]}]}]}}
 
 
 def good_gltf():
     prim = {"attributes": {"POSITION": 0, "TEXCOORD_0": 1, "TEXCOORD_1": 2}}
     return {
-        "nodes": [{"name": "Room_alpha", "mesh": 0}, {"name": "Door_1", "mesh": 1}, {"name": "Switch_alpha", "mesh": 2}],
-        "meshes": [{"primitives": [dict(prim)]} for _ in range(3)],
+        "nodes": [{"name": "Room_alpha", "mesh": 0}, {"name": "Door_1", "mesh": 1}, {"name": "Switch_alpha", "mesh": 2},
+                  {"name": "Move_drawer", "mesh": 3}],
+        "meshes": [{"primitives": [dict(prim)]} for _ in range(4)],
     }
 
 
 def write_set(gltf, state=STATE):
     out = tempfile.mkdtemp()
-    m = manifest.build_manifest(state, RANGES, 1.6)
+    m = manifest.build_manifest(state, BAKED, 1.6)
     body = json.dumps(gltf).encode()
     body += b" " * (-len(body) % 4)
     with open(os.path.join(out, "apartment.glb"), "wb") as f:
         f.write(struct.pack("<4sII", b"glTF", 2, 20 + len(body)))
         f.write(struct.pack("<I4s", len(body), b"JSON") + body)
     os.makedirs(os.path.join(out, "lightmaps"))
-    refs = [c[k] for c in m["chunks"] for k in ("day", "light")] + [d["lightmap"] for d in m["doors"]]
+    refs = [c[k] for c in m["chunks"] for k in ("day", "light")] + [d["lightmap"] for d in m["doors"] + m["movables"]] + [
+        p for x in m["chunks"] + m["doors"] + m["movables"] for p in x["packs"]]
     for ref in refs:
         if ref:
             open(os.path.join(out, ref["file"]), "wb").close()
@@ -67,6 +74,18 @@ class CheckOutputsTests(unittest.TestCase):
         out, m = write_set(g)
         errors = checks.check_outputs(out, m, BUDGET, 1)
         self.assertTrue(any("lacks TEXCOORD_1" in e and "Room_alpha" in e for e in errors), errors)
+
+    def test_missing_pack_file(self):
+        out, m = write_set(good_gltf())
+        os.remove(os.path.join(out, "lightmaps", "door-1_pack0.webp"))
+        self.assertIn("missing file lightmaps/door-1_pack0.webp", checks.check_outputs(out, m, BUDGET, 1))
+
+    def test_movable_needs_lightmap_uvs(self):
+        g = good_gltf()
+        del g["meshes"][3]["primitives"][0]["attributes"]["TEXCOORD_1"]
+        out, m = write_set(g)
+        errors = checks.check_outputs(out, m, BUDGET, 1)
+        self.assertTrue(any("lacks TEXCOORD_1" in e and "Move_drawer" in e for e in errors), errors)
 
     def test_door_count_mismatch(self):
         out, m = write_set(good_gltf())

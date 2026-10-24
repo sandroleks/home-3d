@@ -7,7 +7,19 @@ export const CONFIG = {
   runSpeed: 2.8,
   mouseSensitivity: 0.0022,
   doorDuration: 0.6,
+  /** Seconds for a glazed door's leaf to slide open or shut. */
+  slidingDoorDuration: 0.9,
+  /** Metres the player keeps from a sliding leaf (walls: the player's radius). */
+  slidingLeafRadius: 0.1,
+  /** Seconds for the turntable's platter to come up to speed, or to stop. */
+  spinUp: 1.2,
+  /** Seconds for a drawer or cupboard door to open or close. */
+  movableDuration: 0.45,
   lightFadeDuration: 0.4,
+  /** Mirrors draw their reflection at this share of the screen's resolution: a whole second view of the flat. */
+  mirrorScale: 0.5,
+  /** Packed lamp textures one lightmapped material can take (the pipeline's MAX_PACKS). */
+  maxPacks: 3,
   /** Share of each room's own baked lamp light that is always there, lights off or not: light spilling in from elsewhere, so unlit rooms keep their shape rather than going flat or black. */
   lightSpill: 0.02,
   interactDistance: 2.5,
@@ -92,6 +104,32 @@ export const CONFIG = {
   },
   /** Optional display names by room id, e.g. { sala: 'Living room' }. */
   roomNames: {} as Record<string, string>,
+  /** How prompts name each lamp group ("Click: turn floor lamp on"); otherwise its name with spaces for hyphens. */
+  lampNames: {
+    'bar-shelves': 'shelf lights', workbench: 'workbench light', 'bedside-left': 'bedside lamp', 'bedside-right': 'bedside lamp',
+    'screen-bar': 'monitor light', 'wall-lights': 'wall lights',
+  } as Record<string, string>,
+  /** The TV, monitor and laptop: picture size in px and brightness. The light they cast is baked (SCREEN_LIGHT_WATTS). */
+  screens: {
+    sizes: { tv: [512, 288], monitor: [512, 288], laptop: [384, 240] } as Record<string, [number, number]>,
+    /** Multiplies the picture: above 1 the brightest parts bloom. */
+    brightness: 1.25,
+    /** Pictures redraw this often (per second), and only within this distance (m). */
+    fps: 30,
+    maxDistance: 10,
+    fade: 0.25,
+  },
+  /** Soft glow around small lit fixtures (bulbs, lampshades, ceiling diffusers): one camera-facing sprite each. */
+  halos: {
+    /** Brightness, times the fixture's glow colour and its lamp's level. */
+    strength: 0.35,
+    /** Sprite size relative to the fixture, and its limits in m. */
+    size: 2.2,
+    minSize: 0.25,
+    maxSize: 1.1,
+    /** Glowing surfaces larger than this (m) get no halo: LED strips, a pair of wall lights sharing a material. */
+    maxFixture: 0.7,
+  },
   /** Rooms whose ambience isn't the default quiet room tone. */
   roomAmbience: { varanda: 'outdoor', marquise: 'outdoor', cozinha: 'kitchen', lavandaria: 'kitchen' } as Record<string, Ambience>,
   audio: {
@@ -103,6 +141,8 @@ export const CONFIG = {
     music: 0.25,
     /** Seconds. */
     ambienceFade: 1.5,
+    /** The music fading in when the turntable starts and out when it stops. */
+    musicFade: 1.5,
     muteFade: 0.2,
     /** Metres between footsteps, and before the first one after standing still. */
     stride: 0.7,

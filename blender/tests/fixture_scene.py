@@ -4,7 +4,9 @@ Blender coordinates (Z up). Alpha: x 0..3, y 0..3. Beta: x 3.2..6, y 0..3.
 A 0.2 m wall at x 3.0..3.2 has an opening at y 1.0..1.8 whose door leaf is modelled open into
 Alpha (hinge at (3.1, 1.78)), and an infilled opening at y 2.2..2.8 with a leftover leaf open in Beta.
 Alpha has an exterior window in its south wall (y -0.2..0), a desk lamp, a window fill light and a
-glowing wall lamp; Beta's 'Lamp' glows with the same material.
+glowing wall lamp; Beta's 'Lamp' glows with the same material. The desk lamp is a lamp group of its own
+('desk-lamp', with the wall lamp and a bulb that casts no shadow). Beta has a cabinet against its north wall
+with a drawer (slides -Y) above a cupboard door (hinged at its west edge), and a TV screen on its south wall.
 """
 import math
 
@@ -78,6 +80,11 @@ def _light(name, kind, location, energy, collection, size=None):
     return obj
 
 
+def _props(obj, **values):
+    for k, v in values.items():
+        obj[k] = v
+
+
 def _camera(name, location, rotation, collection):
     obj = bpy.data.objects.new(name, bpy.data.cameras.new(name))
     obj.location = location
@@ -141,7 +148,18 @@ def build():
     box_object("Door leaf 2", [(3.12, 2.20, 0, 3.68, 2.24, 2.0)], wood, doors)  # open, infilled doorway
     box_object("Shelf", [(3.4, 0.5, 0, 3.9, 1.3, 1.2)], wood, furniture)
     box_object("Lamp", [(5.5, 2.5, 0, 5.8, 2.8, 0.5)], glow, furniture)
-    box_object("Alpha wall lamp", [(2.2, 0.8, 1.75, 2.5, 1.1, 1.95)], glow, furniture)  # above the collision rays
+    box_object("Alpha wall lamp", [(2.2, 0.8, 1.75, 2.5, 1.1, 1.95)], glow, furniture)["web_lamp"] = "desk-lamp"
+    bulb = box_object("Desk lamp bulb", [(0.47, 2.47, 0.95, 0.53, 2.53, 1.01)], _mat_emissive("Bulb glow"), furniture)
+    bulb.visible_shadow = False
+    bulb["web_lamp"] = "desk-lamp"
+    box_object("Cabinet", [(4.4, 2.55, 0, 5.0, 3.0, 0.8)], wood, furniture)
+    drawer = box_object("Cabinet drawer", [(4.42, 2.53, 0.45, 4.98, 2.55, 0.78), (4.44, 2.55, 0.46, 4.96, 2.95, 0.75)],
+                        wood, furniture)
+    _props(drawer, web_move="slide", web_dir=[0.0, -1.0, 0.0], web_dist=0.35)
+    door = box_object("Cabinet door", [(4.42, 2.53, 0.02, 4.98, 2.55, 0.43)], wood, furniture)
+    _props(door, web_move="hinge", web_pivot=[4.42, 2.55, 0.2], web_axis=[0.0, 0.0, 1.0], web_angle=-1.7)
+    tv = box_object("TV screen", [(4.4, 0.0, 1.0, 5.2, 0.005, 1.45)], _mat_emissive("Screen"), furniture)
+    tv["web_screen"] = "tv"
     box_object("Window 3 (Exterior / Alpha) glass", [(1.0, -0.11, 1.0, 2.0, -0.09, 2.0)], glass, structure)
     sofa = box_object("Hidden sofa", [(1.0, 2.0, 0, 2.5, 2.8, 0.8)], wood, variant)
     sofa.location = (0.5, 0, 0)
@@ -159,7 +177,7 @@ def build():
     table.modifiers.new("Bevel", "BEVEL").width = 0.01
 
     _light("Sun", "SUN", (0, 0, 10), 3.0, lights)
-    _light("Desk lamp light", "POINT", (0.5, 2.5, 0.9), 10.0, lights)
+    _light("Desk lamp light", "POINT", (0.5, 2.5, 0.98), 10.0, lights)["web_lamp"] = "desk-lamp"
     _light("Portal Alpha window", "AREA", (1.5, 0.05, 1.5), 5.0, lights, size=1.0)
     _light("Ceiling light Alpha", "AREA", (1.5, 1.5, 2.55), 100.0, interior, size=0.5)
     _light("Ceiling light Beta", "AREA", (4.6, 1.5, 2.55), 100.0, interior, size=0.5)

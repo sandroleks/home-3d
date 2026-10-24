@@ -6,6 +6,12 @@ import bpy
 import numpy as np
 
 
+def basis(x, y, z):
+    """The 3x3 matrix whose columns are x, y and z."""
+    from mathutils import Matrix
+    return Matrix((x, y, z)).transposed()
+
+
 def select_only(objs, active=None):
     for o in bpy.context.view_layer.objects:
         o.select_set(False)

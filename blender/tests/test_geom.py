@@ -122,6 +122,15 @@ class DoorSwingTests(unittest.TestCase):
             geom.choose_door_swing((0.0, 0.0), (0.8, 0.0), corner_room, {"hinge": "c"})
 
 
+class SlidePoseTests(unittest.TestCase):
+    def test_closed_leaf_and_its_slide(self):
+        p = geom.slide_pose((1.58, -7.27), (2.197, -7.27), (-2.0, -0.0), 0.621)
+        self.assertEqual(p["hinge"], (1.58, -7.27))
+        self.assertEqual(p["dir"], (1.0, 0.0))
+        self.assertAlmostEqual(p["width"], 0.617)
+        self.assertEqual(p["slide"], {"dir": [-1.0, 0.0], "distance": 0.621})
+
+
 class CameraTests(unittest.TestCase):
     def test_yaw_pitch(self):
         self.assertEqual(geom.yaw_pitch_from_forward((0.0, 0.0, -1.0)), (0.0, 0.0))

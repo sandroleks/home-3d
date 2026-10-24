@@ -1,26 +1,29 @@
 import {
   AgXToneMapping, BufferGeometry, Mesh, MeshStandardMaterial, PerspectiveCamera, PMREMGenerator,
-  Scene, SRGBColorSpace, Vector2, WebGLRenderer,
+  Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { doorSound, loadMuted, saveMuted, StepTimer } from './audio';
 import { CONFIG } from './config';
-import { Interactions, promptFor } from './interactions';
+import { Interactions, promptFor, type Target } from './interactions';
 import { LIGHT_SPILL } from './lightmaps';
 import { loadAssets, type LoadedAssets, type LoadedMap } from './loader';
 import { addMirrors } from './mirrors';
+import { lightmapTextures, UploadQueue, warmUpShaders } from './warmup';
+import { applyMovable } from './movables';
 import { Player, screenFov, vfovFromHfov } from './player';
 import { shrinkLightmap } from './shrink';
 import { Sound } from './sound';
+import { Halos } from './halos';
 import { Daylight, loadRealLighting, saveRealLighting } from './daylight';
 import { Surroundings } from './surroundings';
 import { solarPosition, sunTimes } from './sun';
 import { dayOfYear, daysInYear, formatClock, formatReadout, parseSunParam, SunClock, sunKeyAction } from './sun-clock';
 import { TouchControls } from './touch';
 import { COPY, isTouchOnly, UI } from './ui';
-import { applyDoorRotation, applyGlows, buildWorld } from './world';
+import { applyDoorPose, applyGlows, applyPacks, buildWorld } from './world';
 import './style.css';
 
 BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -83,22 +86,37 @@ async function run(): Promise<void> {
   const assets: LoadedAssets = await loadAssets((f) => ui.setProgress(f), shrink);
 
   const world = buildWorld(assets, scene);
-  addMirrors(world.root, surroundings);
+  const mirrors = addMirrors(world.root, surroundings);
+  const halos = new Halos(world.glows);
+  world.root.add(halos.root);
   const site = assets.manifest.site;
   const clock = new SunClock(parseSunParam(params.get('sun'), site.timeZone) ?? Date.now(), site.timeZone);
   const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings, touch ? CONFIG.touch.shadowMapSize : undefined);
   let real = loadRealLighting(() => localStorage);
   daylight.setReal(real);
+  const mirrorTarget = mirrors.userData.target as WebGLRenderTarget | undefined;
   assets.surroundings.then((root) => {
     if (!root) return;
     surroundings.add(root);
     daylight.addCasters(root);
+    warmUpShaders(renderer, surroundings.scene, camera, [], mirrorTarget ? [mirrorTarget] : []).catch(() => {});
   });
+  // Nothing should stall mid-walk: every shader compiles now, in the background, and the lightmaps go up to the GPU a
+  // few per frame instead of when a room first comes into view.
+  const uploads = new UploadQueue(renderer);
+  uploads.add(lightmapTextures(world.lightmapped));
+  assets.light.then(() => uploads.add(lightmapTextures(world.lightmapped))).catch(() => {});
+  if (mirrorTarget) { // sized now, not on the first frame a mirror is in view
+    const size = renderer.getDrawingBufferSize(new Vector2()).multiplyScalar(CONFIG.mirrorScale).round();
+    mirrorTarget.setSize(size.x, size.y);
+  }
+  warmUpShaders(renderer, scene, camera, world.screens.map((s) => s.pictureMaterial), mirrorTarget ? [mirrorTarget] : [])
+    .catch((err) => console.warn('Shader warm-up failed; shaders compile when first needed.', err));
   const names = new Map(assets.manifest.rooms.map((r) => [r.id, CONFIG.roomNames[r.id] ?? r.name]));
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
-  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, CONFIG, LIGHT_SPILL } }); // tuning from the console
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, CONFIG, LIGHT_SPILL } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;
@@ -120,6 +138,16 @@ async function run(): Promise<void> {
   }
 
   const interactions = new Interactions(camera, world.pickables, world.targets, world.lights);
+  const turntable = world.movables.find((m) => m.state.info.kind === 'spin')?.state;
+  /** Sounds for what a click or tap just used; doors and drawers sound from the frame loop as they move. */
+  const used = (t: Target | null) => {
+    if (!t) return;
+    if (t.kind === 'switch' || t.kind === 'lamp' || t.kind === 'screen') sound?.click(t.node);
+    if (t.kind === 'movable' && t.movable === turntable) {
+      sound?.click(t.node);
+      sound?.setMusic(turntable.isOpen);
+    }
+  };
   const autostart = params.has('autostart');
   let started = false;
   let currentRoom: string | null = null;
@@ -127,6 +155,7 @@ async function run(): Promise<void> {
   let muted = loadMuted(() => localStorage);
   const steps = new StepTimer();
   const doorsBefore = world.doors.map((d) => ({ target: d.state.target, progress: d.state.progress }));
+  const movablesBefore = world.movables.map((m) => ({ target: m.state.target, progress: m.state.progress }));
 
   const start = () => {
     if (started) return;
@@ -137,6 +166,7 @@ async function run(): Promise<void> {
     sound = new Sound(camera);
     sound.setMuted(muted);
     sound.setRoom(currentRoom);
+    sound.setMusic(turntable?.isOpen ?? false);
     ui.setMuted(muted);
     void sound.load();
     if (touch) fullscreen();
@@ -215,8 +245,7 @@ async function run(): Promise<void> {
     tap: (x, y) => {
       if (!started || paused) return;
       const r = canvas.getBoundingClientRect();
-      const t = interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2));
-      if (t?.kind === 'switch') sound?.click(t.node); // doors sound from the frame loop as they move
+      used(interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2)));
     },
   }) : null;
   ui.bindTouchBar({
@@ -241,8 +270,7 @@ async function run(): Promise<void> {
     if (touch) return; // taps are handled by the touch controls
     if (cursor && e.button === 0 && e.target === canvas) return void canvas.requestPointerLock(); // a click on the view looks around again
     if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
-    const t = interactions.click();
-    if (t?.kind === 'switch') sound?.click(t.node); // doors sound from the frame loop as they move
+    used(interactions.click());
   });
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') {
@@ -274,6 +302,7 @@ async function run(): Promise<void> {
     if (e.code === 'KeyM') toggleMute();
   });
 
+  const screenCentre = new Vector3();
   let last = performance.now();
   renderer.setAnimationLoop((now) => {
     const dt = Math.min(0.05, (now - last) / 1000);
@@ -281,13 +310,22 @@ async function run(): Promise<void> {
     let doorsMoved = false;
     world.doors.forEach((d, i) => {
       d.state.update(dt);
-      applyDoorRotation(d);
+      applyDoorPose(d);
       const before = doorsBefore[i];
       const s = doorSound(before, d.state);
       if (s) sound?.door(d.node, s);
       if (d.state.progress !== before.progress) doorsMoved = true;
       before.target = d.state.target;
       before.progress = d.state.progress;
+    });
+    world.movables.forEach((m, i) => {
+      m.state.update(dt);
+      applyMovable(m);
+      const before = movablesBefore[i];
+      const s = doorSound(before, m.state);
+      if (s && m.state !== turntable) sound?.movable(m.node, s, m.state.info.kind === 'slide');
+      before.target = m.state.target;
+      before.progress = m.state.progress;
     });
     if (started && !paused) {
       const x = player.x;
@@ -308,9 +346,18 @@ async function run(): Promise<void> {
       shownVersion = clock.version;
       showSun();
     }
+    const local = clock.local();
+    for (const s of world.screens) {
+      const near = camera.position.distanceTo(screenCentre.fromArray(s.info.center)) < CONFIG.screens.maxDistance;
+      s.update(now / 1000, dt, local, near);
+      if (s.info.group) world.lights.set(s.info.group, s.on); // the TV's bias light
+    }
     world.lights.update(dt);
     applyGlows(world.glows, world.lights);
+    halos.update(world.lights, camera);
+    applyPacks(world);
     surroundings.sky.tick(now / 1000);
+    uploads.tick();
     renderer.clear();
     surroundings.render(renderer, camera);
     renderer.clearDepth();

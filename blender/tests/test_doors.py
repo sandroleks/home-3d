@@ -142,6 +142,32 @@ class ClosedLeafTests(unittest.TestCase):
             _prepare(_add_leaf("Door leaf 3", (3.08, 1.02, 0, 3.12, 1.78, 2.0)))
 
 
+class FrenchDoorTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        def french():
+            bpy.data.objects.remove(bpy.data.objects["Door leaf 1"], do_unlink=True)
+            _add_leaf("Door leaf 1a", (3.08, 1.0, 0, 3.12, 1.398, 2.0))()
+            _add_leaf("Door leaf 1b", (3.08, 1.402, 0, 3.12, 1.8, 2.0))()
+
+        cls.specs = {d["key"]: d for d in _prepare(french, {"Door leaf 1a": {"sign": -1}, "Door leaf 1b": {"sign": 1}})}
+
+    def test_two_half_leaves_share_the_opening(self):
+        self.assertEqual(sorted(self.specs), ["door-1a", "door-1b"])
+        a, b = self.specs["door-1a"], self.specs["door-1b"]
+        self.assertEqual((a["node"], a["opening"], b["opening"]), ("Door_1a", 1, 1))
+        self.assertAlmostEqual(a["hinge"][1], -1.0, places=3)  # each hinges at its own jamb
+        self.assertAlmostEqual(b["hinge"][1], -1.8, places=3)
+        self.assertAlmostEqual(a["width"], 0.398, places=3)
+
+    def test_sign_override_picks_the_swing(self):
+        self.assertAlmostEqual(self.specs["door-1a"]["openAngle"], -math.pi / 2, places=4)
+        self.assertAlmostEqual(self.specs["door-1b"]["openAngle"], math.pi / 2, places=4)
+        # Both swing into Beta.
+        for d in self.specs.values():
+            self.assertGreater(geom.rot_y(d["dir"], d["openAngle"])[0], 0.99)
+
+
 class FallbackTests(unittest.TestCase):
     def test_leaf_far_from_openings_uses_swing_heuristic_and_override(self):
         add_leaf = _add_leaf("Door leaf 3", (0.3, 0.3, 0, 1.06, 0.34, 2.0))

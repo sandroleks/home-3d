@@ -52,6 +52,18 @@ class SceneSelectTests(unittest.TestCase):
         for o in self.meshes:
             self.assertFalse(o.hide_render, o.name)
 
+    def test_faces_keep_their_materials(self):
+        fixture_scene.build()
+        two = fixture_scene.box_object("Two tone", [(0, 0, 0, 1, 1, 1), (2, 0, 0, 3, 1, 1)], bpy.data.materials["Wood"],
+                                       bpy.data.collections["Furniture"])
+        two.data.materials.append(bpy.data.materials["Plaster"])
+        for p in two.data.polygons:
+            p.material_index = 1 if p.center.x > 1.5 else 0
+        scene_select.prepare_scene(bpy.context.scene, bpy.context.view_layer)
+        me = bpy.data.objects["Two tone"].data
+        self.assertEqual(sorted({p.material_index for p in me.polygons}), [0, 1])
+        self.assertTrue(all((p.material_index == 1) == (p.center.x > 1.5) for p in me.polygons))
+
     def test_child_of_dropped_parent_keeps_world_position(self):
         self.assertIn("Sofa cushion", self.names)
         c = bpy.data.objects["Sofa cushion"]
