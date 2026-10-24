@@ -47,3 +47,23 @@ describe('DoorState', () => {
     expect(d.progress).toBeCloseTo(0.25);
   });
 });
+
+describe('a sliding door', () => {
+  const sliding: DoorInfo = { ...info, hinge: [1.58, -7.27], dir: [1, 0], width: 0.617, openAngle: 0, opening: 4, slide: { dir: [-1, 0], distance: 0.62 } };
+
+  it('slides its leaf along the slide instead of swinging, and lets the player come closer', () => {
+    const d = new DoorState(sliding, 1);
+    expect(d.segment()).toMatchObject({ ax: 1.58, bx: 1.58 + 0.617 });
+    d.toggle();
+    d.update(0.5);
+    expect(d.offset).toBeCloseTo(0.31);
+    d.update(1);
+    expect(d.angle).toBe(0);
+    const s = d.segment();
+    expect(s.ax).toBeCloseTo(0.96);
+    expect(s.bx).toBeCloseTo(1.577);
+    expect(s.az).toBeCloseTo(-7.27);
+    expect(s.radius).toBeLessThan(0.2);
+    expect(new DoorState(info).segment().radius).toBeUndefined();
+  });
+});

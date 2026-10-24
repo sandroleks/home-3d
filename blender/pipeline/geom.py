@@ -116,6 +116,22 @@ def principal_frame(points_xz):
     )
 
 
+def slide_pose(a, b, direction, distance):
+    """A sliding door's leaf, modelled closed between ground-plane ends a and b: it slides `distance` m along
+    `direction` (three.js x, z). Hinge, dir and width describe the closed leaf as for a hinged door; the leaf runs
+    along its slide (its outline, pulls included, can lean a little)."""
+    sx, sz = direction
+    norm = math.hypot(sx, sz)
+    sx, sz = sx / norm, sz / norm
+    ax, az = a
+    along = (b[0] - ax) * sx + (b[1] - az) * sz
+    s = 1.0 if along >= 0 else -1.0
+    return {
+        "hinge": (ax, az), "dir": (s * sx + 0.0, s * sz + 0.0), "width": abs(along),
+        "slide": {"dir": [round(sx, 5) + 0.0, round(sz, 5) + 0.0], "distance": round(distance, 4)},
+    }
+
+
 def door_rooms(hinge, direction, width, locate, probe=0.3):
     """Rooms on either side of a closed door (three.js ground plane), each once, in side order.
 

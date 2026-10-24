@@ -7,7 +7,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { doorSound, loadMuted, saveMuted, StepTimer } from './audio';
 import { CONFIG } from './config';
-import { Interactions, promptFor } from './interactions';
+import { Interactions, promptFor, type Target } from './interactions';
 import { LIGHT_SPILL } from './lightmaps';
 import { loadAssets, type LoadedAssets, type LoadedMap } from './loader';
 import { addMirrors } from './mirrors';
@@ -23,7 +23,7 @@ import { solarPosition, sunTimes } from './sun';
 import { dayOfYear, daysInYear, formatClock, formatReadout, parseSunParam, SunClock, sunKeyAction } from './sun-clock';
 import { TouchControls } from './touch';
 import { COPY, isTouchOnly, UI } from './ui';
-import { applyDoorRotation, applyGlows, applyPacks, buildWorld } from './world';
+import { applyDoorPose, applyGlows, applyPacks, buildWorld } from './world';
 import './style.css';
 
 BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -138,7 +138,16 @@ async function run(): Promise<void> {
   }
 
   const interactions = new Interactions(camera, world.pickables, world.targets, world.lights);
-  const clicks = (kind: string) => kind === 'switch' || kind === 'lamp' || kind === 'screen';
+  const turntable = world.movables.find((m) => m.state.info.kind === 'spin')?.state;
+  /** Sounds for what a click or tap just used; doors and drawers sound from the frame loop as they move. */
+  const used = (t: Target | null) => {
+    if (!t) return;
+    if (t.kind === 'switch' || t.kind === 'lamp' || t.kind === 'screen') sound?.click(t.node);
+    if (t.kind === 'movable' && t.movable === turntable) {
+      sound?.click(t.node);
+      sound?.setMusic(turntable.isOpen);
+    }
+  };
   const autostart = params.has('autostart');
   let started = false;
   let currentRoom: string | null = null;
@@ -157,6 +166,7 @@ async function run(): Promise<void> {
     sound = new Sound(camera);
     sound.setMuted(muted);
     sound.setRoom(currentRoom);
+    sound.setMusic(turntable?.isOpen ?? false);
     ui.setMuted(muted);
     void sound.load();
     if (touch) fullscreen();
@@ -235,8 +245,7 @@ async function run(): Promise<void> {
     tap: (x, y) => {
       if (!started || paused) return;
       const r = canvas.getBoundingClientRect();
-      const t = interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2));
-      if (t && clicks(t.kind)) sound?.click(t.node); // doors and drawers sound from the frame loop as they move
+      used(interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2)));
     },
   }) : null;
   ui.bindTouchBar({
@@ -261,8 +270,7 @@ async function run(): Promise<void> {
     if (touch) return; // taps are handled by the touch controls
     if (cursor && e.button === 0 && e.target === canvas) return void canvas.requestPointerLock(); // a click on the view looks around again
     if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
-    const t = interactions.click();
-    if (t && clicks(t.kind)) sound?.click(t.node); // doors and drawers sound from the frame loop as they move
+    used(interactions.click());
   });
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') {
@@ -302,7 +310,7 @@ async function run(): Promise<void> {
     let doorsMoved = false;
     world.doors.forEach((d, i) => {
       d.state.update(dt);
-      applyDoorRotation(d);
+      applyDoorPose(d);
       const before = doorsBefore[i];
       const s = doorSound(before, d.state);
       if (s) sound?.door(d.node, s);
@@ -315,7 +323,7 @@ async function run(): Promise<void> {
       applyMovable(m);
       const before = movablesBefore[i];
       const s = doorSound(before, m.state);
-      if (s) sound?.movable(m.node, s, m.state.info.kind === 'slide');
+      if (s && m.state !== turntable) sound?.movable(m.node, s, m.state.info.kind === 'slide');
       before.target = m.state.target;
       before.progress = m.state.progress;
     });

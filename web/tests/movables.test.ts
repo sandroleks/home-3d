@@ -21,6 +21,31 @@ describe('MovableState', () => {
   });
 });
 
+describe('the turntable', () => {
+  const platter: MovableInfo = { node: 'Move_turntable-platter', room: 'sala', kind: 'spin', pivot: [0, 1, 0], axis: [0, -1, 0], rpm: 30, lightmap, packs: [] };
+
+  it('spins up while playing, turns the platter, and winds down when stopped', () => {
+    const node = new Object3D();
+    const m = movableRuntime(new MovableState(platter, 1), node);
+    m.state.update(1);
+    expect(m.state.angle).toBe(0);
+    m.state.toggle();
+    m.state.update(1);
+    m.state.update(0.25); // full speed: half a turn a second
+    expect(m.state.angle).toBeGreaterThan(0);
+    const before = m.state.angle;
+    m.state.update(0.25);
+    expect(m.state.angle - before).toBeCloseTo(Math.PI / 4);
+    applyMovable(m);
+    expect(node.quaternion.y).not.toBe(0);
+    m.state.toggle();
+    m.state.update(1);
+    const stopped = m.state.angle;
+    m.state.update(1);
+    expect(m.state.angle).toBe(stopped);
+  });
+});
+
 describe('applyMovable', () => {
   it('turns a hinged door about its axis through the node origin', () => {
     const node = new Object3D();

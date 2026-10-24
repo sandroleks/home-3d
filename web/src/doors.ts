@@ -17,10 +17,15 @@ export class DoorState {
   progress = 0;
   target = 0;
 
-  constructor(readonly info: DoorInfo, private duration = CONFIG.doorDuration) {}
+  constructor(readonly info: DoorInfo, private duration = info.slide ? CONFIG.slidingDoorDuration : CONFIG.doorDuration) {}
 
   get angle(): number {
     return this.info.openAngle * easeInOut(this.progress);
+  }
+
+  /** How far a sliding door's leaf has slid, in metres; 0 for a hinged door. */
+  get offset(): number {
+    return (this.info.slide?.distance ?? 0) * easeInOut(this.progress);
   }
 
   get isOpen(): boolean {
@@ -38,9 +43,14 @@ export class DoorState {
       : Math.max(0, this.progress - step);
   }
 
+  /** A sliding leaf is thin glass beside a fixed panel: the player may come closer than to a wall, so the half-open
+   * doorway is easy to pass. */
   segment(): Segment {
     const [dx, dz] = rotY(this.info.dir, this.angle);
-    const [hx, hz] = this.info.hinge;
-    return { ax: hx, az: hz, bx: hx + dx * this.info.width, bz: hz + dz * this.info.width };
+    const [sx, sz] = this.info.slide?.dir ?? [0, 0];
+    const hx = this.info.hinge[0] + sx * this.offset;
+    const hz = this.info.hinge[1] + sz * this.offset;
+    const s = { ax: hx, az: hz, bx: hx + dx * this.info.width, bz: hz + dz * this.info.width };
+    return this.info.slide ? { ...s, radius: CONFIG.slidingLeafRadius } : s;
   }
 }

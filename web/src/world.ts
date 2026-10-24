@@ -11,7 +11,7 @@ import { RoomLocator } from './rooms';
 import { prepareMeshes } from './scene-setup';
 import { type CanvasFactory, domCanvas, Screen } from './screens';
 
-export interface DoorRuntime { state: DoorState; node: Object3D; base: Quaternion }
+export interface DoorRuntime { state: DoorState; node: Object3D; base: Quaternion; position: Vector3 }
 /** A glowing material (lampshade, bulb, LED strip) that follows its light group. */
 export interface Glow { group: string; material: MeshStandardMaterial; base: number; mesh: Mesh }
 export interface World {
@@ -52,8 +52,11 @@ function node(root: Object3D, name: string): Object3D {
   return n;
 }
 
-export function applyDoorRotation(d: DoorRuntime): void {
+/** A hinged leaf turns about its hinge (the node's origin); a sliding leaf moves along its slide. */
+export function applyDoorPose(d: DoorRuntime): void {
   d.node.quaternion.copy(d.base).premultiply(tmp.setFromAxisAngle(UP, d.state.angle));
+  const [sx, sz] = d.state.info.slide?.dir ?? [0, 0];
+  d.node.position.set(d.position.x + sx * d.state.offset, d.position.y, d.position.z + sz * d.state.offset);
 }
 
 /** The group a glowing material follows, from its name. */
@@ -118,7 +121,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
     lightmap(n, info.lightmap, info.packs, null, null);
     const state = new DoorState(info);
     targets.set(n, { kind: 'door', door: state, node: n });
-    return { state, node: n, base: n.quaternion.clone() };
+    return { state, node: n, base: n.quaternion.clone(), position: n.position.clone() };
   });
 
   const movables: MovableRuntime[] = manifest.movables.map((info) => {

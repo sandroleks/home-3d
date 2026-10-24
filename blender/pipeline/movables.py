@@ -2,6 +2,7 @@
 
     web_move = "slide": web_dir (Blender world unit vector), web_dist (m)
     web_move = "hinge": web_pivot (world point), web_axis (world unit vector), web_angle (radians, right-handed)
+    web_move = "spin": web_pivot, web_axis, web_rpm (turns a minute while on: the turntable's platter)
 
 Each becomes its own node (Move_<name>), hinged ones with their origin at the pivot. All of a room's movables share a
 lightmap atlas, one square tile each, baked in their open pose so their insides are lit.
@@ -18,7 +19,8 @@ TILE_PAD = 3  # px kept clear around each tile's UVs, so bake margins don't run 
 
 
 def find(meshes):
-    return [o for o in meshes if o.get(config.MOVE_PROP)]
+    """Door leaves that slide are doors (doors.py), not movables."""
+    return [o for o in meshes if o.get(config.MOVE_PROP) and not o.name.startswith("Door leaf")]
 
 
 def _v(values):
@@ -40,15 +42,18 @@ def prepare_movables(objs, floor_index):
             d = Vector(o["web_dir"]).normalized()
             spec.update(dir=_v(geom.to_three(tuple(d))), distance=round(float(o["web_dist"]), 4),
                         blender={"dir": _v(d), "dist": float(o["web_dist"])})
-        elif kind == "hinge":
+        elif kind in ("hinge", "spin"):
             pivot, axis = Vector(o["web_pivot"]), Vector(o["web_axis"]).normalized()
             o.data.transform(Matrix.Translation(-pivot))
             o.location = pivot
-            spec.update(pivot=_v(geom.to_three(tuple(pivot))), axis=_v(geom.to_three(tuple(axis))),
-                        angle=round(float(o["web_angle"]), 5),
-                        blender={"pivot": _v(pivot), "axis": _v(axis), "angle": float(o["web_angle"])})
+            spec.update(pivot=_v(geom.to_three(tuple(pivot))), axis=_v(geom.to_three(tuple(axis))))
+            if kind == "hinge":
+                spec.update(angle=round(float(o["web_angle"]), 5),
+                            blender={"pivot": _v(pivot), "axis": _v(axis), "angle": float(o["web_angle"])})
+            else:  # baked as it stands: a spinning platter looks the same at any angle
+                spec.update(rpm=round(float(o["web_rpm"]), 3), blender={"pivot": _v(pivot), "axis": _v(axis), "angle": 0.0})
         else:
-            raise RuntimeError(f"{o.name}: {config.MOVE_PROP} is {kind!r}, expected 'slide' or 'hinge'")
+            raise RuntimeError(f"{o.name}: {config.MOVE_PROP} is {kind!r}, expected 'slide', 'hinge' or 'spin'")
         o.name = spec["node"]
         specs.append(spec)
     bpy.context.view_layer.update()  # matrix_world follows the new origins

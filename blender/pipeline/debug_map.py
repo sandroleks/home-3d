@@ -19,8 +19,9 @@ def render_map(grid, doors, switch_points, spawn, scale=4):
         img[max(j - r, 0):j + r + 1, max(i - r, 0):i + r + 1] = color
 
     for d in doors:
-        hx, hz = d["hinge"]
-        for angle, color in ((0.0, (0.9, 0.1, 0.1)), (d["openAngle"], (0.1, 0.7, 0.1))):
+        slide = d.get("slide", {"dir": (0.0, 0.0), "distance": 0.0})
+        for angle, move, color in ((0.0, 0.0, (0.9, 0.1, 0.1)), (d["openAngle"], slide["distance"], (0.1, 0.7, 0.1))):
+            hx, hz = d["hinge"][0] + slide["dir"][0] * move, d["hinge"][1] + slide["dir"][1] * move
             vx, vz = geom.rot_y(d["dir"], angle)
             for k in range(21):
                 f = d["width"] * k / 20

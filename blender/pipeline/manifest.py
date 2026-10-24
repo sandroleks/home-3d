@@ -41,14 +41,14 @@ def build_manifest(state, baked, eye_height, proxies=None):
         for c in state["chunks"]
     ]
     doors = [
-        {**{k: d[k] for k in ("node", "hinge", "dir", "width", "openAngle", "opening")},
+        {**{k: d[k] for k in ("node", "hinge", "dir", "width", "openAngle", "opening", "slide") if k in d},
          "lightmap": ref(d["key"], "day"), "packs": packs(d["key"])}
         for d in state["doors"]
     ]
     movables = []
     for mv in state["movables"]:
         key = f"movables-{mv['room']}"
-        motion = ("dir", "distance") if mv["kind"] == "slide" else ("pivot", "axis", "angle")
+        motion = {"slide": ("dir", "distance"), "hinge": ("pivot", "axis", "angle"), "spin": ("pivot", "axis", "rpm")}[mv["kind"]]
         movables.append({"node": mv["node"], "room": mv["room"], "kind": mv["kind"], **{k: mv[k] for k in motion},
                          "lightmap": ref(key, "day"), "packs": packs(key)})
     return {

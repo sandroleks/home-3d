@@ -34,11 +34,24 @@ describe('parseManifest', () => {
     expect(m.movables[0]).toMatchObject({ kind: 'slide', dir: [0, 0, 1], distance: 0.35 });
     expect(m.movables[1]).toMatchObject({ kind: 'hinge', pivot: [4.42, 0.2, -2.55], axis: [0, 1, 0], angle: -1.7 });
     const raw = sampleManifest() as { movables: Record<string, unknown>[] };
-    raw.movables[0].kind = 'spin';
+    raw.movables[0].kind = 'roll';
     expect(() => parseManifest(raw)).toThrow('movables[0].kind');
+    const spin = sampleManifest() as { movables: Record<string, unknown>[] };
+    spin.movables[1] = { ...spin.movables[1], kind: 'spin', axis: [0, -1, 0], rpm: 33.333 };
+    delete spin.movables[1].angle;
+    expect(parseManifest(spin).movables[1]).toMatchObject({ kind: 'spin', axis: [0, -1, 0], rpm: 33.333 });
     const raw2 = sampleManifest() as { movables: Record<string, unknown>[] };
     delete raw2.movables[1].axis;
     expect(() => parseManifest(raw2)).toThrow('movables[1].axis');
+  });
+
+  it('reads a sliding door, and none from a hinged one', () => {
+    const raw = sampleManifest() as { doors: Record<string, unknown>[] };
+    expect(parseManifest(raw).doors[0].slide).toBeUndefined();
+    raw.doors[0].slide = { dir: [-1, 0], distance: 0.62 };
+    expect(parseManifest(raw).doors[0].slide).toEqual({ dir: [-1, 0], distance: 0.62 });
+    raw.doors[0].slide = { dir: [-1, 0] };
+    expect(() => parseManifest(raw)).toThrow('doors[0].slide.distance');
   });
 
   it('names the path of a broken field', () => {

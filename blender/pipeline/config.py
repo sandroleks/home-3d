@@ -36,8 +36,8 @@ SPAWN_CAMERA = "Cam_Entrada"
 VIEWPOINT_CAMERAS = ("Cam_Sala", "Cam_Kitchen", "Cam_Bedroom")
 FIRST_VIEW_BUDGET_BYTES = 30 * 1024 * 1024
 # Leaf 5 (infilled opening 20) was deleted from the model; a leaf on an infilled opening is still dropped. The three
-# glazed doors have two leaves each.
-EXPECTED_DOOR_COUNT = 15
+# glazed doors have one sliding leaf each (blender/tools/sliding_doors.py).
+EXPECTED_DOOR_COUNT = 12
 # Chunking: faces over a wall (no floor below) join the nearest room within this distance;
 # meshes with faces larger than DICE_MAX_FACE_AREA m² are first cut on a DICE_CELL grid.
 ROOM_ASSIGN_MAX_DIST = 0.2
@@ -49,11 +49,14 @@ DROP_OBJECT_NAMES = ("Walls (backup before finishes)",)
 # instead of being chunked and lightmapped they go to surroundings.glb, which the viewer lights live.
 SURROUNDINGS_COLLECTION_PREFIXES = ("Exterior - neighbourhood",)
 FORCE_INCLUDE_COLLECTION_PREFIXES = ("Ceiling",)
-PASSABLE_NAME_PATTERN = r"^Glazed Door .* (glass|mullion|rail)(\.\d+)?$"
+# Not walls: the old glazed doors' bars. A sliding door's fixed panel and its glass block the way.
+PASSABLE_NAME_PATTERN = r"^Glazed Door .* (mullion|rail)(\.\d+)?$"
 # Custom properties the model uses (blender/tools/model_details.py writes them; README lists them).
 LAMP_PROP = "web_lamp"  # on a light and its fixtures: the lamp group, switched apart from the room's wall switch
 SCREEN_PROP = "web_screen"  # "tv" | "monitor" | "laptop"
-MOVE_PROP = "web_move"  # "slide" (web_dir, web_dist) | "hinge" (web_pivot, web_axis, web_angle)
+# "slide" (web_dir, web_dist) | "hinge" (web_pivot, web_axis, web_angle) | "spin" (web_pivot, web_axis, web_rpm: the
+# turntable, which plays the music). "slide" on a `Door leaf` makes a sliding door instead of a movable.
+MOVE_PROP = "web_move"
 LEAF_PROP = "web_leaf"  # a part joined into the named door leaf (French door glass)
 # The light a screen casts, baked for an all-white picture (W); the viewer scales it by the picture's brightness.
 SCREEN_LIGHT_WATTS = {"tv": 100.0, "monitor": 20.0}

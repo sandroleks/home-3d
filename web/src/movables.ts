@@ -3,12 +3,15 @@ import { CONFIG } from './config';
 import { easeInOut } from './doors';
 import type { MovableInfo } from './manifest';
 
-/** A drawer or cupboard door: eases between shut (0) and open (1). */
+/** A drawer or cupboard door: eases between shut (0) and open (1). The turntable's platter: "open" is playing, and
+ * progress is how near full speed it turns. */
 export class MovableState {
   progress = 0;
   target = 0;
+  /** The platter's turn so far, in radians. */
+  angle = 0;
 
-  constructor(readonly info: MovableInfo, private duration = CONFIG.movableDuration) {}
+  constructor(readonly info: MovableInfo, private duration = info.kind === 'spin' ? CONFIG.spinUp : CONFIG.movableDuration) {}
 
   get isOpen(): boolean {
     return this.target === 1;
@@ -26,6 +29,7 @@ export class MovableState {
   update(dt: number): void {
     const step = dt / this.duration;
     this.progress = this.target > this.progress ? Math.min(1, this.progress + step) : Math.max(0, this.progress - step);
+    if (this.info.kind === 'spin') this.angle = (this.angle + this.amount * (this.info.rpm! / 60) * 2 * Math.PI * dt) % (2 * Math.PI);
   }
 }
 
@@ -38,13 +42,15 @@ export function movableRuntime(state: MovableState, node: Object3D): MovableRunt
   return { state, node, position: node.position.clone(), quaternion: node.quaternion.clone() };
 }
 
-/** Pose the node: a slide moves along its direction, a hinge turns about its axis through the node's origin (the pivot). */
+/** Pose the node: a slide moves along its direction, a hinge or a spin turns about its axis through the node's origin
+ * (the pivot). */
 export function applyMovable(m: MovableRuntime): void {
   const { info, amount } = m.state;
   if (info.kind === 'slide') {
     m.node.position.copy(m.position).addScaledVector(axis.fromArray(info.dir!), info.distance! * amount);
   } else {
-    m.node.quaternion.copy(m.quaternion).premultiply(tmp.setFromAxisAngle(axis.fromArray(info.axis!), info.angle! * amount));
+    const turn = info.kind === 'spin' ? m.state.angle : info.angle! * amount;
+    m.node.quaternion.copy(m.quaternion).premultiply(tmp.setFromAxisAngle(axis.fromArray(info.axis!), turn));
   }
 }
 

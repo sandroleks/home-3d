@@ -6,7 +6,8 @@ state, and the mesh is rotated into the doorway so it is baked closed. A matched
 closed keeps its hinge and gets its swing from geom.choose_door_swing (see geom.door_pose); a "sign" in
 DOOR_OVERRIDES picks the swing instead. A leaf that matches no opening falls back to the swing heuristic
 (DOOR_OVERRIDES applies there). An opening takes two leaves (French doors, "Door leaf 4a" and "4b") when each is
-narrower than two thirds of it.
+narrower than two thirds of it. A leaf tagged `web_move = "slide"` (web_dir, web_dist) is a sliding door: modelled
+closed, it slides along web_dir instead of swinging.
 """
 import math
 import re
@@ -15,7 +16,7 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
-from . import bpyutil, geom
+from . import bpyutil, config, geom
 
 NUM_RE = re.compile(r"(\d+)([a-z]?)")
 HINGE_MATCH_DIST = 0.25
@@ -56,10 +57,15 @@ def prepare_doors(door_objs, grid, overrides, openings, infilled):
             if num in used and (len(used[num]) > 1 or not (half and used[num][0][1])):
                 raise RuntimeError(f"door leaves {used[num][0][0]!r} and {obj.name!r} both match opening {num}")
             used.setdefault(num, []).append((obj.name, half))
-            choice = geom.door_pose(match, ends[0], ends[1], lambda x, z: grid.is_blocked(x, z, raw=True), obj.name,
-                                    overrides.get(obj.name))
-            angle, to_closed = choice["angle"], choice["to_closed"]
-            how = f"opening {num}" + (" (modelled closed; swing heuristic)" if choice["closed"] else "")
+            if obj.get(config.MOVE_PROP) == "slide":
+                choice = geom.slide_pose(ends[0], ends[1], geom.to_three_xz(*obj["web_dir"][:2]), float(obj["web_dist"]))
+                angle, to_closed = 0.0, 0.0
+                how = f"opening {num}, slides {choice['slide']['distance']} m"
+            else:
+                choice = geom.door_pose(match, ends[0], ends[1], lambda x, z: grid.is_blocked(x, z, raw=True),
+                                        obj.name, overrides.get(obj.name))
+                angle, to_closed = choice["angle"], choice["to_closed"]
+                how = f"opening {num}" + (" (modelled closed; swing heuristic)" if choice["closed"] else "")
         else:
             choice = geom.choose_door_swing(
                 ends[0], ends[1], lambda x, z: grid.is_blocked(x, z, raw=True), overrides.get(obj.name)
@@ -82,6 +88,7 @@ def prepare_doors(door_objs, grid, overrides, openings, infilled):
             "dir": [round(choice["dir"][0], 5), round(choice["dir"][1], 5)],
             "width": round(choice["width"], 4),
             "openAngle": round(angle, 5),
+            **({"slide": choice["slide"]} if "slide" in choice else {}),
         })
         print(f"[doors] {obj.name}: {how}, hinge {specs[-1]['hinge']} dir {specs[-1]['dir']} "
               f"open {math.degrees(angle):.1f}°", flush=True)

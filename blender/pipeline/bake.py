@@ -7,8 +7,9 @@ import tempfile
 
 import bpy
 import numpy as np
+from mathutils import Vector
 
-from . import bpyutil, config, lamps, movables, packs, raster
+from . import bpyutil, config, geom, lamps, movables, packs, raster
 from . import layers as layers_mod
 
 BAKE_NODE = "WEB_LIGHTMAP_TARGET"
@@ -259,6 +260,14 @@ class Surfaces:
         return out
 
 
+def _slid(door):
+    """How far a sliding door's leaf moves to open (Blender world), zero for a hinged one."""
+    s = door.get("slide")
+    if not s:
+        return Vector((0.0, 0.0, 0.0))
+    return Vector((*geom.from_three_xz(*s["dir"]), 0.0)) * s["distance"]
+
+
 def bake_all(scene, state, quality, out_dir):
     """Bake every layer the plan (state["layers"]) asks for. Returns {"rgbm": {name: range}, "packs": {surface key:
     [{file, layers: [{...layer, range, tint}]}]}}."""
@@ -309,6 +318,7 @@ def bake_all(scene, state, quality, out_dir):
             opened = [bpy.data.objects[n] for n, d in leaves.items() if d["opening"] == spill["opening"]]
             for o in opened:
                 o.rotation_euler.z = leaves[o.name]["openAngle"]  # three.js Y is Blender Z
+                o.location += _slid(leaves[o.name])
             bpy.context.view_layer.update()
             try:
                 for key in surfaces.keys():
@@ -318,6 +328,7 @@ def bake_all(scene, state, quality, out_dir):
             finally:
                 for o in opened:
                     o.rotation_euler.z = 0.0
+                    o.location -= _slid(leaves[o.name])
                 bpy.context.view_layer.update()
     finally:
         lighting.restore()

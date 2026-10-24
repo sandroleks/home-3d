@@ -37,20 +37,24 @@ export interface DoorInfo {
   openAngle: number;
   /** The doorway: French doors are two leaves at one opening. */
   opening: number;
+  /** A sliding door: the leaf slides `distance` m along `dir` instead of swinging (openAngle is 0). */
+  slide?: { dir: [number, number]; distance: number };
   lightmap: LightmapRef;
   /** Lamp light from each room the leaf faces. */
   packs: Pack[];
 }
-/** A drawer (slides `distance` m along `dir`) or a cupboard door (turns `angle` about `axis` through `pivot`). */
+/** A drawer (slides `distance` m along `dir`), a cupboard door (turns `angle` about `axis` through `pivot`), or the
+ * turntable's platter (turns `rpm` times a minute about `axis` while the record plays). */
 export interface MovableInfo {
   node: string;
   room: string;
-  kind: 'slide' | 'hinge';
+  kind: 'slide' | 'hinge' | 'spin';
   dir?: [number, number, number];
   distance?: number;
   pivot?: [number, number, number];
   axis?: [number, number, number];
   angle?: number;
+  rpm?: number;
   lightmap: LightmapRef;
   packs: Pack[];
 }
@@ -208,6 +212,10 @@ export function parseManifest(json: unknown): Manifest {
         width: num(d.width, `doors[${i}].width`),
         openAngle: num(d.openAngle, `doors[${i}].openAngle`),
         opening: num(d.opening, `doors[${i}].opening`),
+        ...(d.slide === undefined ? {} : (() => {
+          const s = obj(d.slide, `doors[${i}].slide`);
+          return { slide: { dir: vec(s.dir, 2, `doors[${i}].slide.dir`) as [number, number], distance: num(s.distance, `doors[${i}].slide.distance`) } };
+        })()),
         lightmap: lightmap(d.lightmap, `doors[${i}].lightmap`),
         packs: packs(d.packs, `doors[${i}].packs`),
       };
@@ -215,10 +223,11 @@ export function parseManifest(json: unknown): Manifest {
     movables: arr(m.movables, 'movables').map((v, i) => {
       const p = `movables[${i}]`;
       const x = obj(v, p);
-      const kind = oneOf(x.kind, ['slide', 'hinge'] as const, `${p}.kind`);
+      const kind = oneOf(x.kind, ['slide', 'hinge', 'spin'] as const, `${p}.kind`);
+      const turn = () => ({ pivot: vec(x.pivot, 3, `${p}.pivot`) as [number, number, number], axis: vec(x.axis, 3, `${p}.axis`) as [number, number, number] });
       const motion = kind === 'slide'
         ? { dir: vec(x.dir, 3, `${p}.dir`) as [number, number, number], distance: num(x.distance, `${p}.distance`) }
-        : { pivot: vec(x.pivot, 3, `${p}.pivot`) as [number, number, number], axis: vec(x.axis, 3, `${p}.axis`) as [number, number, number], angle: num(x.angle, `${p}.angle`) };
+        : kind === 'hinge' ? { ...turn(), angle: num(x.angle, `${p}.angle`) } : { ...turn(), rpm: num(x.rpm, `${p}.rpm`) };
       return {
         node: str(x.node, `${p}.node`), room: str(x.room, `${p}.room`), kind, ...motion,
         lightmap: lightmap(x.lightmap, `${p}.lightmap`), packs: packs(x.packs, `${p}.packs`),

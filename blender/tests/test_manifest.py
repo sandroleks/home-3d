@@ -80,6 +80,20 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(m["glows"], STATE["glows"])
         self.assertEqual(manifest.validate_manifest(m), [])
 
+    def test_sliding_door_and_turntable(self):
+        state = copy.deepcopy(STATE)
+        state["doors"][0]["slide"] = {"dir": [-1.0, 0.0], "distance": 0.62}
+        state["doors"][0]["openAngle"] = 0.0
+        state["movables"].append({"node": "Move_turntable-platter", "room": "alpha", "kind": "spin", "pivot": [1, 1, -2],
+                                  "axis": [0, -1, 0], "rpm": 33.333, "source": "Turntable platter"})
+        m = build(state)
+        self.assertEqual(m["doors"][0]["slide"], {"dir": [-1.0, 0.0], "distance": 0.62})
+        self.assertNotIn("slide", build()["doors"][0])
+        self.assertEqual({k: v for k, v in m["movables"][2].items() if k not in ("lightmap", "packs")},
+                         {"node": "Move_turntable-platter", "room": "alpha", "kind": "spin", "pivot": [1, 1, -2],
+                          "axis": [0, -1, 0], "rpm": 33.333})
+        self.assertEqual(manifest.validate_manifest(m), [])
+
     def test_validate_reports_missing_pieces(self):
         baked = copy.deepcopy(BAKED)
         del baked["rgbm"]["alpha_light"]

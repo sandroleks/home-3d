@@ -13,6 +13,7 @@ export type Target =
   | { kind: 'screen'; screen: Screen; node: Object3D };
 
 const HIGHLIGHT = new Color(0.12, 0.12, 0.09);
+const tint = new Color();
 const CENTER = new Vector2(0, 0);
 
 export function lampName(name: string, names = CONFIG.lampNames): string {
@@ -23,7 +24,9 @@ export function lampName(name: string, names = CONFIG.lampNames): string {
 export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): string {
   switch (t.kind) {
     case 'door': return t.door.isOpen ? `${verb}: close door` : `${verb}: open door`;
-    case 'movable': return `${verb}: ${t.movable.isOpen ? 'close' : 'open'} ${movableNoun(t.movable.info)}`;
+    case 'movable':
+      if (t.movable.info.kind === 'spin') return `${verb}: ${t.movable.isOpen ? 'stop the record' : 'play a record'}`;
+      return `${verb}: ${t.movable.isOpen ? 'close' : 'open'} ${movableNoun(t.movable.info)}`;
     case 'lamp': return `${verb}: turn ${lampName(t.name)} ${lights.isOn(t.group) ? 'off' : 'on'}`;
     case 'screen': {
       const s = t.screen;
@@ -45,6 +48,12 @@ export function activate(t: Target, lights: LightGroups, now = 0): void {
   }
 }
 
+/** Glass and other see-through surfaces don't hide what's behind them. */
+function seeThrough(o: Object3D): boolean {
+  const m = (o as Mesh).material as MeshStandardMaterial | undefined;
+  return !!m && !Array.isArray(m) && m.transparent;
+}
+
 export function findTarget(hit: Object3D | null, targets: Map<Object3D, Target>): Target | null {
   for (let o: Object3D | null = hit; o; o = o.parent) {
     const t = targets.get(o);
@@ -53,13 +62,17 @@ export function findTarget(hit: Object3D | null, targets: Map<Object3D, Target>)
   return null;
 }
 
+/** Tints what the crosshair is on. Dark surfaces get less, in proportion: the tone mapping lifts near-black so much that
+ * the full tint turns a black record light grey. */
 export function setHighlight(node: Object3D, on: boolean): void {
   node.traverse((o) => {
     const m = (o as Mesh).material as MeshStandardMaterial | undefined;
     if (!m || !m.emissive) return;
     if (!m.userData.baseEmissive) m.userData.baseEmissive = m.emissive.clone();
     m.emissive.copy(m.userData.baseEmissive);
-    if (on) m.emissive.add(HIGHLIGHT);
+    const c = m.color;
+    const strength = c ? Math.min(1, 4 * (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b)) : 1;
+    if (on) m.emissive.add(tint.copy(HIGHLIGHT).multiplyScalar(strength));
   });
 }
 
@@ -75,14 +88,18 @@ export class Interactions {
     private now: () => number = () => performance.now() / 1000,
   ) {
     this.raycaster.far = CONFIG.interactDistance;
-    (this.raycaster as Raycaster & { firstHitOnly?: boolean }).firstHitOnly = true;
   }
 
-  /** What's under a point on screen (normalised device coordinates); walls in `pickables` occlude targets behind them. */
+  /** What's under a point on screen (normalised device coordinates); walls in `pickables` occlude targets behind them,
+   * glass doesn't (the record under the turntable's lid, a sliding leaf behind the fixed panel). */
   at(point: Vector2): Target | null {
     this.raycaster.setFromCamera(point, this.camera);
-    const hit = this.raycaster.intersectObjects(this.pickables, true)[0];
-    return findTarget(hit?.object ?? null, this.targets);
+    for (const hit of this.raycaster.intersectObjects(this.pickables, true)) {
+      const t = findTarget(hit.object, this.targets);
+      if (t) return t;
+      if (!seeThrough(hit.object)) return null;
+    }
+    return null;
   }
 
   /** Raycast from the crosshair and highlight what it's on. */

@@ -18,6 +18,30 @@ describe('interactions', () => {
     expect(promptFor(t, lights)).toBe('Click: close door');
   });
 
+  it('prompts the turntable as a record player', () => {
+    const lights = new LightGroups([]);
+    const platter: MovableInfo = { node: 'Move_turntable-platter', room: 'sala', kind: 'spin', pivot: [0, 1, 0], axis: [0, -1, 0], rpm: 33.3, lightmap: { file: 'x', range: 1 }, packs: [] };
+    const t: Target = { kind: 'movable', movable: new MovableState(platter), node: new Object3D() };
+    expect(promptFor(t, lights)).toBe('Click: play a record');
+    activate(t, lights);
+    expect(promptFor(t, lights, 'Tap')).toBe('Tap: stop the record');
+  });
+
+  it('aims through glass that is not itself a target, but not through walls', () => {
+    const lights = new LightGroups(['sala']);
+    const glass = new Mesh(new BoxGeometry(1, 1, 0.01), new MeshStandardMaterial({ transparent: true, opacity: 0.2 }));
+    const wall = new Mesh(new BoxGeometry(1, 1, 0.01), new MeshStandardMaterial());
+    glass.position.set(0, 0, -0.5);
+    wall.position.set(0, 0, -0.5);
+    const node = new Mesh(new BoxGeometry(), new MeshStandardMaterial());
+    node.position.set(0, 0, -1.5);
+    for (const o of [glass, wall, node]) o.updateMatrixWorld();
+    const t: Target = { kind: 'switch', room: 'sala', node };
+    const camera = new PerspectiveCamera();
+    expect(new Interactions(camera, [glass, node], new Map([[node as Object3D, t]]), lights).update()).toBe(t);
+    expect(new Interactions(camera, [wall, node], new Map([[node as Object3D, t]]), lights).update()).toBeNull();
+  });
+
   it('prompts and activates switches', () => {
     const lights = new LightGroups(['sala']);
     const t: Target = { kind: 'switch', room: 'sala', node: new Object3D() };
@@ -62,6 +86,15 @@ describe('interactions', () => {
     expect(mat.emissive.r).toBeGreaterThan(0.1);
     setHighlight(mesh, false);
     expect(mat.emissive.r).toBeCloseTo(0.1);
+  });
+  it('highlights very dark surfaces less', () => {
+    const black = new MeshStandardMaterial({ color: new Color(0.02, 0.02, 0.02) });
+    const white = new MeshStandardMaterial({ color: new Color(0.9, 0.9, 0.9) });
+    setHighlight(new Mesh(new BoxGeometry(), black), true);
+    setHighlight(new Mesh(new BoxGeometry(), white), true);
+    expect(white.emissive.r).toBeCloseTo(0.12);
+    expect(black.emissive.r).toBeLessThan(0.015);
+    expect(black.emissive.r).toBeGreaterThan(0);
   });
   it('click returns the activated target, or null when nothing is aimed at', () => {
     const lights = new LightGroups(['sala']);

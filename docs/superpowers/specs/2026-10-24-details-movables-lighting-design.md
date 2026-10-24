@@ -51,6 +51,8 @@ Objects with `web_move` are exported as their own nodes (`Move_<slug>`), origin 
 
 `prepare_doors` accepts two leaves per opening when each is less than two thirds of its width. Both are ordinary doors in the manifest (`Door_4a`, `Door_4b`), with collision segments, so a closed glazed door blocks the way.
 
+**Later (2026-10-24):** the real glazed doors slide, so `blender/tools/sliding_doors.py` replaced each French pair with a fixed panel and one leaf tagged `web_move = "slide"`, which `prepare_doors` exports as a door with a `slide` (direction, distance) instead of a swing. Spill is baked with the leaf slid open; the viewer slides it and keeps its collision segment. The turntable's platter became a `spin` movable that plays the music.
+
 ### Fixtures and screens
 
 - Each lamp group with fixture meshes gets an invisible box node around them (`Lamp_<slug>`), added after the bake: the viewer's click target.

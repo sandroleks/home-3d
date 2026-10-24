@@ -7,6 +7,12 @@ export const CONFIG = {
   runSpeed: 2.8,
   mouseSensitivity: 0.0022,
   doorDuration: 0.6,
+  /** Seconds for a glazed door's leaf to slide open or shut. */
+  slidingDoorDuration: 0.9,
+  /** Metres the player keeps from a sliding leaf (walls: the player's radius). */
+  slidingLeafRadius: 0.1,
+  /** Seconds for the turntable's platter to come up to speed, or to stop. */
+  spinUp: 1.2,
   /** Seconds for a drawer or cupboard door to open or close. */
   movableDuration: 0.45,
   lightFadeDuration: 0.4,
@@ -135,6 +141,8 @@ export const CONFIG = {
     music: 0.25,
     /** Seconds. */
     ambienceFade: 1.5,
+    /** The music fading in when the turntable starts and out when it stops. */
+    musicFade: 1.5,
     muteFade: 0.2,
     /** Metres between footsteps, and before the first one after standing still. */
     stride: 0.7,

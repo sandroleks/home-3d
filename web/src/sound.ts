@@ -24,6 +24,10 @@ export class Sound {
   private ambience = new Map<Ambience, GainNode>();
   private buffers = new Map<string, AudioBuffer>();
   private currentAmbience: Ambience | null = null;
+  private loaded = false;
+  /** The music plays only while the turntable does. */
+  private musicOn = false;
+  private musicSource: AudioBufferSourceNode | null = null;
   private lastStep = -1;
   private position = new Vector3();
 
@@ -51,8 +55,27 @@ export class Sound {
       }
     }));
     for (const [name, gain] of this.ambience) this.loop(`ambience-${name}`, gain);
-    this.loop('music', this.music);
-    this.ramp(this.music.gain, CONFIG.audio.music, CONFIG.audio.ambienceFade);
+    this.loaded = true;
+    if (this.musicOn) this.startMusic();
+  }
+
+  /** Starts the music from the top of the record, or fades it out. Before the files arrive, it starts once they do. */
+  setMusic(on: boolean): void {
+    if (on === this.musicOn) return;
+    this.musicOn = on;
+    if (!this.loaded) return;
+    if (on) return this.startMusic();
+    this.ramp(this.music.gain, 0, CONFIG.audio.musicFade);
+    this.musicSource?.stop(this.ctx.currentTime + CONFIG.audio.musicFade);
+    this.musicSource = null;
+  }
+
+  private startMusic(): void {
+    this.musicSource?.stop();
+    this.music.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.music.gain.setValueAtTime(0, this.ctx.currentTime);
+    this.musicSource = this.loop('music', this.music);
+    this.ramp(this.music.gain, CONFIG.audio.music, CONFIG.audio.musicFade);
   }
 
   door(node: Object3D, sound: DoorSound): void {
@@ -96,9 +119,9 @@ export class Sound {
     return g;
   }
 
-  private loop(name: string, to: AudioNode): void {
+  private loop(name: string, to: AudioNode): AudioBufferSourceNode | null {
     const buffer = this.buffers.get(name);
-    if (!buffer) return;
+    if (!buffer) return null;
     const src = this.ctx.createBufferSource();
     src.buffer = buffer;
     src.loop = true;
@@ -107,6 +130,7 @@ export class Sound {
     src.loopEnd = end / buffer.sampleRate;
     src.connect(to);
     src.start(0, src.loopStart);
+    return src;
   }
 
   private play(name: string, to: AudioNode, at?: Object3D, rate = 1, level = 1): void {
