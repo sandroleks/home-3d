@@ -1,6 +1,6 @@
 # Apartment Walkthrough
 
-A first-person web walkthrough of the apartment, built from the Blender model. Visitors walk around with the keyboard and mouse, or by touch on phones and tablets, open doors and flip the light switches.
+A first-person web walkthrough of the apartment, built from the Blender model. Visitors walk around with the keyboard and mouse, or by touch on phones and tablets, open doors, drawers and cupboards, flip the light switches and lamps, and watch TV.
 
 It has two halves: `blender/` turns the .blend into web assets (headless Blender, run through the Makefile), and `web/` is the viewer (Vite, TypeScript, three.js).
 
@@ -18,6 +18,7 @@ It has two halves: `blender/` turns the .blend into web assets (headless Blender
 
 Good to know:
 
+- `blender/tools/model_details.py` added the drawers and cupboards that open (with insides), the French door leaves, lamp colour temperatures, bulbs, LED strips and sockets. It has run once on `Untitled.blend` and refuses to run again; edit those things by hand from now on, following the conventions below.
 - The pipeline never writes to either .blend file. It runs Blender on a staged copy in `/private/tmp` with factory settings, so your add-ons don't load.
 - External image textures must be packed: File > External Data > Pack Resources.
 
@@ -25,7 +26,7 @@ Good to know:
 
 ```
 make export-preview    # about 1 minute, low-quality lighting, good for checking changes
-make export-final      # about 35 minutes on the GPU
+make export-final      # about 1 to 1.5 hours on the GPU
 make export-surroundings   # about 30 seconds: only the view through the windows, nothing else changes
 ```
 
@@ -50,7 +51,15 @@ Keep these names in Blender, or the export won't find things:
 - Door parts: `Door N infill` (a filled-in opening), `Door leaf N`, and the glazed parts (glass, mullion, rail).
 - Cameras: `Cam_Entrada` is where visitors start. `Cam_Sala`, `Cam_Kitchen` and `Cam_Bedroom` are viewpoints (used for `?view=` and the reference renders).
 - Exterior glass: `Window N (Exterior / Room) glass` and `Glazed Door N (Exterior / Room) glass`; the viewer measures the sunlight entering through them.
-- Lights named `Portal …` are window fill and count as sky light; every other lamp is switched with its room's ceiling light.
+- Lights named `Portal …` are window fill and count as sky light; every other lamp is switched with its room's ceiling light, unless it's in a lamp group (below).
+- French doors: two leaves at one glazed opening, `Door leaf Na` and `Door leaf Nb`. Their glass keeps the window name (`Glazed Door N (A / B) glass`, `… glass.001`) so the sun still comes in, and carries a `web_leaf` custom property naming the leaf it joins.
+
+Custom properties (Object Properties > Custom Properties):
+
+- `web_lamp = "<name>"` on a light, and on the meshes around it (shade, base, bulb), makes a lamp that switches on its own: click it in the walkthrough. Its glowing materials glow with it. Lamps with the same name in one room switch together.
+- `web_screen = "tv" | "monitor" | "laptop"` on a screen mesh: it shows a generated picture when switched on. The TV's bias light is lamp group `tv` and follows the TV.
+- `web_move` makes a mesh open. `"slide"` with `web_dir` (a world direction, e.g. `[1, 0, 0]`) and `web_dist` (m) for a drawer; `"hinge"` with `web_pivot` (a world point on the hinge line), `web_axis` (the hinge direction) and `web_angle` (radians, right-handed about the axis) for a door or flap. Give the carcass behind it a hollow (a boolean against a hidden cutter, as the script does) so there is an inside to see.
+- A mesh that casts no shadow (Object Properties > Visibility > Shadow off) and only uses glowing materials is a bulb or LED strip: it is exported unlit and glows with its lamp, and it never blocks the lamp inside it.
 - The build-up animation is fine: the export uses the final frame.
 - The view through the windows is everything in `Exterior - neighbourhood` (and its sub-collections). It is too big to lightmap, so it goes to `surroundings.glb`. The viewer lights it live with the same sun and sky as the flat (no shadows between buildings). When only the neighbourhood changed, `make export-surroundings` is enough.
 
@@ -60,7 +69,7 @@ When the automatic choice is wrong, adjust the tables in `blender/pipeline/confi
 
 - `EXPECTED_DOOR_COUNT`: how many interactive doors the export check expects.
 - `SWITCH_OVERRIDES`: move a room's light switch (`door`, `side`, and `face: outside` to put it on the other room's wall).
-- `DOOR_OVERRIDES`: fix a door leaf's hinge side or swing direction.
+- `DOOR_OVERRIDES`: fix a door leaf's hinge side or swing direction (`sign` alone also works for a leaf modelled closed in its doorway, as the French doors are).
 - `QUALITY`: bake resolution and samples for preview and final.
 - `SURROUNDINGS_COLLECTION_PREFIXES`: which collections make the view through the windows.
 
@@ -87,7 +96,7 @@ The sun is live: its position comes from the NOAA solar equations for the flat's
 cd web && npm run dev      # http://localhost:5173
 ```
 
-Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors and use switches, L toggles the current room's light, M mutes sound, `,` and `.` move the time back and forward 15 minutes (hold to keep going), Shift + `,` and `.` move the date a week, P plays the day (one hour of sun every two seconds), R turns the real sun and sky on or off, and Esc pauses. The sun panel at the bottom left is always on screen. Press Tab to free the mouse and use it while you keep walking with WASD; press Tab again, or click the view, to look around. It also works while paused.
+Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors, drawers and cupboards and to use switches, lamps and screens (the TV steps through its channels, then switches off), L toggles the current room's light, M mutes sound, `,` and `.` move the time back and forward 15 minutes (hold to keep going), Shift + `,` and `.` move the date a week, P plays the day (one hour of sun every two seconds), R turns the real sun and sky on or off, and Esc pauses. The sun panel at the bottom left is always on screen. Press Tab to free the mouse and use it while you keep walking with WASD; press Tab again, or click the view, to look around. It also works while paused.
 
 On phones and tablets (no mouse): drag on the left half of the screen to walk (a stick appears under your thumb; push past its ring to walk faster), drag on the right half to look around, and tap doors and switches. Both thumbs work at once. The buttons at the top right open the sun panel, toggle the room's light, mute and pause. Android goes fullscreen on start; iPhones can't. Tuning (stick size, dead zone, look speed, tap timing) is in `CONFIG.touch`. To try it on a desktop, use the browser's device toolbar with a phone selected and reload.
 
@@ -117,11 +126,20 @@ The repo is self-contained: the exported assets in `web/public/assets/` (about 3
 
 File names are stable across exports. Vercel revalidates static files on every visit, so that's fine there. On another CDN, purge the cache after re-exporting, or use short cache times for `assets/manifest.json`, `assets/*.glb` (including `surroundings.glb`) and `assets/lightmaps/*`.
 
+## Lighting
+
+Each room's wall switch turns on its ceiling light and every lamp without a lamp group; lamps with one (`web_lamp`) switch on their own. Lamps use real colour temperatures (2700 to 4000 K). Each group is baked on its own: a room's wall switch as a full colour layer, everything else (its lamps, an open-plan neighbour's lamps, and the light from a lit room through each of its doors) as 8-bit luminance layers three to a texture (RGB), with the light's colour as a tint (`blender/pipeline/packs.py`, `layers.py`). The light through a door follows how far it's open and how bright the room behind it is.
+
+Drawers and cupboard doors are baked open, so their insides are lit; the rooms are baked with them taken away, so the hollow carcasses get light inside and no open front leaves a shadow behind.
+
+What's brighter than white (bulbs, lit shades, screens, sunlit patches) blooms (`src/bloom.ts`, `CONFIG.bloom`). The TV and monitor light the room with the colour of their picture (`CONFIG.screens`).
+
 ## Known limits
 
 - Phones get a lighter load to fit their GPU memory: lightmaps larger than 1024 px are halved on the GPU as they load (the 2048 px rooms, about 290 MB down to 140 MB), and the sun's shadow map is 2048 px instead of 4096 (`CONFIG.touch`). A touch laptop, or an iPad with a trackpad, counts as a desktop.
-- Light from one room doesn't spill through doorways into the next. Rooms open to each other with no wall between them (the kitchen and the living room) do share lamp light: each one's lamps are baked onto the other as well, on the other's switch.
-- An open door keeps the lighting it was baked with closed.
+- Light through a door is one layer per door and room: it follows the room's overall brightness, not which of its lamps are on, and lights only the rooms, not the door leaves or drawers. Sun and sky don't come through open doors.
+- An open door keeps the lighting it was baked with closed; a drawer or cupboard keeps the lighting it was baked with open, and doesn't shade its neighbours.
+- The TV and monitor light casts no shadows.
 - No moon or stars at night.
 - The baked sky light comes from below the horizon too, compensated globally by `CONFIG.sun.skyGain`, so ceilings near windows read a little bright and up-facing outdoor surfaces (balcony floor, sills) a little dark.
 - The bounce fill is a flat approximation: rooms without exterior glass of their own (e.g. the kitchen, lit through the glazed doors) get none and read darker than Cycles.
