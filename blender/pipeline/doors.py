@@ -3,8 +3,10 @@
 The real file models leaves open (90° into the room). A leaf is matched to the opening whose
 jamb end is nearest one of its ends; that end is the hinge, the modelled pose becomes the open
 state, and the mesh is rotated into the doorway so it is baked closed. A matched leaf modelled
-closed keeps its hinge and gets its swing from geom.choose_door_swing (see geom.door_pose). A leaf
-that matches no opening falls back to the swing heuristic (DOOR_OVERRIDES applies there).
+closed keeps its hinge and gets its swing from geom.choose_door_swing (see geom.door_pose); a "sign" in
+DOOR_OVERRIDES picks the swing instead. A leaf that matches no opening falls back to the swing heuristic
+(DOOR_OVERRIDES applies there). An opening takes two leaves (French doors, "Door leaf 4a" and "4b") when each is
+narrower than two thirds of it.
 """
 import math
 import re
@@ -15,8 +17,9 @@ from mathutils import Matrix, Vector
 
 from . import bpyutil, geom
 
-NUM_RE = re.compile(r"(\d+)")
+NUM_RE = re.compile(r"(\d+)([a-z]?)")
 HINGE_MATCH_DIST = 0.25
+PAIR_SHARE = 2 / 3
 
 
 def _number(name):
@@ -24,10 +27,16 @@ def _number(name):
     return int(m.group(1)) if m else 0
 
 
+def _label(name):
+    """'4a' for 'Door leaf 4a', '1' for 'Door leaf 1'."""
+    m = NUM_RE.search(name)
+    return f"{m.group(1)}{m.group(2)}" if m else "0"
+
+
 def prepare_doors(door_objs, grid, overrides, openings, infilled):
     specs, used = [], {}
-    for obj in sorted(door_objs, key=lambda o: _number(o.name)):
-        n = _number(obj.name)
+    for obj in sorted(door_objs, key=lambda o: (_number(o.name), _label(o.name))):
+        n, label = _number(obj.name), _label(obj.name)
         co = bpyutil.world_coords(obj)
         pts = np.stack([co[:, 0], -co[:, 1]], axis=1)
         center, u, _, width, _ = geom.principal_frame(pts)
@@ -43,10 +52,12 @@ def prepare_doors(door_objs, grid, overrides, openings, infilled):
             continue
         if match:
             num = match["opening"].num
-            if num in used:
-                raise RuntimeError(f"door leaves {used[num]!r} and {obj.name!r} both match opening {num}")
-            used[num] = obj.name
-            choice = geom.door_pose(match, ends[0], ends[1], lambda x, z: grid.is_blocked(x, z, raw=True), obj.name)
+            half = match["width"] < match["opening"].width * PAIR_SHARE
+            if num in used and (len(used[num]) > 1 or not (half and used[num][0][1])):
+                raise RuntimeError(f"door leaves {used[num][0][0]!r} and {obj.name!r} both match opening {num}")
+            used.setdefault(num, []).append((obj.name, half))
+            choice = geom.door_pose(match, ends[0], ends[1], lambda x, z: grid.is_blocked(x, z, raw=True), obj.name,
+                                    overrides.get(obj.name))
             angle, to_closed = choice["angle"], choice["to_closed"]
             how = f"opening {num}" + (" (modelled closed; swing heuristic)" if choice["closed"] else "")
         else:
@@ -55,16 +66,18 @@ def prepare_doors(door_objs, grid, overrides, openings, infilled):
             )
             angle, to_closed = choice["sign"] * math.pi / 2, 0.0  # assumed modelled closed
             how = "fallback swing heuristic"
+            num = None
         hx, hz = choice["hinge"]
         bx, by = geom.from_three_xz(hx, hz)
         hinge = Vector((bx, by, float(co[:, 2].min())))
         # Into the closed pose: rotation about three.js Y equals rotation about Blender Z.
         obj.data.transform(Matrix.Rotation(-to_closed, 4, "Z") @ Matrix.Translation(-hinge))
         obj.location = hinge
-        obj.name = f"Door_{n}"
+        obj.name = f"Door_{label}"
         specs.append({
             "node": obj.name,
-            "key": f"door-{n}",
+            "key": f"door-{label}",
+            "opening": num if num is not None else n,
             "hinge": [round(hx, 4), round(hz, 4)],
             "dir": [round(choice["dir"][0], 5), round(choice["dir"][1], 5)],
             "width": round(choice["width"], 4),

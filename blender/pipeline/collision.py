@@ -7,7 +7,7 @@ import numpy as np
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
-from . import bpyutil, config, geom, raster
+from . import bpyutil, config, geom, lamps, raster
 
 
 @dataclass
@@ -63,7 +63,7 @@ def collision_meshes(meshes):
     passable = re.compile(config.PASSABLE_NAME_PATTERN)
     out = []
     for o in meshes:
-        if o.name.startswith(("Floor - ", "Door leaf")) or passable.match(o.name):
+        if o.name.startswith(("Floor - ", "Door leaf")) or passable.match(o.name) or lamps.glow_only(o):
             continue
         if bpyutil.world_coords(o)[:, 2].max() < config.LOW_OBJECT_MAX_Z:
             continue

@@ -25,8 +25,9 @@ class SwitchObjectTests(unittest.TestCase):
         self.assertAlmostEqual(sw.location.x, 2.994, places=3)
         self.assertAlmostEqual(sw.location.y, 0.85, places=3)
         self.assertAlmostEqual(sw.location.z, 1.1, places=3)
-        self.assertAlmostEqual(sw.dimensions.x, 0.08, places=3)
-        self.assertAlmostEqual(sw.dimensions.y, 0.01, places=3)
+        self.assertAlmostEqual(sw.dimensions.x, 0.086, places=3)
+        self.assertAlmostEqual(sw.dimensions.y, 0.024, places=3)  # the plate and a rocker on each face
+        self.assertEqual([s.material.name for s in sw.material_slots], ["Web switch", "Web switch rocker"])
         mat = sw.material_slots[0].material
         bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
         self.assertGreater(bsdf.inputs["Emission Strength"].default_value, 0)

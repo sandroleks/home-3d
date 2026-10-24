@@ -26,8 +26,9 @@ def sanitized_node_name(name):
 
 def check_outputs(out_dir, m, budget_bytes, expected_doors):
     errors = list(manifest_mod.validate_manifest(m))
-    refs = [c["day"] for c in m["chunks"]] + [c["light"] for c in m["chunks"]] + [d["lightmap"] for d in m["doors"]] + [
-        l for x in m["chunks"] + m["doors"] for l in x.get("lights", [])]
+    lit = m["chunks"] + m["doors"] + m["movables"]
+    refs = [c["day"] for c in m["chunks"]] + [c["light"] for c in m["chunks"]] + [
+        x["lightmap"] for x in m["doors"] + m["movables"]] + [p for x in lit for p in x["packs"]]
     for ref in refs:
         if ref and not os.path.exists(os.path.join(out_dir, ref["file"])):
             errors.append(f"missing file {ref['file']}")
@@ -36,8 +37,8 @@ def check_outputs(out_dir, m, budget_bytes, expected_doors):
             errors.append(f"missing file {name}")
     if errors:
         return errors
-    all_names = [c["node"] for c in m["chunks"]] + [d["node"] for d in m["doors"]] + [
-        r["switch"] for r in m["rooms"] if r["switch"]]
+    others = [x["node"] for x in m["screens"] + m["glows"]] + [g["target"] for g in m["groups"] if g["target"]]
+    all_names = [x["node"] for x in lit] + [r["switch"] for r in m["rooms"] if r["switch"]] + others
     for name in all_names:
         clean = sanitized_node_name(name)
         if clean != name:
@@ -46,7 +47,10 @@ def check_outputs(out_dir, m, budget_bytes, expected_doors):
         errors.append(f"expected {expected_doors} doors, found {len(m['doors'])}")
     gltf = read_glb_json(os.path.join(out_dir, "apartment.glb"))
     nodes = {n["name"]: n for n in gltf["nodes"]}
-    for name in [c["node"] for c in m["chunks"]] + [d["node"] for d in m["doors"]]:
+    for name in others:
+        if name not in nodes:
+            errors.append(f"glb has no node {name}")
+    for name in [x["node"] for x in lit]:
         node = nodes.get(name)
         if node is None or "mesh" not in node:
             errors.append(f"glb has no mesh node {name}")
@@ -62,9 +66,8 @@ def check_outputs(out_dir, m, budget_bytes, expected_doors):
     for sw in [r["switch"] for r in m["rooms"] if r["switch"]]:
         if sw not in nodes:
             errors.append(f"glb has no switch node {sw}")
-    first_view = ["apartment.glb", "collision.json", "manifest.json"] + [c["day"]["file"] for c in m["chunks"]] + [
-        d["lightmap"]["file"] for d in m["doors"]
-    ]
+    first_view = ["apartment.glb", "collision.json", "manifest.json"] + sorted(
+        {c["day"]["file"] for c in m["chunks"]} | {x["lightmap"]["file"] for x in m["doors"] + m["movables"]})
     errors += check_surroundings(out_dir)
     total = sum(os.path.getsize(os.path.join(out_dir, f)) for f in first_view)
     if total > budget_bytes:
@@ -89,7 +92,8 @@ def check_scene(state):
     from .proc_materials import is_procedural
 
     errors = []
-    names = [c["node"] for c in state["chunks"]] + [d["node"] for d in state["doors"]]
+    names = [c["node"] for c in state["chunks"]] + [d["node"] for d in state["doors"]] + [
+        mv["node"] for mv in state["movables"]]
     for name in names:
         obj = bpy.data.objects[name]
         if [l.name for l in obj.data.uv_layers] != ["UVMap", "UVLightmap"]:
@@ -109,6 +113,11 @@ def check_scene(state):
         bx, by = geom.from_three_xz(*d["hinge"])
         if abs(loc.x - bx) > 1e-3 or abs(loc.y - by) > 1e-3:
             errors.append(f"{d['node']}: origin is not at its hinge")
+    for mv in state["movables"]:
+        if mv["kind"] == "hinge":
+            loc = bpy.data.objects[mv["node"]].location
+            if any(abs(a - b) > 1e-3 for a, b in zip(loc, mv["blender"]["pivot"])):
+                errors.append(f"{mv['node']}: origin is not at its pivot")
     for msg in state.get("lost_lamps", []):
         errors.append(f"lamp or glowing object {msg}: move it into a room with a ceiling light")
     return errors
