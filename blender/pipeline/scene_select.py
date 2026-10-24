@@ -2,6 +2,7 @@
 import math
 
 import bpy
+import numpy as np
 from mathutils import Matrix
 
 from . import config
@@ -71,9 +72,12 @@ def realize(objs):
             raise RuntimeError(f"could not replace the mesh of {o.name!r} (mode {o.mode})")
         o.matrix_world = Matrix.Identity(4)
         mats = slots[o.name] or [None]
-        o.data.materials.clear()
+        faces = np.empty(len(o.data.polygons), dtype=np.int32)
+        o.data.polygons.foreach_get("material_index", faces)
+        o.data.materials.clear()  # Blender 5 drops every face's material index with the materials
         for m in mats:
             o.data.materials.append(m or _placeholder_material())
+        o.data.polygons.foreach_set("material_index", np.minimum(faces, len(mats) - 1))
         for s in o.material_slots:
             s.link = "DATA"
 
