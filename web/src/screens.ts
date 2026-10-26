@@ -73,6 +73,23 @@ export class Screen {
     return this.isTv && (this.content as TvContent).channel === TV_CHANNELS.length - 1;
   }
 
+  /** The TV's channel; 0 for the monitor and laptop. */
+  get channel(): number {
+    return this.isTv ? (this.content as TvContent).channel : 0;
+  }
+
+  /** Puts the screen in a given state, as another visitor left it: on with a channel, or off. */
+  set(on: boolean, channel: number, t: number): void {
+    if (on && !this.on) {
+      this.on = true;
+      this.started = t;
+      this.lastDraw = -Infinity;
+      if (this.isTv) (this.content as TvContent).reset();
+    }
+    if (on && this.isTv) (this.content as TvContent).setChannel(channel);
+    if (!on) this.on = false;
+  }
+
   /** The TV: on, then each channel in turn, then off. The monitor and laptop: on and off. */
   click(t: number): void {
     if (!this.on) {

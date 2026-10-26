@@ -21,6 +21,13 @@ button {
   padding: 10px 26px; cursor: pointer;
 }
 button:disabled { opacity: 0.5; cursor: default; }
+.name-field { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.name-field input {
+  font: inherit; font-size: 15px; color: var(--ink); background: rgba(255, 255, 255, 0.08); text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 8px 12px; width: 200px; box-sizing: border-box;
+}
+.name-field input:focus { outline: none; border-color: var(--accent); }
+.name-field input::placeholder { color: var(--muted); opacity: 0.7; }
 .controls { list-style: none; padding: 0; margin: 0; color: var(--muted); line-height: 1.9; }
 kbd {
   font: inherit; font-size: 0.85em; color: var(--ink); border: 1px solid rgba(255, 255, 255, 0.3);
@@ -28,7 +35,11 @@ kbd {
 }
 #error { color: #f2a19a; max-width: 420px; }
 .hint { color: var(--muted); }
-#crosshair, #room-name, #prompt, #muted { pointer-events: none; } /* touches go through to the view */
+#crosshair, #room-name, #people, #prompt, #muted { pointer-events: none; } /* touches go through to the view */
+#people {
+  position: fixed; left: calc(20px + env(safe-area-inset-left)); top: calc(40px + env(safe-area-inset-top)); font-size: 13px;
+  color: var(--muted); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); max-width: min(50vw, 360px);
+}
 #crosshair {
   position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px;
   border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);

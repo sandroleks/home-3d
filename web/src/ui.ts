@@ -63,7 +63,28 @@ export class UI {
   }
 
   onStart(cb: () => void): void {
-    this.el('start-button').addEventListener('click', cb);
+    const b = this.el<HTMLButtonElement>('start-button');
+    b.addEventListener('click', cb);
+    this.el('name').addEventListener('keydown', (e) => { // Enter in the name field starts too
+      if (e.key === 'Enter' && !b.disabled) cb();
+    });
+  }
+
+  /** The name field on the start screen: what the other visitors see. */
+  getName(): string {
+    return this.el<HTMLInputElement>('name').value;
+  }
+
+  setName(name: string): void {
+    this.el<HTMLInputElement>('name').value = name;
+  }
+
+  /** Who else is here, under the room name; hidden when alone. */
+  setPeople(names: string[]): void {
+    const p = this.el('people');
+    p.hidden = names.length === 0;
+    const text = names.length ? `With ${names.join(', ')}` : '';
+    if (p.textContent !== text) p.textContent = text;
   }
 
   hideStart(): void {

@@ -159,6 +159,10 @@ export class LightGroups {
     return this.uniforms.has(id);
   }
 
+  ids(): string[] {
+    return [...this.uniforms.keys()];
+  }
+
   isOn(id: string): boolean {
     return this.targets.get(id) === 1;
   }

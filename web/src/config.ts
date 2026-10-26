@@ -102,6 +102,45 @@ export const CONFIG = {
     outsideSun: { elevation: 50, azimuth: 200, watts: 500 },
     outsideSky: 150,
   },
+  /** Visitors see each other: WebRTC between their browsers, found through public Nostr relays (Trystero), no server. */
+  multiplayer: {
+    appId: 'apartment-walkthrough',
+    /** Everyone on the site shares this room; `?room=<name>` gives a group one of its own. */
+    room: 'apartment',
+    /** Poses sent per second while moving or turning, and while still (a heartbeat). */
+    poseRate: 15,
+    idleRate: 1,
+    /** Seconds without a pose before a visitor's avatar is removed. */
+    staleAfter: 15,
+    /** Time constant (s) of the avatars' motion smoothing between poses. */
+    smoothing: 0.1,
+    maxNameLength: 24,
+    defaultName: 'Guest',
+    /** Each visitor's colour, picked from here by their peer id: pastels, the first a caramel after the reindeer's brown. */
+    colours: ['#e2bc94', '#f7b2c4', '#a9d4f5', '#b5e5b0', '#fde29b', '#cdb6f2', '#ffc4a0', '#9fe3d6'],
+    /** The visitors' figures (`creatures.ts`): little toy animals, about 1.6 m to the antler tips at scale 1. */
+    creature: {
+      scale: 1,
+      /** Metres between the top of the figure and its name label, and the label's width and height. */
+      labelGap: 0.18,
+      label: [0.9, 0.16] as [number, number],
+      /** Metres walked per walk cycle (a step with each pair of legs). */
+      stride: 0.75,
+      /** The figure's brightness in an unlit room at night, as a share of its full colour. */
+      darkest: 0.25,
+      /** The baked sky level at which daylight shows a figure in full colour (night 0, a summer noon about 4.7). */
+      daylight: 1.5,
+      /** How much a lamp lights a figure in its room, against the room's ceiling light. */
+      lamp: 0.7,
+      /** Metres the body bounces with each step. */
+      bounce: 0.05,
+      /** The googly pupils: how stiff and how damped their spring is (lower damping wobbles longer), and how far they roll (radians). */
+      googly: { stiffness: 80, damping: 3.2, range: 0.55 },
+      /** Seconds between blinks, at random within this range, and how long one lasts. */
+      blink: [2, 6] as [number, number],
+      blinkTime: 0.16,
+    },
+  },
   /** Optional display names by room id, e.g. { sala: 'Living room' }. */
   roomNames: {} as Record<string, string>,
   /** How prompts name each lamp group ("Click: turn floor lamp on"); otherwise its name with spaces for hyphens. */

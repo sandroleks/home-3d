@@ -13,6 +13,9 @@ import { loadAssets, type LoadedAssets, type LoadedMap } from './loader';
 import { addMirrors } from './mirrors';
 import { lightmapTextures, UploadQueue, warmUpShaders } from './warmup';
 import { applyMovable } from './movables';
+import { Avatars, figureLight } from './avatars';
+import { Multiplayer, trysteroRoom } from './multiplayer';
+import { cleanName, loadName, saveName, stateDelta, stateKey } from './presence';
 import { Player, screenFov, vfovFromHfov } from './player';
 import { shrinkLightmap } from './shrink';
 import { Sound } from './sound';
@@ -89,6 +92,18 @@ async function run(): Promise<void> {
   const mirrors = addMirrors(world.root, surroundings);
   const halos = new Halos(world.glows);
   world.root.add(halos.root);
+  const avatars = new Avatars(); // the other visitors; in the scene now so the warm-up compiles them
+  scene.add(avatars.root);
+  // How lit a visitor's figure is: its room's ceiling light and lamps, or the daylight
+  const roomGroups = new Map<string, { id: string; weight: number }[]>();
+  for (const g of assets.manifest.groups) {
+    roomGroups.set(g.room, [...(roomGroups.get(g.room) ?? []), { id: g.id, weight: g.kind === 'switch' ? 1 : CONFIG.multiplayer.creature.lamp }]);
+  }
+  const avatarLight = (x: number, z: number): number => {
+    const room = world.rooms.locate(x, z, null);
+    const lamps = (room && roomGroups.get(room)) || [];
+    return figureLight(lamps.reduce((a, g) => Math.max(a, g.weight * world.lights.uniform(g.id).value), 0), world.sky.value);
+  };
   const site = assets.manifest.site;
   const clock = new SunClock(parseSunParam(params.get('sun'), site.timeZone) ?? Date.now(), site.timeZone);
   const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings, touch ? CONFIG.touch.shadowMapSize : undefined);
@@ -116,7 +131,7 @@ async function run(): Promise<void> {
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
-  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, CONFIG, LIGHT_SPILL } }); // tuning from the console
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;
@@ -148,6 +163,29 @@ async function run(): Promise<void> {
       sound?.setMusic(turntable.isOpen);
     }
   };
+  /** The others here, once joined: their avatars, and the doors, lights and screens shared with them. */
+  let others: Multiplayer | null = null;
+  const byKey = new Map([...world.targets.values()].map((t) => [stateKey(t), t] as const));
+  const share = (t: Target | null) => {
+    if (t) others?.broadcast(stateDelta(t, world.lights));
+  };
+  ui.setName(loadName(() => localStorage));
+  const joinOthers = async () => {
+    const typed = ui.getName().trim();
+    saveName(() => localStorage, typed);
+    try {
+      const { joinRoom, selfId } = await import('trystero');
+      const room = joinRoom({ appId: CONFIG.multiplayer.appId }, params.get('room') || CONFIG.multiplayer.room);
+      others = new Multiplayer(trysteroRoom(room, selfId), world, avatars, cleanName(typed), {
+        now: () => performance.now() / 1000,
+        onChanged: (keys) => keys.forEach((k) => used(byKey.get(k) ?? null)), // the sounds a local click would make
+        onPeers: (names) => ui.setPeople(names),
+      });
+      window.addEventListener('pagehide', () => others?.leave(), { once: true });
+    } catch (err) {
+      console.warn('Could not reach the other visitors; exploring alone.', err);
+    }
+  };
   const autostart = params.has('autostart');
   let started = false;
   let currentRoom: string | null = null;
@@ -169,6 +207,7 @@ async function run(): Promise<void> {
     sound.setMusic(turntable?.isOpen ?? false);
     ui.setMuted(muted);
     void sound.load();
+    if (!params.has('solo')) void joinOthers();
     if (touch) fullscreen();
     else canvas.requestPointerLock();
   };
@@ -229,6 +268,7 @@ async function run(): Promise<void> {
     if (!currentRoom || !world.lights.has(currentRoom)) return;
     world.lights.toggle(currentRoom);
     sound?.click(world.switches.get(currentRoom));
+    others?.broadcast({ [`light:${currentRoom}`]: world.lights.isOn(currentRoom) ? 1 : 0 });
   };
   const toggleMute = () => {
     if (!sound) return;
@@ -245,7 +285,9 @@ async function run(): Promise<void> {
     tap: (x, y) => {
       if (!started || paused) return;
       const r = canvas.getBoundingClientRect();
-      used(interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2)));
+      const t = interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2));
+      used(t);
+      share(t);
     },
   }) : null;
   ui.bindTouchBar({
@@ -270,7 +312,9 @@ async function run(): Promise<void> {
     if (touch) return; // taps are handled by the touch controls
     if (cursor && e.button === 0 && e.target === canvas) return void canvas.requestPointerLock(); // a click on the view looks around again
     if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
-    used(interactions.click());
+    const t = interactions.click();
+    used(t);
+    share(t);
   });
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') {
@@ -334,6 +378,11 @@ async function run(): Promise<void> {
       if (sound && steps.update(Math.hypot(player.x - x, player.z - z), player.running)) sound.step();
     }
     if (!player.frozen && world.collision.isBlocked(player.x, player.z)) player.resolve();
+    if (others) {
+      others.sendPose(player.x, player.z, player.yaw, player.pitch);
+      others.tick();
+    }
+    avatars.update(dt, avatarLight);
     currentRoom = world.rooms.locate(player.x, player.z, currentRoom);
     sound?.setRoom(currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');

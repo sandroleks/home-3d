@@ -10,6 +10,7 @@
     <div id="start" class="overlay">
       <h1>Apartment Walkthrough</h1>
       <div class="progress"><div id="progress-bar"></div></div>
+      <label class="name-field"><span>Your name, for anyone else here</span><input id="name" type="text" maxlength="24" autocomplete="nickname" placeholder="Guest" /></label>
       <button id="start-button" disabled>Loading…</button>
       <ul class="controls keys-only">
         <li><kbd>W A S D</kbd> walk</li>
@@ -24,12 +25,14 @@
         <li><kbd>R</kbd> real sun and sky on or off</li>
         <li><kbd>Tab</kbd> free the mouse for the sun panel, keep walking</li>
         <li><kbd>Esc</kbd> pause</li>
+        <li>Anyone else exploring now walks the flat with you</li>
       </ul>
       <ul class="controls touch-only">
         <li><kbd>Drag left</kbd> walk, push further to go faster</li>
         <li><kbd>Drag right</kbd> look around</li>
         <li><kbd>Tap</kbd> open doors, flip light switches</li>
         <li>Buttons, top right: date and time, room light, sound, pause</li>
+        <li>Anyone else exploring now walks the flat with you</li>
       </ul>
       <p id="error" hidden></p>
       <button id="retry-button" hidden>Try again</button>
@@ -37,6 +40,7 @@
     <div id="hud" hidden>
       <div id="crosshair"></div>
       <div id="room-name"></div>
+      <div id="people" hidden></div>
       <div id="prompt" hidden></div>
       <div id="stick" hidden><i id="stick-knob"></i></div>
       <div id="touch-bar">
