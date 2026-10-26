@@ -2,6 +2,8 @@ import type { Ambience } from './audio';
 
 export const CONFIG = {
   assetsBase: 'assets/',
+  /** The kitchen walled off, as it is now (?kitchen=wall, K): its own export, inside assetsBase. */
+  kitchenWallAssets: 'variants/kitchen-wall/',
   dracoPath: 'draco/',
   walkSpeed: 1.4,
   runSpeed: 2.8,

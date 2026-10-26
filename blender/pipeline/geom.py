@@ -181,6 +181,15 @@ def open_neighbours(rooms, locate_many, min_shared=0.5, step=0.05, probe=0.02):
     return out
 
 
+def faces_within(faces, lo, hi, tol=0.01):
+    """Indices of the faces whose every corner lies in the box lo..hi on the ground plane, give or take `tol`.
+
+    faces: [[(x, y), ...] per face]; lo, hi: (x, y) corners of the box.
+    """
+    return [i for i, f in enumerate(faces)
+            if all(lo[0] - tol <= x <= hi[0] + tol and lo[1] - tol <= y <= hi[1] + tol for x, y in f)]
+
+
 def choose_door_swing(end_a, end_b, is_blocked, override=None):
     """Pick the hinge end and swing direction for a closed door leaf.
 

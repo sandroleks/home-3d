@@ -70,6 +70,18 @@ class OpenNeighbourTests(unittest.TestCase):
         self.assertEqual(geom.open_neighbours(rooms, index.locate_many, min_shared=0.1), {"a": ["b"], "b": ["a"]})
 
 
+class FacesWithinTests(unittest.TestCase):
+    def test_keeps_faces_that_reach_out_of_the_box(self):
+        # The kitchen floor: a big face up to the opening, and the strip across it that a closed wall would cover
+        room = [(-3.26, -5.59), (-1.075, -5.59), (-1.075, -1.16)]
+        strip = [(-1.075, -1.3), (-0.99, -1.3), (-0.99, -5.4), (-1.075, -5.4)]
+        self.assertEqual(geom.faces_within([room, strip], (-1.24, -5.40), (-0.84, -1.30)), [1])
+
+    def test_tolerance(self):
+        self.assertEqual(geom.faces_within([[(0.0, 0.0), (1.005, 1.0)]], (0, 0), (1, 1)), [0])
+        self.assertEqual(geom.faces_within([[(0.0, 0.0), (1.05, 1.0)]], (0, 0), (1, 1)), [])
+
+
 class PrincipalFrameTests(unittest.TestCase):
     def test_rotated_rectangle(self):
         a = math.radians(30)

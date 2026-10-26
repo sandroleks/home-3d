@@ -11,11 +11,12 @@ import { Interactions, promptFor, type Target } from './interactions';
 import { LIGHT_SPILL } from './lightmaps';
 import { loadAssets, type LoadedAssets, type LoadedMap } from './loader';
 import { addMirrors } from './mirrors';
+import { assetsFor, type Kitchen, kitchenFrom, saveCarry, takeCarry, urlFor } from './layout';
 import { lightmapTextures, UploadQueue, warmUpShaders } from './warmup';
 import { applyMovable } from './movables';
 import { Avatars, figureLight } from './avatars';
 import { Multiplayer, trysteroRoom } from './multiplayer';
-import { cleanName, loadName, saveName, stateDelta, stateKey } from './presence';
+import { applyState, cleanName, collectState, loadName, saveName, stateDelta, stateKey } from './presence';
 import { Player, screenFov, vfovFromHfov } from './player';
 import { shrinkLightmap } from './shrink';
 import { Sound } from './sound';
@@ -36,10 +37,13 @@ const params = new URLSearchParams(location.search);
 const ui = new UI(document);
 /** No mouse: touch controls instead of pointer lock, and a lighter load for the GPU. */
 const touch = isTouchOnly((q) => window.matchMedia(q));
+const kitchen = kitchenFrom(params);
+/** Coming from the other kitchen: where the visitor was, the time, and the doors and lights. */
+const carry = takeCarry(() => sessionStorage);
 
-function fail(message: string, err: unknown): void {
+function fail(message: string, err: unknown, retry = () => location.reload()): void {
   console.error(err);
-  ui.showError(message, () => location.reload());
+  ui.showError(message, retry);
 }
 
 async function boot(): Promise<void> {
@@ -86,7 +90,14 @@ async function run(): Promise<void> {
   new ResizeObserver(resize).observe(canvas);
 
   const shrink = touch ? (m: LoadedMap) => shrinkLightmap(renderer, m, CONFIG.touch.maxLightmapSize) : undefined;
-  const assets: LoadedAssets = await loadAssets((f) => ui.setProgress(f), shrink);
+  ui.setKitchenWall(kitchen === 'wall');
+  let assets: LoadedAssets;
+  try {
+    assets = await loadAssets((f) => ui.setProgress(f), shrink, assetsFor(kitchen));
+  } catch (err) {
+    if (kitchen !== 'wall') throw err;
+    return fail(COPY.noKitchenWall, err, () => location.assign(urlFor(location.href, 'open')));
+  }
 
   const world = buildWorld(assets, scene);
   const mirrors = addMirrors(world.root, surroundings);
@@ -105,7 +116,7 @@ async function run(): Promise<void> {
     return figureLight(lamps.reduce((a, g) => Math.max(a, g.weight * world.lights.uniform(g.id).value), 0), world.sky.value);
   };
   const site = assets.manifest.site;
-  const clock = new SunClock(parseSunParam(params.get('sun'), site.timeZone) ?? Date.now(), site.timeZone);
+  const clock = new SunClock(carry?.utc ?? parseSunParam(params.get('sun'), site.timeZone) ?? Date.now(), site.timeZone);
   const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings, touch ? CONFIG.touch.shadowMapSize : undefined);
   let real = loadRealLighting(() => localStorage);
   daylight.setReal(real);
@@ -140,10 +151,14 @@ async function run(): Promise<void> {
     player.frozen = true;
     fixedHfov = vp.hfov;
     resize();
+  } else if (carry) {
+    player.teleport(carry.x, carry.z, carry.yaw, carry.pitch);
+    player.resolve(); // where the wall now stands, step out of it
   }
   player.update(0); // place the camera now so the view behind the start overlay shows the spawn
   const spawnRoom = world.rooms.locate(player.x, player.z, null);
-  if (spawnRoom && world.lights.has(spawnRoom) && real && daylight.isNight(clock.utc)) world.lights.toggle(spawnRoom);
+  if (carry) applyState(world, carry.state, performance.now() / 1000);
+  else if (spawnRoom && world.lights.has(spawnRoom) && real && daylight.isNight(clock.utc)) world.lights.toggle(spawnRoom);
   if (params.get('debug') === 'lightmap') {
     for (const m of world.lightmapped as MeshStandardMaterial[]) {
       m.color.setRGB(1, 1, 1);
@@ -238,6 +253,15 @@ async function run(): Promise<void> {
       readout: real ? formatReadout(l, solarPosition(clock.utc, site.lat, site.lon), assets.climate.months[l.month - 1]) : COPY.flatLighting,
     });
   };
+  /** The other kitchen is another export: reload into it, keeping the visitor's place, the time and the lights. */
+  const setKitchen = (k: Kitchen) => {
+    if (k === kitchen) return;
+    saveCarry(() => sessionStorage, {
+      x: player.x, z: player.z, yaw: player.yaw, pitch: player.pitch, utc: clock.utc, state: collectState(world),
+    });
+    location.assign(urlFor(location.href, k)); // pagehide says goodbye to the others
+  };
+  ui.onKitchenWall((wall) => setKitchen(wall ? 'wall' : 'open'));
   const setReal = (on: boolean) => {
     real = on;
     saveRealLighting(() => localStorage, on);
@@ -342,6 +366,7 @@ async function run(): Promise<void> {
     }
     if (e.repeat) return;
     if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey && !e.altKey) setReal(!real);
+    if (e.code === 'KeyK' && !e.metaKey && !e.ctrlKey && !e.altKey) setKitchen(kitchen === 'wall' ? 'open' : 'wall');
     if (e.code === 'KeyL') toggleRoomLight();
     if (e.code === 'KeyM') toggleMute();
   });
