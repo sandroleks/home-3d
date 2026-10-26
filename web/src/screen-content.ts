@@ -588,6 +588,15 @@ export class TvContent {
     return true;
   }
 
+  /** Straight to a channel (clamped), as another visitor's TV shows it. */
+  setChannel(channel: number): void {
+    const c = Math.max(0, Math.min(TV_CHANNELS.length - 1, Math.round(channel)));
+    if (c === this.channel) return;
+    this.channel = c;
+    this.changed = true;
+    this.noisy = true;
+  }
+
   /** Back to the first channel, for switching the TV on again. */
   reset(): void {
     this.channel = 0;

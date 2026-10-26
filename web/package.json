@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "three": "0.170.0",
-    "three-mesh-bvh": "0.8.3"
+    "three-mesh-bvh": "0.8.3",
+    "trystero": "0.26.0"
   },
   "devDependencies": {
     "@types/node": "22.19.0",
