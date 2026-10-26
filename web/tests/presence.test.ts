@@ -180,4 +180,20 @@ describe('Peers', () => {
     expect(peers.prune(16)).toEqual(['a']);
     expect(peers.ids).toEqual(['b']);
   });
+
+  it('shares a dimmed, toned light and applies it', () => {
+    const w = world();
+    w.lights.setScene('sala', 0.567, 447);
+    const state = collectState(w);
+    expect(state['light:sala']).toBe(0.567);
+    expect(state['ct:sala']).toBe(447);
+    expect(state['ct:sala/floor-lamp']).toBeUndefined();
+    const other = world();
+    expect(applyState(other, { 'light:sala': 0.567, 'ct:sala': 447 }, 1)).toEqual(['light:sala', 'ct:sala']);
+    expect(other.lights.brightness('sala')).toBeCloseTo(0.567);
+    expect(other.lights.mireds('sala')).toBe(447);
+    expect(applyState(other, { 'light:sala': 0.567, 'ct:sala': 447 }, 2)).toEqual([]);
+    expect(applyState(other, { 'light:sala': 0 }, 3)).toEqual(['light:sala']);
+    expect(other.lights.isOn('sala')).toBe(false);
+  });
 });

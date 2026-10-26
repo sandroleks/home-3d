@@ -1,3 +1,5 @@
+import { blackBody, type HueScene, levelFor } from './hue';
+
 export const COPY = {
   ready: 'Click to explore',
   readyTouch: 'Tap to explore',
@@ -7,7 +9,11 @@ export const COPY = {
   flatLighting: 'Real sun and sky off: the same even daylight at any time.',
   kitchenWall: 'Kitchen wall up, as it is now',
   noKitchenWall: "The kitchen-wall version hasn't been exported yet. Open the flat without it instead.",
+  thisRoom: 'This room',
 };
+
+/** Where a Hue scene goes: the room the visitor is in, or every room. */
+export type SceneScope = 'room' | 'home';
 
 export function isTouchOnly(matchMedia: (q: string) => { matches: boolean }): boolean {
   return matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches;
@@ -227,6 +233,36 @@ export class UI {
   onKitchenWall(cb: (wall: boolean) => void): void {
     const box = this.el<HTMLInputElement>('kitchen-wall');
     box.addEventListener('change', () => cb(box.checked));
+  }
+
+  /** One button per Hue scene, with a dot in its light's colour and brightness. */
+  bindScenes(scenes: readonly HueScene[], cb: (id: string, scope: SceneScope) => void): void {
+    const box = this.el('scene-buttons');
+    const scope = this.el<HTMLSelectElement>('scene-scope');
+    for (const s of scenes) {
+      const b = this.doc.createElement('button');
+      b.type = 'button';
+      b.dataset.scene = s.id;
+      b.setAttribute('aria-pressed', 'false');
+      const dot = this.doc.createElement('i');
+      const c = blackBody(s.ct > 0 ? 1e6 / s.ct : 2700);
+      const v = s.bri > 0 ? 0.35 + 0.65 * levelFor(s.bri) : 0.15;
+      dot.style.background = `rgb(${Math.round(c.r * v * 255)}, ${Math.round(c.g * v * 255)}, ${Math.round(c.b * v * 255)})`;
+      b.append(dot, s.name);
+      b.addEventListener('click', () => cb(s.id, scope.value === 'home' ? 'home' : 'room'));
+      box.append(b);
+    }
+  }
+
+  /** The scope menu names the room the visitor is in; a scene shows as chosen while it's still what's set. */
+  setScenes(room: string | null, active: string | null): void {
+    const here = this.el<HTMLSelectElement>('scene-scope').options[0];
+    const label = room ? `${COPY.thisRoom} (${room})` : COPY.thisRoom;
+    if (here.textContent !== label) here.textContent = label;
+    for (const b of this.el('scene-buttons').querySelectorAll<HTMLButtonElement>('button')) {
+      const on = String(b.dataset.scene === active);
+      if (b.getAttribute('aria-pressed') !== on) b.setAttribute('aria-pressed', on);
+    }
   }
 
   showNotice(text: string): void {

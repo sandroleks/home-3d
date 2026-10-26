@@ -1,7 +1,8 @@
-import { type Color, DataTexture, MeshStandardMaterial, Texture, Vector3 } from 'three';
+import { Color, DataTexture, MeshStandardMaterial, Texture, Vector3 } from 'three';
 import { CONFIG } from './config';
 import type { PackLayer } from './manifest';
 import { RGBM_GLSL } from './rgbm';
+import { toneFor } from './hue';
 
 /** Up to three packed lamp layers in one texture's RGB: each channel is (L / range)^(1/2.2), coloured by its tint. */
 export interface PackBinding {
@@ -9,6 +10,8 @@ export interface PackBinding {
   /** Per channel: range x how much of that light is on right now. */
   gains: { value: Vector3 };
   tints: { value: Vector3[] };
+  /** The tints as baked; a scene's colour temperature scales them (applyPacks). */
+  baseTints: Vector3[];
   layers: PackLayer[];
 }
 
@@ -18,6 +21,8 @@ export interface LightmapBinding {
   light: Texture;
   lightRange: number;
   intensity: { value: number };
+  /** The switch layer's colour against its bake: white unless a scene changed the colour temperature. */
+  lightColor?: { value: Color };
   /** Packed lamp layers: the room's lamps, an open-plan neighbour's, light through the doors (at most CONFIG.maxPacks). */
   packs?: PackBinding[];
   /** Shared by every lightmapped material: how bright the baked sky is right now. */
@@ -37,7 +42,10 @@ export const BLACK_LIGHTMAP = (() => {
 
 export function packBinding(layers: PackLayer[]): PackBinding {
   const tints = [0, 1, 2].map((i) => (layers[i] ? new Vector3(...layers[i].tint) : new Vector3()));
-  return { texture: { value: BLACK_LIGHTMAP }, gains: { value: new Vector3() }, tints: { value: tints }, layers };
+  return {
+    texture: { value: BLACK_LIGHTMAP }, gains: { value: new Vector3() }, tints: { value: tints },
+    baseTints: tints.map((t) => t.clone()), layers,
+  };
 }
 
 // Our own attribute + varying. The uv1 declaration is guarded so it can't collide with three's own
@@ -57,6 +65,7 @@ uniform float lmDayRange;
 uniform float lmLightRange;
 uniform float lmLightIntensity;
 uniform float lmLightSpill;
+uniform vec3 lmLightColor;
 uniform float lmScale;
 uniform float lmSkyScale;
 uniform vec3 lmFill;
@@ -76,7 +85,7 @@ function accumulate(packs: number): string {
   }
   return /* glsl */ `
 #if defined( RE_IndirectDiffuse )
-	vec3 lmLamps = max( lmLightIntensity, lmLightSpill ) * rgbmDecode( texture( lmLight, vLmUv ), lmLightRange );${lamps}
+	vec3 lmLamps = max( lmLightIntensity, lmLightSpill ) * lmLightColor * rgbmDecode( texture( lmLight, vLmUv ), lmLightRange );${lamps}
 	irradiance += ( lmSkyScale * rgbmDecode( texture( lmDay, vLmUv ), lmDayRange ) + lmLamps ) * lmScale + lmFill;
 #endif`;
 }
@@ -104,6 +113,7 @@ export function applyLightmap(material: MeshStandardMaterial, b: LightmapBinding
     lmLightRange: { value: b.lightRange },
     lmLightIntensity: b.intensity,
     lmLightSpill: LIGHT_SPILL,
+    lmLightColor: b.lightColor ?? { value: new Color(1, 1, 1) },
     lmScale: { value: scale },
     lmSkyScale: b.sky,
     lmFill: b.fill,
@@ -119,7 +129,7 @@ export function applyLightmap(material: MeshStandardMaterial, b: LightmapBinding
     shader.vertexShader = patchVertex(shader.vertexShader);
     shader.fragmentShader = patchFragment(shader.fragmentShader, packs.length);
   };
-  material.customProgramCacheKey = () => `room-lightmap-v5-${packs.length}`;
+  material.customProgramCacheKey = () => `room-lightmap-v6-${packs.length}`;
   material.needsUpdate = true;
 }
 
@@ -135,17 +145,25 @@ export function fadeToward(current: number, target: number, dt: number, duration
   return target > current ? Math.min(target, current + step) : Math.max(target, current - step);
 }
 
-/** One fading level per light group: each room's wall switch (by room id) and each lamp that switches on its own. */
+/**
+ * One fading level per light group: each room's wall switch (by room id) and each lamp that switches on its own.
+ * A group is on or off, and when on it shines at its brightness (1 = as baked) and colour temperature (mireds, 0 = as
+ * baked); a Hue scene sets both (setScene). Switching off and on again keeps them.
+ */
 export class LightGroups {
   private uniforms = new Map<string, { value: number }>();
   private targets = new Map<string, number>();
   private linear = new Map<string, number>();
+  private levels = new Map<string, { target: number; current: number }>();
+  private colors = new Map<string, { mireds: number; target: Color; value: Color }>();
 
   constructor(ids: string[], private duration = CONFIG.lightFadeDuration) {
     for (const id of ids) {
       this.uniforms.set(id, { value: 0 });
       this.targets.set(id, 0);
       this.linear.set(id, 0);
+      this.levels.set(id, { target: 1, current: 1 });
+      this.colors.set(id, { mireds: 0, target: new Color(1, 1, 1), value: new Color(1, 1, 1) });
     }
   }
 
@@ -153,6 +171,13 @@ export class LightGroups {
     const u = this.uniforms.get(id);
     if (!u) throw new Error(`no light group ${id}`);
     return u;
+  }
+
+  /** The group's colour against its bake, for the shaders and glows to multiply by. */
+  color(id: string): { value: Color } {
+    const c = this.colors.get(id);
+    if (!c) throw new Error(`no light group ${id}`);
+    return c;
   }
 
   has(id: string): boolean {
@@ -167,6 +192,16 @@ export class LightGroups {
     return this.targets.get(id) === 1;
   }
 
+  /** How bright the group shines when on, 0..1. */
+  brightness(id: string): number {
+    return this.levels.get(id)?.target ?? 0;
+  }
+
+  /** The group's colour temperature in mireds; 0 while it is as baked. */
+  mireds(id: string): number {
+    return this.colors.get(id)?.mireds ?? 0;
+  }
+
   toggle(id: string): void {
     if (this.has(id)) this.targets.set(id, this.isOn(id) ? 0 : 1);
   }
@@ -175,11 +210,33 @@ export class LightGroups {
     if (this.has(id)) this.targets.set(id, on ? 1 : 0);
   }
 
+  /** On at `brightness` (0..1; 0 switches off and keeps the last brightness), at `mireds` when given (> 0). */
+  setScene(id: string, brightness: number, mireds = 0): void {
+    if (!this.has(id)) return;
+    const b = Math.min(1, Math.max(0, brightness));
+    this.targets.set(id, b > 0 ? 1 : 0);
+    if (b > 0) this.levels.get(id)!.target = b;
+    if (mireds > 0) this.setTone(id, mireds);
+  }
+
+  /** The colour temperature alone, in mireds (0: back to as baked). */
+  setTone(id: string, mireds: number): void {
+    const c = this.colors.get(id);
+    if (!c) return;
+    c.mireds = Math.max(0, mireds);
+    c.target.copy(toneFor(c.mireds));
+  }
+
   update(dt: number): void {
+    const k = Math.min(1, dt / this.duration);
     for (const [id, u] of this.uniforms) {
       const l = fadeToward(this.linear.get(id)!, this.targets.get(id)!, dt, this.duration);
       this.linear.set(id, l);
-      u.value = l * l * (3 - 2 * l);
+      const level = this.levels.get(id)!;
+      level.current = fadeToward(level.current, level.target, dt, this.duration);
+      u.value = l * l * (3 - 2 * l) * level.current;
+      const c = this.colors.get(id)!;
+      c.value.lerp(c.target, k);
     }
   }
 }

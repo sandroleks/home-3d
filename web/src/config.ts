@@ -143,12 +143,26 @@ export const CONFIG = {
       blinkTime: 0.16,
     },
   },
+  /** The office's Nanoleaf panels (nanoleaf.ts): a gradient between two hues (0..1: teal to magenta, through blue)
+   * drifting across the panels, `speed` radians a second, `spread` radians a metre along the wall. `glow` scales the
+   * panels' baked glow so the colours stay deep instead of clipping to white. */
+  nanoleaf: { hues: [0.47, 0.83] as [number, number], speed: 0.45, spread: 4.5, saturation: 1, lightness: 0.5, glow: 0.22 },
+  /** Philips Hue scenes (hue.ts): S in the sun panel, H steps through them in the room you're in. */
+  hue: {
+    /** Colour temperature the lamps were baked at (model_details.py: 3000 K ceilings, 2700 K lamps). */
+    bakedKelvin: 2850,
+    /** For linking the flat's real bridge later: its address and app key, and each room id's Hue room (group) id.
+     * Until then (bridge null) scenes only change the walkthrough. */
+    bridge: null as string | null,
+    appKey: '',
+    rooms: {} as Record<string, string>,
+  },
   /** Optional display names by room id, e.g. { sala: 'Living room' }. */
   roomNames: {} as Record<string, string>,
   /** How prompts name each lamp group ("Click: turn floor lamp on"); otherwise its name with spaces for hyphens. */
   lampNames: {
     'bar-shelves': 'shelf lights', workbench: 'workbench light', 'bedside-left': 'bedside lamp', 'bedside-right': 'bedside lamp',
-    'screen-bar': 'monitor light', 'wall-lights': 'wall lights',
+    'screen-bar': 'monitor light', 'wall-lights': 'wall lights', nanoleaf: 'Nanoleaf panels', niche: 'shelf light',
   } as Record<string, string>,
   /** The TV, monitor and laptop: picture size in px and brightness. The light they cast is baked (SCREEN_LIGHT_WATTS). */
   screens: {

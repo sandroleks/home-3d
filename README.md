@@ -94,13 +94,19 @@ The sun is live: its position comes from the NOAA solar equations for the flat's
 - Mirrors reflect the room live (`web/src/mirrors.ts`): any thin slab with the `Mirror` material.
 - The sky behind the neighbourhood (`web/src/sky.ts`) has a gradient, the sun's disc and glow where the sun really is, and drifting clouds. Cloud cover follows each month's average from `climate.json`, scaled by `CONFIG.sky.cloudScale`. Colours and the disc's size are in `CONFIG.sky`.
 
+## Hue scenes
+
+The flat runs on Philips Hue, so the walkthrough has Hue's own white scenes (Bright, Read, Concentrate, Energize, Relax, Dimmed, Nightlight, and Off) in the sun panel, for the room you're in or the whole home; H steps through them. A scene sets each light's brightness and colour temperature with the bridge's own values (`bri` 1–254, `ct` in mireds; `HUE_SCENES` in `web/src/hue.ts`). The baked lamp light is dimmed and re-tinted live, relative to the colour temperature it was baked at (`CONFIG.hue.bakedKelvin`). Clicking a lamp or a switch afterwards keeps its dimmed level, and the other visitors see the scenes too.
+
+Linking the real bridge comes later: fill in `CONFIG.hue` (the bridge's address, an app key, and each room id's Hue room) and give `main.ts` a `HueLink` that sends `applyScene(rooms, scene)` to the bridge. Until then scenes change only the walkthrough.
+
 ## Run and test
 
 ```
 cd web && npm run dev      # http://localhost:5173
 ```
 
-Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors, drawers and cupboards and to use switches, lamps, screens and the turntable (the TV steps through its channels, then switches off), L toggles the current room's light, M mutes sound, `,` and `.` move the time back and forward 15 minutes (hold to keep going), Shift + `,` and `.` move the date a week, P plays the day (one hour of sun every two seconds), R turns the real sun and sky on or off, K puts the kitchen wall up or takes it down, and Esc pauses. The sun panel at the bottom left is always on screen. Press Tab to free the mouse and use it while you keep walking with WASD; press Tab again, or click the view, to look around. It also works while paused.
+Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors, drawers and cupboards and to use switches, lamps, screens and the turntable (the TV steps through its channels, then switches off), L toggles the current room's light, H steps through the Hue scenes in the current room, M mutes sound, `,` and `.` move the time back and forward 15 minutes (hold to keep going), Shift + `,` and `.` move the date a week, P plays the day (one hour of sun every two seconds), R turns the real sun and sky on or off, K puts the kitchen wall up or takes it down, and Esc pauses. The sun panel at the bottom left is always on screen. Press Tab to free the mouse and use it while you keep walking with WASD; press Tab again, or click the view, to look around. It also works while paused.
 
 On phones and tablets (no mouse): drag on the left half of the screen to walk (a stick appears under your thumb; push past its ring to walk faster), drag on the right half to look around, and tap doors, switches, lamps, screens and the turntable. Both thumbs work at once. The buttons at the top right open the sun panel, toggle the room's light, mute and pause. Android goes fullscreen on start; iPhones can't. Tuning (stick size, dead zone, look speed, tap timing) is in `CONFIG.touch`. To try it on a desktop, use the browser's device toolbar with a phone selected and reload.
 

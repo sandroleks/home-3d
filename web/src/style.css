@@ -91,6 +91,12 @@ body.walking .sun-hint-cursor, body.cursor .sun-hint-walking { display: none; }
 .sun-buttons { display: flex; flex-wrap: wrap; gap: 5px; }
 .sun-buttons button { padding: 4px 10px; font-size: 12px; background: rgba(255, 255, 255, 0.12); color: var(--ink); }
 #sun-readout { margin: 0; line-height: 1.4; color: var(--muted); }
+#scenes { display: flex; flex-direction: column; gap: 6px; }
+.scenes-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); }
+#scene-scope { font: inherit; font-size: 12px; color: var(--ink); background: rgba(255, 255, 255, 0.12); border: 0; border-radius: 6px; padding: 2px 4px; }
+#scene-buttons button { display: inline-flex; align-items: center; gap: 5px; }
+#scene-buttons button i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+#scene-buttons button[aria-pressed='true'] { background: var(--accent); color: #121110; }
 .sun-hint { margin: 0; font-size: 12px; color: var(--muted); }
 
 /* Phones and tablets (body.touch): a stick under the left thumb, a button bar top right for what the keys do,
@@ -131,3 +137,5 @@ body.touch #sun-panel {
 body.touch .sun-buttons { flex-wrap: nowrap; gap: 6px; }
 body.touch .sun-buttons button { flex: 1; padding: 7px 0; font-size: 13px; } /* bigger targets, one row */
 body.touch .sun-row input { height: 28px; }
+body.touch #scene-buttons { flex-wrap: wrap; }
+body.touch #scene-buttons button { flex: 1 0 22%; justify-content: center; }

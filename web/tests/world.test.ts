@@ -37,13 +37,18 @@ describe('applyGlows', () => {
   it('dims a glowing material with its group', () => {
     const lights = new LightGroups(['sala/floor-lamp'], 0.4);
     const material = new MeshStandardMaterial({ emissive: 0xffeecc, emissiveIntensity: 3 });
-    const glows = [{ group: 'sala/floor-lamp', material, base: 3, mesh: new Mesh(new BoxGeometry(), material) }];
+    const glows = [{ group: 'sala/floor-lamp', material, base: 3, baseColor: material.emissive.clone(), mesh: new Mesh(new BoxGeometry(), material) }];
     applyGlows(glows, lights);
     expect(material.emissiveIntensity).toBe(0);
     lights.toggle('sala/floor-lamp');
     lights.update(1);
     applyGlows(glows, lights);
     expect(material.emissiveIntensity).toBe(3);
+    lights.setScene('sala/floor-lamp', 0.5, 447);
+    lights.update(5);
+    applyGlows(glows, lights);
+    expect(material.emissiveIntensity).toBeCloseTo(1.5);
+    expect(material.emissive.r / material.emissive.b).toBeGreaterThan(0xff / 0xcc);
   });
 
   it('reads the group from the material name', () => {

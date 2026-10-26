@@ -50,7 +50,7 @@ describe('applyLightmap', () => {
     expect(shader.uniforms.lmFill).toBe(b.fill);
     expect(shader.uniforms.lmScale.value).toBe(3);
     expect(shader.uniforms.lmDayRange.value).toBe(4);
-    expect(m.customProgramCacheKey()).toBe('room-lightmap-v5-0');
+    expect(m.customProgramCacheKey()).toBe('room-lightmap-v6-0');
     const tex = new Texture();
     setLightTexture(m, tex, 5);
     expect(m.userData.lightmapUniforms.lmLight.value).toBe(tex);
@@ -63,7 +63,7 @@ describe('applyLightmap', () => {
     const m2 = new MeshStandardMaterial();
     applyLightmap(m1, { ...base(), packs: [pack] });
     applyLightmap(m2, { ...base(), packs: [pack] });
-    expect(m1.customProgramCacheKey()).toBe('room-lightmap-v5-1');
+    expect(m1.customProgramCacheKey()).toBe('room-lightmap-v6-1');
     expect(m1.userData.lightmapUniforms.lmPack0).toBe(m2.userData.lightmapUniforms.lmPack0);
     expect(pack.tints.value[0].toArray()).toEqual([1.2, 1, 0.8]);
     expect(pack.tints.value[2].toArray()).toEqual([0, 0, 0]);
@@ -99,5 +99,29 @@ describe('fading', () => {
     expect(lights.isOn('alpha/lamp')).toBe(true);
     lights.toggle('nope');
     expect(lights.has('nope')).toBe(false);
+  });
+
+  it('LightGroups dims and tones a group for a scene, and keeps both through off and on', () => {
+    const lights = new LightGroups(['alpha'], 0.4);
+    lights.setScene('alpha', 0.3, 447);
+    expect(lights.isOn('alpha')).toBe(true);
+    expect(lights.brightness('alpha')).toBeCloseTo(0.3);
+    expect(lights.mireds('alpha')).toBe(447);
+    lights.update(5);
+    expect(lights.uniform('alpha').value).toBeCloseTo(0.3);
+    const warm = lights.color('alpha').value;
+    expect(warm.r).toBeGreaterThan(warm.b);
+    lights.toggle('alpha');
+    lights.update(5);
+    expect(lights.uniform('alpha').value).toBe(0);
+    lights.toggle('alpha');
+    lights.update(5);
+    expect(lights.uniform('alpha').value).toBeCloseTo(0.3);
+    lights.setScene('alpha', 0);
+    expect(lights.isOn('alpha')).toBe(false);
+    expect(lights.brightness('alpha')).toBeCloseTo(0.3);
+    lights.setTone('alpha', 0);
+    lights.update(5);
+    expect(lights.color('alpha').value.r).toBeCloseTo(1);
   });
 });
