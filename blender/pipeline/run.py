@@ -204,6 +204,8 @@ def run_all(quality_name, out_dir, build_dir, expected_doors=config.EXPECTED_DOO
     quality = config.QUALITY[quality_name]
     scene = bpy.context.scene
     out_dir, build_dir = os.path.abspath(out_dir), os.path.abspath(build_dir)
+    if variant:
+        expected_doors = config.VARIANTS[variant].get("expected_doors", expected_doors)
     prepare(scene, quality, out_dir, build_dir, variant=variant)
     bake_stage(scene, quality, out_dir)
     return export_stage(scene, out_dir, expected_doors, budget)

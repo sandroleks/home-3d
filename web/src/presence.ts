@@ -8,7 +8,8 @@ import type { Screen } from './screens';
 
 /** Where a visitor stands and looks: x, z (m), yaw, pitch (radians). */
 export type Pose = [number, number, number, number];
-/** The flat's shared state: "door:<node>", "movable:<node>", "light:<group>" → 0 or 1; "screen:<node>" → -1 off, else the channel. */
+/** The flat's shared state: "door:<node>", "movable:<node>" → 0 or 1; "light:<group>" → 0 off, else its brightness
+ * (1: as baked); "ct:<group>" → its colour temperature in mireds (0: as baked); "screen:<node>" → -1 off, else the channel. */
 export type StateMap = Record<string, number>;
 /** The parts of the world the shared state is read from and written to. */
 export interface StateWorld {
@@ -115,10 +116,15 @@ export function stateValue(t: Target, lights: LightGroups): number {
   switch (t.kind) {
     case 'door': return t.door.isOpen ? 1 : 0;
     case 'movable': return t.movable.isOpen ? 1 : 0;
-    case 'lamp': return lights.isOn(t.group) ? 1 : 0;
+    case 'lamp': return lightValue(lights, t.group);
     case 'screen': return t.screen.on ? t.screen.channel : -1;
-    default: return lights.isOn(t.room) ? 1 : 0;
+    default: return lightValue(lights, t.room);
   }
+}
+
+/** A light group in shared form: 0 off, else its brightness. */
+export function lightValue(lights: LightGroups, id: string): number {
+  return lights.isOn(id) ? round(lights.brightness(id)) : 0;
 }
 
 export function stateDelta(t: Target, lights: LightGroups): StateMap {
@@ -130,7 +136,10 @@ export function collectState(world: StateWorld): StateMap {
   const out: StateMap = {};
   for (const d of world.doors) out[`door:${d.state.info.node}`] = d.state.isOpen ? 1 : 0;
   for (const m of world.movables) out[`movable:${m.state.info.node}`] = m.state.isOpen ? 1 : 0;
-  for (const id of world.lights.ids()) out[`light:${id}`] = world.lights.isOn(id) ? 1 : 0;
+  for (const id of world.lights.ids()) {
+    out[`light:${id}`] = lightValue(world.lights, id);
+    if (world.lights.mireds(id) > 0) out[`ct:${id}`] = world.lights.mireds(id);
+  }
   for (const s of world.screens) out[`screen:${s.info.node}`] = s.on ? s.channel : -1;
   return out;
 }
@@ -149,8 +158,12 @@ export function applyState(world: StateWorld, delta: StateMap, now: number): str
       if (!s || s.target === (value ? 1 : 0)) continue;
       s.target = value ? 1 : 0;
     } else if (kind === 'light') {
-      if (!world.lights.has(id) || world.lights.isOn(id) === !!value) continue;
-      world.lights.set(id, !!value);
+      if (!world.lights.has(id) || lightValue(world.lights, id) === round(value)) continue;
+      if (value > 0) world.lights.setScene(id, value);
+      else world.lights.set(id, false);
+    } else if (kind === 'ct') {
+      if (!world.lights.has(id) || world.lights.mireds(id) === value) continue;
+      world.lights.setTone(id, value);
     } else if (kind === 'screen') {
       const s = world.screens.find((sc) => sc.info.node === id);
       if (!s) continue;

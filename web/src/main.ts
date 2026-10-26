@@ -16,17 +16,19 @@ import { lightmapTextures, UploadQueue, warmUpShaders } from './warmup';
 import { applyMovable } from './movables';
 import { Avatars, figureLight } from './avatars';
 import { Multiplayer, trysteroRoom } from './multiplayer';
-import { applyState, cleanName, collectState, loadName, saveName, stateDelta, stateKey } from './presence';
+import { applyState, cleanName, collectState, lightValue, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
+import { activeScene, groupsIn, HUE_SCENES, levelFor, nextScene, NO_HUE_LINK, sceneById } from './hue';
 import { Player, screenFov, vfovFromHfov } from './player';
 import { shrinkLightmap } from './shrink';
 import { Sound } from './sound';
 import { Halos } from './halos';
+import { Nanoleaf } from './nanoleaf';
 import { Daylight, loadRealLighting, saveRealLighting } from './daylight';
 import { Surroundings } from './surroundings';
 import { solarPosition, sunTimes } from './sun';
 import { dayOfYear, daysInYear, formatClock, formatReadout, parseSunParam, SunClock, sunKeyAction } from './sun-clock';
 import { TouchControls } from './touch';
-import { COPY, isTouchOnly, UI } from './ui';
+import { COPY, isTouchOnly, type SceneScope, UI } from './ui';
 import { applyDoorPose, applyGlows, applyPacks, buildWorld } from './world';
 import './style.css';
 
@@ -101,7 +103,8 @@ async function run(): Promise<void> {
 
   const world = buildWorld(assets, scene);
   const mirrors = addMirrors(world.root, surroundings);
-  const halos = new Halos(world.glows);
+  const nanoleaf = new Nanoleaf(world.glows);
+  const halos = new Halos(world.glows.filter((g) => !nanoleaf.has(g)));
   world.root.add(halos.root);
   const avatars = new Avatars(); // the other visitors; in the scene now so the warm-up compiles them
   scene.add(avatars.root);
@@ -292,8 +295,28 @@ async function run(): Promise<void> {
     if (!currentRoom || !world.lights.has(currentRoom)) return;
     world.lights.toggle(currentRoom);
     sound?.click(world.switches.get(currentRoom));
-    others?.broadcast({ [`light:${currentRoom}`]: world.lights.isOn(currentRoom) ? 1 : 0 });
+    others?.broadcast({ [`light:${currentRoom}`]: lightValue(world.lights, currentRoom) });
   };
+  /** Hue scenes: every light in the room (or the flat) to the scene's brightness and colour temperature. */
+  const biasLights = new Set(world.screens.flatMap((s) => (s.info.group ? [s.info.group] : [])));
+  const litRooms = [...new Set(assets.manifest.groups.map((g) => g.room))];
+  const hue = NO_HUE_LINK; // the real bridge, once linked (CONFIG.hue)
+  const sceneGroups = (room: string | null) => (room ? groupsIn(assets.manifest.groups, room, biasLights) : []);
+  const applyScene = (id: string, scope: SceneScope) => {
+    const scene = sceneById(id);
+    const rooms = scope === 'home' ? litRooms : currentRoom ? [currentRoom] : [];
+    if (!scene || rooms.length === 0) return;
+    const delta: StateMap = {};
+    for (const g of rooms.flatMap(sceneGroups)) {
+      world.lights.setScene(g, levelFor(scene.bri), scene.ct);
+      delta[`light:${g}`] = lightValue(world.lights, g);
+      if (scene.ct > 0) delta[`ct:${g}`] = scene.ct;
+    }
+    if (currentRoom) sound?.click(world.switches.get(currentRoom));
+    others?.broadcast(delta);
+    hue.applyScene(rooms, scene);
+  };
+  ui.bindScenes(HUE_SCENES, applyScene);
   const toggleMute = () => {
     if (!sound) return;
     muted = !muted;
@@ -368,6 +391,7 @@ async function run(): Promise<void> {
     if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey && !e.altKey) setReal(!real);
     if (e.code === 'KeyK' && !e.metaKey && !e.ctrlKey && !e.altKey) setKitchen(kitchen === 'wall' ? 'open' : 'wall');
     if (e.code === 'KeyL') toggleRoomLight();
+    if (e.code === 'KeyH' && !e.metaKey && !e.ctrlKey && !e.altKey) applyScene(nextScene(activeScene(world.lights, sceneGroups(currentRoom))).id, 'room');
     if (e.code === 'KeyM') toggleMute();
   });
 
@@ -414,6 +438,7 @@ async function run(): Promise<void> {
     const target = started ? interactions.update() : null;
     ui.setPrompt(target ? promptFor(target, world.lights, touch ? 'Tap' : 'Click') : null);
     ui.setRoomLight(currentRoom && world.lights.has(currentRoom) ? world.lights.isOn(currentRoom) : null);
+    ui.setScenes(currentRoom ? names.get(currentRoom) ?? null : null, activeScene(world.lights, sceneGroups(currentRoom)));
     clock.tick(dt);
     daylight.update(clock.utc, clock.version, doorsMoved);
     if (clock.version !== shownVersion) {
@@ -428,6 +453,7 @@ async function run(): Promise<void> {
     }
     world.lights.update(dt);
     applyGlows(world.glows, world.lights);
+    nanoleaf.update(now / 1000, world.lights); // after the glows, before the halos and packs take its colours
     halos.update(world.lights, camera);
     applyPacks(world);
     surroundings.sky.tick(now / 1000);

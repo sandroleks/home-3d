@@ -59,7 +59,7 @@ export class Halos {
       sprite.renderOrder = 10;
       sprite.visible = false;
       this.root.add(sprite);
-      const color = g.material.emissive.clone();
+      const color = g.material.emissive; // live: a Hue scene's tone or the Nanoleaf's colours show in the halo too
       this.halos.push({ sprite, group: g.group, centre, color, pull: Math.min(0.2, scale * 0.3) });
     }
   }

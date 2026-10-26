@@ -68,6 +68,16 @@
           <label class="sun-real"><input id="sun-real" type="checkbox" /> Real sun and sky</label>
         </div>
         <label class="sun-real"><input id="kitchen-wall" type="checkbox" /> Kitchen wall, as it is now</label>
+        <div id="scenes">
+          <div class="scenes-head">
+            <span>Hue scenes</span>
+            <select id="scene-scope" aria-label="Where the scene goes">
+              <option value="room">This room</option>
+              <option value="home">Whole home</option>
+            </select>
+          </div>
+          <div class="sun-buttons" id="scene-buttons"></div>
+        </div>
         <fieldset id="sun-controls">
           <label class="sun-row"><span>Date</span><input id="sun-date" type="range" min="1" max="365" step="1" /></label>
           <div class="sun-months" aria-hidden="true">
