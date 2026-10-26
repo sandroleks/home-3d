@@ -5,6 +5,7 @@ Run it through the Makefile, never by pointing Blender at files in ~/Documents:
     make export-preview     # about 1 minute
     make export-final       # about 35 minutes on the GPU
     make export-surroundings  # about 1 minute: only the neighbourhood seen through the windows
+    make export-final VARIANT=kitchen-wall  # another layout (config.VARIANTS), into assets/variants/kitchen-wall/
 
 The Makefile stages a copy of the code and the .blend in /private/tmp and runs Blender there with
 factory settings (--factory-startup), so personal add-ons never load. Baking uses the GPU; set
@@ -31,6 +32,7 @@ def parse_args(argv):
     p.add_argument("--out", default="web/public/assets")
     p.add_argument("--build", default="build")
     p.add_argument("--stage", choices=("all", "bake", "export", "surroundings"), default="all")
+    p.add_argument("--variant", choices=sorted(config.VARIANTS), help="export this layout instead of the model as saved")
     return p.parse_args(argv)
 
 
@@ -43,7 +45,7 @@ def main():
     quality = config.QUALITY[args.quality]
     scene = bpy.context.scene
     if args.stage == "all":
-        errors = run.run_all(args.quality, out_dir, build_dir)
+        errors = run.run_all(args.quality, out_dir, build_dir, variant=args.variant)
     elif args.stage == "surroundings":
         names = surroundings.export_surroundings(scene, bpy.context.view_layer, quality, out_dir)
         errors = checks.check_surroundings(out_dir) if names else [f"no meshes in {config.SURROUNDINGS_COLLECTION_PREFIXES}"]

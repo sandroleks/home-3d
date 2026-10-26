@@ -31,6 +31,7 @@ Good to know:
 make export-preview    # about 1 minute, low-quality lighting, good for checking changes
 make export-final      # about 1 to 1.5 hours on the GPU
 make export-surroundings   # about 30 seconds: only the view through the windows, nothing else changes
+make export-final VARIANT=kitchen-wall   # the kitchen with its wall, as it is now (see Kitchen wall, below)
 ```
 
 If the GPU bake hangs, quit Blender and try again, or run on the CPU (much slower): `WEB_BAKE_DEVICE=CPU make export-final`.
@@ -99,7 +100,7 @@ The sun is live: its position comes from the NOAA solar equations for the flat's
 cd web && npm run dev      # http://localhost:5173
 ```
 
-Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors, drawers and cupboards and to use switches, lamps, screens and the turntable (the TV steps through its channels, then switches off), L toggles the current room's light, M mutes sound, `,` and `.` move the time back and forward 15 minutes (hold to keep going), Shift + `,` and `.` move the date a week, P plays the day (one hour of sun every two seconds), R turns the real sun and sky on or off, and Esc pauses. The sun panel at the bottom left is always on screen. Press Tab to free the mouse and use it while you keep walking with WASD; press Tab again, or click the view, to look around. It also works while paused.
+Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors, drawers and cupboards and to use switches, lamps, screens and the turntable (the TV steps through its channels, then switches off), L toggles the current room's light, M mutes sound, `,` and `.` move the time back and forward 15 minutes (hold to keep going), Shift + `,` and `.` move the date a week, P plays the day (one hour of sun every two seconds), R turns the real sun and sky on or off, K puts the kitchen wall up or takes it down, and Esc pauses. The sun panel at the bottom left is always on screen. Press Tab to free the mouse and use it while you keep walking with WASD; press Tab again, or click the view, to look around. It also works while paused.
 
 On phones and tablets (no mouse): drag on the left half of the screen to walk (a stick appears under your thumb; push past its ring to walk faster), drag on the right half to look around, and tap doors, switches, lamps, screens and the turntable. Both thumbs work at once. The buttons at the top right open the sun panel, toggle the room's light, mute and pause. Android goes fullscreen on start; iPhones can't. Tuning (stick size, dead zone, look speed, tap timing) is in `CONFIG.touch`. To try it on a desktop, use the browser's device toolbar with a phone selected and reload.
 
@@ -108,6 +109,7 @@ Handy URL options:
 - `?room=friends`: meet only the people who open the same `?room=` link (see Visitors together, below). `?solo` explores alone.
 - `?view=Cam_Sala&autostart`: jump to a viewpoint and skip the start screen.
 - `?sun=2026-12-21T10:00`: open at that moment (Lisbon time). It combines with `?view=` and `autostart`.
+- `?kitchen=wall`: open with the kitchen wall up, as it is now.
 - `?debug=lightmap`: show the lighting alone, without textures.
 
 Tests and comparisons:
@@ -117,6 +119,14 @@ make test-blender    # export pipeline tests
 make web-test        # viewer tests
 make render-refs     # Cycles reference renders in build/ref/ to compare against the viewer
 ```
+
+## Kitchen wall
+
+The model as saved is the plan: the kitchen opened up into the Sala, with the island, coffee station and pendants (collection `Kitchen - open`, and the `Kitchen opening` boolean on `Walls`). The flat as it is now has the wall, with units along it (`Kitchen - closed`). `Kitchen - shared` is in both.
+
+The walkthrough shows either: the checkbox in the sun panel or K switches. Each is lit by its own bake, so the wall version is a second export into `web/public/assets/variants/kitchen-wall/` (`make export-final VARIANT=kitchen-wall`, as long as the main one). It shares the climate, sound and neighbourhood with the main export, and the main export leaves `variants/` alone. Switching reloads the page into the other version; where you stand, the time, and the doors, lights and screens carry over. Run both exports after changing the model, so the two stay in step.
+
+What a variant changes is `VARIANTS` in `blender/pipeline/config.py`: the collections to show and hide, the modifiers to remove, and the floor faces to drop under the closed opening (otherwise the Cozinha's floor would still reach the Sala's under the wall, and the export would treat them as one open-plan room).
 
 ## Visitors together
 
@@ -156,4 +166,5 @@ Keep the frame cheap: every live light (three.js light) is paid for by every pix
 - The TV's and monitor's light takes the picture's average colour, the same everywhere in the room.
 - No moon or stars at night.
 - The baked sky light comes from below the horizon too, compensated globally by `CONFIG.sun.skyGain`, so ceilings near windows read a little bright and up-facing outdoor surfaces (balcony floor, sills) a little dark.
+- Visitors together see each other whichever kitchen they chose, so with the wall up, someone in the open plan walks through it.
 - The bounce fill is a flat approximation: rooms without exterior glass of their own (e.g. the kitchen, lit through the glazed doors) get none and read darker than Cycles.

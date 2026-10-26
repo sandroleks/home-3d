@@ -62,12 +62,13 @@ async function fetchJson(url: string): Promise<unknown> {
 
 /** `prepare` gets each lightmap as it arrives and returns the one to use (phones shrink the large ones). */
 export async function loadAssets(
-  onProgress: (fraction: number) => void, prepare: (m: LoadedMap) => LoadedMap = (m) => m,
+  onProgress: (fraction: number) => void, prepare: (m: LoadedMap) => LoadedMap = (m) => m, base = CONFIG.assetsBase,
 ): Promise<LoadedAssets> {
-  const base = CONFIG.assetsBase;
+  // `base` holds one layout of the flat (layout.ts); the climate and the neighbourhood are the same for every layout.
+  const shared = CONFIG.assetsBase;
   const manifest = parseManifest(await fetchJson(`${base}manifest.json`));
   const collision = parseCollision(await fetchJson(`${base}collision.json`));
-  const climate = parseClimate(await fetchJson(`${base}climate.json`));
+  const climate = parseClimate(await fetchJson(`${shared}climate.json`));
 
   const draco = new DRACOLoader().setDecoderPath(CONFIG.dracoPath);
   const gltfLoader = new GLTFLoader().setDRACOLoader(draco);
@@ -97,7 +98,7 @@ export async function loadAssets(
   };
 
   // Not part of the first view: the windows show the flat sky until it arrives.
-  const surroundings = gltfLoader.loadAsync(`${base}surroundings.glb`).then(
+  const surroundings = gltfLoader.loadAsync(`${shared}surroundings.glb`).then(
     (g) => g.scene,
     (err) => {
       console.warn('surroundings.glb failed to load; the windows show only the sky.', err);

@@ -5,6 +5,8 @@ export const COPY = {
   contextLost: 'The 3D view stopped responding. Reload to continue.',
   noWebGL: "Your browser doesn't support WebGL 2, which this walkthrough needs. Try a recent Chrome, Firefox, Safari or Edge.",
   flatLighting: 'Real sun and sky off: the same even daylight at any time.',
+  kitchenWall: 'Kitchen wall up, as it is now',
+  noKitchenWall: "The kitchen-wall version hasn't been exported yet. Open the flat without it instead.",
 };
 
 export function isTouchOnly(matchMedia: (q: string) => { matches: boolean }): boolean {
@@ -212,6 +214,19 @@ export class UI {
   setClock(text: string): void {
     const c = this.el('sun-clock');
     if (c.textContent !== text) c.textContent = text;
+  }
+
+  /** The kitchen wall checkbox in the sun panel, and a note on the start screen while the wall is up. */
+  setKitchenWall(wall: boolean): void {
+    this.el<HTMLInputElement>('kitchen-wall').checked = wall;
+    const note = this.el('layout-note');
+    note.hidden = !wall;
+    note.textContent = wall ? COPY.kitchenWall : '';
+  }
+
+  onKitchenWall(cb: (wall: boolean) => void): void {
+    const box = this.el<HTMLInputElement>('kitchen-wall');
+    box.addEventListener('change', () => cb(box.checked));
   }
 
   showNotice(text: string): void {

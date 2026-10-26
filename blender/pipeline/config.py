@@ -45,6 +45,18 @@ DICE_CELL = 0.25
 DICE_MAX_FACE_AREA = 0.5
 
 DROP_OBJECT_NAMES = ("Walls (backup before finishes)",)
+# Other layouts of the flat, each exported on its own into assets/variants/<id>/ (`make export-final VARIANT=<id>`);
+# the walkthrough switches between them. A variant renders the collections in `show` and not those in `hide`,
+# removes the named modifiers, and drops a floor's faces that lie within a cutter's footprint: with the opening
+# closed they'd sit under the wall and join the rooms on either side into one open plan.
+VARIANTS = {
+    "kitchen-wall": {  # the kitchen as it is now: walled off from the Sala, with units along that wall
+        "show": ("Kitchen - closed",),
+        "hide": ("Kitchen - open",),
+        "remove_modifiers": (("Walls", "Kitchen opening"),),
+        "trim_floors": (("Floor - Cozinha", "Cutter - kitchen opening"),),
+    },
+}
 # Collections (and their sub-collections) seen through the windows. They are kilometre-scale, so
 # instead of being chunked and lightmapped they go to surroundings.glb, which the viewer lights live.
 SURROUNDINGS_COLLECTION_PREFIXES = ("Exterior - neighbourhood",)

@@ -7,7 +7,7 @@ from mathutils import Matrix, Vector
 
 from . import (bake, bpyutil, chunks, checks, collision, config, debug_map, doors, export, geom, lamps, layers,
                manifest, movables, openings, packs, proc_materials, rooms, scene_select, screens, state, surroundings,
-               switches, uvs, windows)
+               switches, uvs, variants, windows)
 
 
 def join_leaf_parts(meshes):
@@ -58,11 +58,13 @@ def movable_atlases(movable_specs, quality):
     return atlas
 
 
-def prepare(scene, quality, out_dir, build_dir, stop_after="uvs"):
+def prepare(scene, quality, out_dir, build_dir, stop_after="uvs", variant=None):
     os.makedirs(build_dir, exist_ok=True)
     os.makedirs(out_dir, exist_ok=True)
     # First action: switch to a copy so the source .blend is never written.
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(build_dir, "web-export.blend"))
+    if variant:
+        variants.apply_variant(variant, bpy.context.view_layer)
 
     surroundings.export_surroundings(scene, bpy.context.view_layer, quality, out_dir)  # before prepare_scene deletes them
     meshes, day_lights = scene_select.prepare_scene(scene, bpy.context.view_layer)
@@ -198,10 +200,10 @@ def export_stage(scene, out_dir, expected_doors, budget):
 
 
 def run_all(quality_name, out_dir, build_dir, expected_doors=config.EXPECTED_DOOR_COUNT,
-            budget=config.FIRST_VIEW_BUDGET_BYTES):
+            budget=config.FIRST_VIEW_BUDGET_BYTES, variant=None):
     quality = config.QUALITY[quality_name]
     scene = bpy.context.scene
     out_dir, build_dir = os.path.abspath(out_dir), os.path.abspath(build_dir)
-    prepare(scene, quality, out_dir, build_dir)
+    prepare(scene, quality, out_dir, build_dir, variant=variant)
     bake_stage(scene, quality, out_dir)
     return export_stage(scene, out_dir, expected_doors, budget)
