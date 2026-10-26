@@ -1,6 +1,6 @@
 # Apartment Walkthrough
 
-A first-person web walkthrough of the apartment, built from the Blender model. Visitors walk around with the keyboard and mouse, or by touch on phones and tablets, open doors (the glazed ones slide), drawers and cupboards, flip the light switches and lamps, watch TV and put a record on.
+A first-person web walkthrough of the apartment, built from the Blender model. Visitors walk around with the keyboard and mouse, or by touch on phones and tablets, open doors (the glazed ones slide), drawers and cupboards, flip the light switches and lamps, watch TV and put a record on. Visitors who are there at the same time see each other and share the flat.
 
 It has two halves: `blender/` turns the .blend into web assets (headless Blender, run through the Makefile), and `web/` is the viewer (Vite, TypeScript, three.js).
 
@@ -103,6 +103,7 @@ On phones and tablets (no mouse): drag on the left half of the screen to walk (a
 
 Handy URL options:
 
+- `?room=friends`: meet only the people who open the same `?room=` link (see Visitors together, below). `?solo` explores alone.
 - `?view=Cam_Sala&autostart`: jump to a viewpoint and skip the start screen.
 - `?sun=2026-12-21T10:00`: open at that moment (Lisbon time). It combines with `?view=` and `autostart`.
 - `?debug=lightmap`: show the lighting alone, without textures.
@@ -114,6 +115,14 @@ make test-blender    # export pipeline tests
 make web-test        # viewer tests
 make render-refs     # Cycles reference renders in build/ref/ to compare against the viewer
 ```
+
+## Visitors together
+
+People who open the walkthrough at the same time see each other as little pastel toy animals after the wooden reindeer on the sofa (a reindeer, bear, bunny or fox in its visitor's own colour, with googly eyes and a face of its own, `web/src/creatures.ts`), with the name they typed on the start screen above it (remembered per browser; blank reads "Guest"), and a "With …" line under the room name. The flat is shared: doors, drawers and cupboards, lights, screens and the turntable are in the same state for everyone, and whoever arrives later gets the flat as the others left it. The sun's date and time are not shared: they stay each visitor's own.
+
+There is no server. The browsers connect to each other with WebRTC through [Trystero](https://github.com/dmotz/trystero), which finds the other visitors through public Nostr relays. Everyone on the site shares one room by default; `?room=<name>` gives a group a room of their own, and `?solo` stays alone. Trystero loads only after the start click, and if it can't load or a network blocks WebRTC, the walkthrough carries on alone (a warning in the console). It connects everyone to everyone, so it suits a handful of people, not a crowd. Reference renders (`?autostart`) never join.
+
+Tuning is in `CONFIG.multiplayer` (`web/src/config.ts`): the room, how often poses are sent, how long a silent visitor stays, the colours, and the creatures' size, walk, bounce, googly eyes, blinking and how they dim with the room's light. The design note is `docs/superpowers/specs/2026-10-25-multiplayer-design.md`.
 
 ## Deploy
 
