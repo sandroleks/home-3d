@@ -1,7 +1,7 @@
 # Proximity Voice — Design
 
 **Date:** 2026-10-27
-**Status:** Approved, not implemented
+**Status:** Implemented
 
 ## Goal
 
@@ -48,7 +48,7 @@ MediaStream ─► MediaStreamAudioSourceNode ─┬─► AnalyserNode (level, 
 
 ## Walls and doors
 
-- Ten times a second for each voice (`CONFIG.multiplayer.voice.occlusionRate`), a ray runs from the listener's ear (the camera) to the speaker's head, against the occluders: the flat's chunk meshes and the doors' nodes. Switches, lamp boxes and screens are not occluders. The meshes already have BVH bounds trees, so the rays are cheap.
+- Ten times a second for each voice (`CONFIG.multiplayer.voice.occlusionRate`), a ray runs from the listener's ear (the camera) to the speaker's head, against `world.occluders`, the meshes that cast the sun's shadows: walls, doors and furniture, everything but glass. Voices pass through glass unmuffled. The meshes already have BVH bounds trees, so the rays are cheap.
 - Hits closer than 0.3 m to each other count as one, so a wall counts once whether its meshes are single- or double-sided. The count is capped at 3. Tall furniture in the way (a wardrobe, kitchen cabinets) counts too. That is accepted: it muffles a little, as it would.
 - A door's node turns as it opens, so an open door is out of the ray's way and a closed one is in it, without any door logic.
 - `occlusionFor(walls)` (pure, tested) gives the gain and the low-pass cutoff:
@@ -83,7 +83,7 @@ MediaStream ─► MediaStreamAudioSourceNode ─┬─► AnalyserNode (level, 
 - Modify `web/src/avatars.ts` and `web/src/creatures.ts`: `setTalk`, the open mouth, the nod.
 - Modify `web/src/sound.ts`: expose the context and the master input for `Voices`.
 - Modify `web/index.html`, `web/src/ui.ts`, `web/src/style.css`: the checkbox, the mic button and mark, "V" in the controls list, the speaker glyph in the "With …" line.
-- Modify `web/src/main.ts`: ask for the mic on start, create `Voices`, pass the occluders, V and the touch button, pause, the per-frame update.
+- Modify `web/src/main.ts`: ask for the mic on start, create `Voices`, pass the occluders, V and the touch button, pause, the per-frame update. `world.occluders` (unchanged) are the occluders.
 - Modify `web/src/config.ts`: `CONFIG.multiplayer.voice`.
 - Modify `README.md` and `2026-10-25-multiplayer-design.md` (a pointer to this note).
 
