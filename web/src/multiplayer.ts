@@ -33,7 +33,8 @@ export function trysteroRoom(room: TrysteroRoom, selfId: string): Room {
   };
 }
 
-interface Hello { name: string; since: number }
+/** `ask`: send yours back (to a peer that timed out here and came back, so its name is lost). */
+interface Hello { name: string; since: number; ask?: 1 }
 const isHello = (v: unknown): v is Hello =>
   !!v && typeof v === 'object' && typeof (v as Hello).name === 'string' && typeof (v as Hello).since === 'number';
 
@@ -49,7 +50,8 @@ export interface MultiplayerHooks {
 /**
  * The others in the flat. Every visitor owns their own pose and broadcasts it; the flat's state is "last message wins"
  * and always carries the resulting state, so it converges. A newcomer asks the visitors who were here before it (by
- * join time, sent in each hello) for the full state, until it has one or has changed something itself.
+ * join time, sent in each hello) for the full state, until it has one (marked `full`: a click someone makes meanwhile
+ * is only a delta) or has changed something itself.
  */
 export class Multiplayer {
   private peers = new Peers();
@@ -58,11 +60,11 @@ export class Multiplayer {
   private lastSent = -Infinity;
   private lastPose: Pose | null = null;
 
-  constructor(private room: Room, world: StateWorld, private avatars: Avatars, name: string, private hooks: MultiplayerHooks, joinedAt = Date.now()) {
+  constructor(private room: Room, world: StateWorld, private avatars: Avatars, private name: string, private hooks: MultiplayerHooks, joinedAt = Date.now()) {
     this.since = joinedAt;
     room.onPeerJoin((id) => {
       this.arrive(id);
-      room.send('hello', { name, since: this.since }, id);
+      this.greet(id);
     });
     room.onPeerLeave((id) => this.depart(id));
     room.onMessage('hello', (data, id) => {
@@ -71,19 +73,20 @@ export class Multiplayer {
       const peerName = cleanName(data.name);
       this.peers.hello(id, peerName, data.since, hooks.now());
       avatars.setName(id, peerName);
+      if (data.ask) this.greet(id);
       if (!this.settled && data.since < this.since) room.send('state', { want: 1 }, id);
       hooks.onPeers(this.peers.names());
     });
     room.onMessage('pose', (data, id) => {
       if (!isPose(data)) return;
-      this.arrive(id);
+      if (this.arrive(id)) this.greet(id, true);
       avatars.setPose(id, data);
     });
     room.onMessage('state', (data, id) => {
       if (!isStateMap(data)) return;
-      this.arrive(id);
-      if ('want' in data) return room.send('state', collectState(world), id);
-      this.settled = true;
+      if (this.arrive(id)) this.greet(id, true);
+      if ('want' in data) return room.send('state', { ...collectState(world), full: 1 }, id);
+      if ('full' in data) this.settled = true;
       const changed = applyState(world, data, hooks.now());
       if (changed.length) hooks.onChanged(changed);
     });
@@ -93,10 +96,16 @@ export class Multiplayer {
     return this.peers.names();
   }
 
-  private arrive(id: string): void {
-    if (!this.peers.seen(id, this.hooks.now())) return;
+  /** Returns true for a peer not in the table: new, or back after timing out. */
+  private arrive(id: string): boolean {
+    if (!this.peers.seen(id, this.hooks.now())) return false;
     this.avatars.add(id, colourFor(id), CONFIG.multiplayer.defaultName);
     this.hooks.onPeers(this.peers.names());
+    return true;
+  }
+
+  private greet(id: string, ask = false): void {
+    this.room.send('hello', ask ? { name: this.name, since: this.since, ask: 1 } : { name: this.name, since: this.since }, id);
   }
 
   private depart(id: string): void {
