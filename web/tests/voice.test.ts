@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BoxGeometry, DoubleSide, Mesh, MeshBasicMaterial, Vector3 } from 'three';
-import { countWalls, loadVoice, occlusionFor, openMic, rmsOf, saveVoice, smoothTalk, talkLevel, wallCounter } from '../src/voice';
+import { countWalls, loadVoice, occlusionFor, openMic, rmsOf, saveVoice, smoothTalk, talkLevel, Voices, wallCounter } from '../src/voice';
 
 const store = (initial: Record<string, string> = {}) => {
   const data = { ...initial };
@@ -98,5 +98,156 @@ describe('talk level', () => {
     expect(opened).toBeCloseTo(1 - Math.exp(-1));
     expect(1 - closed).toBeLessThan(opened);
     expect(smoothTalk(0.4, 0.4, 0.016, 0.03, 0.12)).toBe(0.4);
+  });
+});
+
+// Just enough of Web Audio for Voices: nodes record what they connect to, params jump straight to their target
+class FakeParam {
+  value = 0;
+  setTargetAtTime(v: number) { this.value = v; }
+}
+class FakeNode {
+  out: unknown[] = [];
+  connect(n: unknown) { this.out.push(n); return n; }
+  disconnect() { this.out = []; }
+}
+function fakeAudio() {
+  const state = { level: 0 }; // what every analyser hears
+  const nodes: FakeNode[] = [];
+  const node = <T extends object>(extra: T) => {
+    const n = Object.assign(new FakeNode(), extra);
+    nodes.push(n);
+    return n;
+  };
+  const ctx = {
+    currentTime: 0,
+    createMediaStreamSource: () => node({ kind: 'source' }),
+    createAnalyser: () => node({ kind: 'analyser', fftSize: 2048, getFloatTimeDomainData: (b: Float32Array) => void b.fill(state.level) }),
+    createGain: () => node({ kind: 'gain', gain: new FakeParam() }),
+    createBiquadFilter: () => node({ kind: 'filter', type: '', frequency: new FakeParam() }),
+    createPanner: () => node({
+      kind: 'panner', panningModel: '', distanceModel: '', refDistance: 0, rolloffFactor: 0, maxDistance: 0,
+      positionX: new FakeParam(), positionY: new FakeParam(), positionZ: new FakeParam(),
+    }),
+  };
+  const out = new FakeNode();
+  const elements: { muted: boolean; srcObject: unknown; played: boolean }[] = [];
+  const audioElement = () => {
+    const e = { muted: false, srcObject: null as unknown, played: false, play: async () => { e.played = true; }, pause: () => {} };
+    elements.push(e);
+    return e as unknown as HTMLAudioElement;
+  };
+  const voices = new Voices(ctx as unknown as AudioContext, out as unknown as AudioNode, audioElement);
+  const find = (kind: string) => nodes.filter((n) => (n as unknown as { kind: string }).kind === kind) as unknown as Record<string, any>[];
+  return { voices, state, out, elements, find };
+}
+const fakeMic = () => {
+  const track = { enabled: true };
+  return { track, stream: { getAudioTracks: () => [track] } as unknown as MediaStream };
+};
+
+describe('Voices', () => {
+  const peer = {} as MediaStream;
+  const at = (x: number, z: number) => (_id: string, out: Vector3) => out.set(x, 1.2, z);
+  const noWalls = () => 0;
+
+  it('plays a peer through an analyser, a gain, a low-pass and an HRTF panner into the bus', () => {
+    const { voices, out, elements, find } = fakeAudio();
+    voices.add('p1', peer);
+    expect(voices.ids).toEqual(['p1']);
+    const [source] = find('source');
+    const [gain] = find('gain');
+    const [filter] = find('filter');
+    const [panner] = find('panner');
+    expect(source.out).toEqual([find('analyser')[0], gain]);
+    expect(gain.out).toEqual([filter]);
+    expect(filter.out).toEqual([panner]);
+    expect(panner.out).toEqual([out]);
+    expect(filter.type).toBe('lowpass');
+    expect(panner).toMatchObject({ panningModel: 'HRTF', distanceModel: 'inverse', refDistance: 1.5, rolloffFactor: 1.2, maxDistance: 15 });
+    expect(gain.gain.value).toBe(0); // silent until its animal is placed
+    expect(elements[0]).toMatchObject({ muted: true, srcObject: peer, played: true }); // Chrome only plays it into Web Audio so
+  });
+
+  it('places the voice at its animal and muffles it by the walls in between', () => {
+    const { voices, find } = fakeAudio();
+    voices.add('p1', peer);
+    voices.update(0.016, new Vector3(), at(3, -2), () => 2);
+    const [panner] = find('panner');
+    expect([panner.positionX.value, panner.positionY.value, panner.positionZ.value]).toEqual([3, 1.2, -2]);
+    expect(find('gain')[0].gain.value).toBe(0.25);
+    expect(find('filter')[0].frequency.value).toBe(900);
+  });
+
+  it('checks the walls ten times a second, not every frame', () => {
+    const { voices } = fakeAudio();
+    voices.add('p1', peer);
+    const walls = vi.fn(() => 0);
+    for (let i = 0; i < 60; i++) voices.update(1 / 60, new Vector3(), at(1, 1), walls);
+    expect(walls.mock.calls.length).toBeGreaterThanOrEqual(9);
+    expect(walls.mock.calls.length).toBeLessThanOrEqual(11);
+  });
+
+  it('stays silent while its animal has no place yet', () => {
+    const { voices, find } = fakeAudio();
+    voices.add('p1', peer);
+    voices.update(0.016, new Vector3(), () => null, noWalls);
+    expect(find('gain')[0].gain.value).toBe(0);
+  });
+
+  it('opens a mouth with a loud voice and marks it talking for a while after', () => {
+    const { voices, state } = fakeAudio();
+    voices.add('p1', peer);
+    state.level = 0.5;
+    for (let i = 0; i < 20; i++) voices.update(0.016, new Vector3(), at(1, 1), noWalls);
+    expect(voices.talk('p1')).toBeGreaterThan(0.9);
+    expect(voices.talking('p1')).toBe(true);
+    state.level = 0;
+    for (let i = 0; i < 20; i++) voices.update(0.016, new Vector3(), at(1, 1), noWalls); // 0.32 s of silence
+    expect(voices.talking('p1')).toBe(true); // the mouth closed below the mark at ~0.17 s, held 0.5 s from then
+    for (let i = 0; i < 40; i++) voices.update(0.016, new Vector3(), at(1, 1), noWalls); // 0.96 s
+    expect(voices.talking('p1')).toBe(false);
+    expect(voices.talk('p1')).toBeLessThan(0.1);
+    expect(voices.talk('nobody')).toBe(0);
+  });
+
+  it('removes a peer and tears its sound down', () => {
+    const { voices, elements, find } = fakeAudio();
+    voices.add('p1', peer);
+    voices.remove('p1');
+    expect(voices.has('p1')).toBe(false);
+    expect(find('source')[0].out).toEqual([]);
+    expect(find('panner')[0].out).toEqual([]);
+    expect(elements[0].srcObject).toBeNull();
+    expect(() => voices.remove('p1')).not.toThrow();
+  });
+
+  it('replaces a peer whose stream comes again', () => {
+    const { voices, find } = fakeAudio();
+    voices.add('p1', peer);
+    voices.add('p1', {} as MediaStream);
+    expect(voices.ids).toEqual(['p1']);
+    expect(find('source')[0].out).toEqual([]); // the first one is torn down
+  });
+
+  it('switches the mic on and off, and off while paused', () => {
+    const { voices } = fakeAudio();
+    expect(voices.micState).toBe('none');
+    voices.setMicOn(false); // no mic: nothing to switch
+    const { track, stream } = fakeMic();
+    voices.setMic(stream);
+    expect(voices.mic).toBe(stream);
+    expect(voices.micState).toBe('off'); // still switched off from before
+    voices.setMicOn(true);
+    expect(track.enabled).toBe(true);
+    expect(voices.micState).toBe('on');
+    voices.setPaused(true);
+    expect(track.enabled).toBe(false);
+    expect(voices.micState).toBe('on'); // what it goes back to
+    voices.setPaused(false);
+    expect(track.enabled).toBe(true);
+    voices.setMicOn(false);
+    expect(track.enabled).toBe(false);
+    expect(voices.micState).toBe('off');
   });
 });

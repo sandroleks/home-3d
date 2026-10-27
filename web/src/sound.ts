@@ -112,6 +112,16 @@ export class Sound {
     (paused ? this.ctx.suspend() : this.ctx.resume()).catch(() => {});
   }
 
+  /** The audio context, for the voices. */
+  get context(): AudioContext {
+    return this.ctx;
+  }
+
+  /** A bus for the voices into the master, so mute and pause silence them too. */
+  voiceOutput(level: number): GainNode {
+    return this.bus(level, this.listener.getInput());
+  }
+
   private bus(level: number, to: AudioNode): GainNode {
     const g = this.ctx.createGain();
     g.gain.value = level;
