@@ -105,6 +105,24 @@ describe('Multiplayer', () => {
     expect(link.removed).toEqual(['p1', 'p2']);
   });
 
+  it("brings a timed-out peer's voice back with its animal, but not one who left", () => {
+    const { fake, mp, avatars, setNow } = setup();
+    const link = voiceLink(null);
+    mp.setVoice(link);
+    const voice = {} as MediaStream;
+    fake.stream(voice, 'p1');
+    setNow(100);
+    mp.tick(); // a backgrounded tab stops sending poses
+    expect(link.removed).toEqual(['p1']);
+    expect(avatars.has('p1')).toBe(false);
+    fake.receive('pose', [0, 0, 0, 0], 'p1');
+    expect(avatars.has('p1')).toBe(true);
+    expect(link.added).toEqual([['p1', voice], ['p1', voice]]);
+    fake.leave('p1');
+    fake.receive('pose', [0, 0, 0, 0], 'p1');
+    expect(link.added).toHaveLength(2); // gone for good: Trystero would send a new stream if it came back
+  });
+
   it('lists the people here with their ids', () => {
     const { fake, mp } = setup();
     fake.join('p1');

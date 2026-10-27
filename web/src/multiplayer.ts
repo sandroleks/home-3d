@@ -71,6 +71,8 @@ export class Multiplayer {
   private lastPose: Pose | null = null;
   private voice: VoiceLink | null = null;
   private sharedMic: MediaStream | null = null;
+  /** Each peer's voice until the peer leaves: Trystero won't send it again over a connection that stayed up. */
+  private streams = new Map<string, MediaStream>();
 
   constructor(private room: Room, world: StateWorld, private avatars: Avatars, name: string, private hooks: MultiplayerHooks, joinedAt = Date.now()) {
     this.since = joinedAt;
@@ -81,8 +83,8 @@ export class Multiplayer {
     });
     room.onPeerLeave((id) => this.depart(id));
     room.onPeerStream((stream, id) => {
-      this.arrive(id);
-      this.voice?.add(id, stream);
+      this.streams.set(id, stream);
+      if (!this.arrive(id)) this.voice?.add(id, stream); // a new peer gets its voice in arrive
     });
     room.onMessage('hello', (data, id) => {
       if (!isHello(data)) return;
@@ -131,13 +133,18 @@ export class Multiplayer {
     this.room.addStream(mic);
   }
 
-  private arrive(id: string): void {
-    if (!this.peers.seen(id, this.hooks.now())) return;
+  /** Notes a sign of life from a peer; true when the peer is new (or back after a timeout), with its animal and voice. */
+  private arrive(id: string): boolean {
+    if (!this.peers.seen(id, this.hooks.now())) return false;
     this.avatars.add(id, colourFor(id), CONFIG.multiplayer.defaultName);
+    const stream = this.streams.get(id);
+    if (stream) this.voice?.add(id, stream);
     this.hooks.onPeers(this.peers.names());
+    return true;
   }
 
   private depart(id: string): void {
+    this.streams.delete(id);
     if (!this.peers.remove(id)) return;
     this.avatars.remove(id);
     this.voice?.remove(id);

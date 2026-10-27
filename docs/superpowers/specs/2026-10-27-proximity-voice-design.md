@@ -28,7 +28,7 @@ It builds on the multiplayer (`2026-10-25-multiplayer-design.md`): the same Trys
 
 - The `Room` interface in `src/multiplayer.ts` gains `addStream(stream, to?)` and `onPeerStream(cb: (stream, peerId) => void)`. `trysteroRoom` maps them to Trystero's `room.addStream(stream, { target })` and `room.onPeerStream`.
 - After joining, the mic stream is added for everyone in the room. Trystero only sends a stream to peers present when it is added, so `Multiplayer` also adds it for each peer on its `onPeerJoin`, targeted at that peer.
-- An incoming stream belongs to its peer: `Multiplayer` forwards it to `Voices.add(peerId, stream)`. When the peer leaves or times out, `Voices.remove(peerId)` disconnects its nodes.
+- An incoming stream belongs to its peer: `Multiplayer` forwards it to `Voices.add(peerId, stream)`. When the peer leaves, `Voices.remove(peerId)` disconnects its nodes. When it times out (a visitor whose tab was in the background stops sending poses), its voice is removed with its animal and comes back with it: `Multiplayer` keeps each peer's stream until the peer leaves, because Trystero won't send it again over a connection that stayed up.
 - Opus at the browser's default voice bitrate (about 30 kbps) per peer per direction. Everyone sends to everyone, which suits a handful of visitors, like the poses.
 
 ## Sound (`src/voice.ts`)
@@ -96,6 +96,6 @@ MediaStream ─► MediaStreamAudioSourceNode ─┬─► AnalyserNode (level, 
 ## Limits
 
 - Everyone sends to everyone: a handful of visitors, as before.
-- Echo cancellation copes with laptop speakers, but headphones sound better.
+- Headphones are recommended: the voices play through Web Audio (to place them in 3D), which browsers' echo cancellation may not cover, so on speakers the others can hear themselves echoed back. Not yet tested on real devices.
 - Safari asks for mic permission on each visit unless the site is allowed in its settings.
 - No voice activity detection on the sending side: an open mic sends silence or room noise. Noise suppression keeps it low.

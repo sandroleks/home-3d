@@ -111,7 +111,7 @@ class FakeNode {
   connect(n: unknown) { this.out.push(n); return n; }
   disconnect() { this.out = []; }
 }
-function fakeAudio() {
+function fakeAudio(opts: { sourceThrows?: boolean } = {}) {
   const state = { level: 0 }; // what every analyser hears
   const nodes: FakeNode[] = [];
   const node = <T extends object>(extra: T) => {
@@ -121,7 +121,10 @@ function fakeAudio() {
   };
   const ctx = {
     currentTime: 0,
-    createMediaStreamSource: () => node({ kind: 'source' }),
+    createMediaStreamSource: () => {
+      if (opts.sourceThrows) throw new Error('stream has no audio tracks');
+      return node({ kind: 'source' });
+    },
     createAnalyser: () => node({ kind: 'analyser', fftSize: 2048, getFloatTimeDomainData: (b: Float32Array) => void b.fill(state.level) }),
     createGain: () => node({ kind: 'gain', gain: new FakeParam() }),
     createBiquadFilter: () => node({ kind: 'filter', type: '', frequency: new FakeParam() }),
@@ -166,7 +169,20 @@ describe('Voices', () => {
     expect(filter.type).toBe('lowpass');
     expect(panner).toMatchObject({ panningModel: 'HRTF', distanceModel: 'inverse', refDistance: 1.5, rolloffFactor: 1.2, maxDistance: 15 });
     expect(gain.gain.value).toBe(0); // silent until its animal is placed
-    expect(elements[0]).toMatchObject({ muted: true, srcObject: peer, played: true }); // Chrome only plays it into Web Audio so
+    expect(elements[0]).toMatchObject({ muted: true, srcObject: peer, played: true }); // Chrome only feeds a remote stream to Web Audio while it also plays in a media element
+  });
+
+  it('skips a stream it cannot use, without an element or a voice', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { voices, elements } = fakeAudio({ sourceThrows: true });
+      expect(() => voices.add('p1', peer)).not.toThrow();
+      expect(voices.ids).toEqual([]);
+      expect(elements).toHaveLength(0);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('places the voice at its animal and muffles it by the walls in between', () => {

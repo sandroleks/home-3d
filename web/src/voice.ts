@@ -137,7 +137,7 @@ export class Voices {
     return !this.stream ? 'none' : this.wanted ? 'on' : 'off';
   }
 
-  /** V: off sends silence, so nothing reconnects and on is instant. */
+  /** Off sends silence, so nothing reconnects and on is instant (V, or the touch mic button). */
   setMicOn(on: boolean): void {
     this.wanted = on;
     this.applyMic();
@@ -163,13 +163,19 @@ export class Voices {
 
   add(id: string, stream: MediaStream): void {
     this.remove(id); // a peer's new stream replaces its old one
+    let source: MediaStreamAudioSourceNode;
+    try {
+      source = this.ctx.createMediaStreamSource(stream);
+    } catch (err) {
+      console.warn(`Could not play the voice of ${id}.`, err); // e.g. a stream without audio tracks
+      return;
+    }
     const element = this.audioElement?.() ?? null;
     if (element) {
       element.muted = true;
       element.srcObject = stream;
       void element.play().catch(() => {});
     }
-    const source = this.ctx.createMediaStreamSource(stream);
     const analyser = this.ctx.createAnalyser();
     analyser.fftSize = 512;
     const gain = this.ctx.createGain();

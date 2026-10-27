@@ -199,6 +199,7 @@ async function run(): Promise<void> {
   // TURN credentials, asked for while the visitor reads the start screen so joining doesn't wait on them
   const joins = !params.has('autostart') && !params.has('solo');
   const iceServers = joins ? fetchIceServers(fetch, CONFIG.multiplayer.turn.url, CONFIG.multiplayer.turn.timeout) : Promise.resolve([]);
+  let alone = false; // joining failed: the mic is released, and stays so if it arrives later
   const joinOthers = async () => {
     const typed = ui.getName().trim();
     saveName(() => localStorage, typed);
@@ -218,6 +219,10 @@ async function run(): Promise<void> {
       window.addEventListener('pagehide', () => others?.leave(), { once: true });
     } catch (err) {
       console.warn('Could not reach the other visitors; exploring alone.', err);
+      alone = true;
+      voices?.mic?.getTracks().forEach((t) => t.stop());
+      voices?.setMic(null);
+      ui.setMic(voices?.micState ?? 'none');
     }
   };
   const autostart = params.has('autostart');
@@ -248,7 +253,8 @@ async function run(): Promise<void> {
       ui.setMic('none');
       // Asked inside the click, the gesture browsers want for the mic; joining doesn't wait for the answer
       void (talk ? openMic(navigator.mediaDevices) : Promise.resolve(null)).then((mic) => {
-        v.setMic(mic);
+        if (alone) mic?.getTracks().forEach((t) => t.stop());
+        v.setMic(alone ? null : mic);
         others?.shareMic();
         ui.setMic(v.micState);
       });
