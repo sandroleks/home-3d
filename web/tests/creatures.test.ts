@@ -41,6 +41,15 @@ describe('the egg', () => {
 });
 
 describe('buildCreature', () => {
+  it("gives every animal a mouth that opens: hidden at rest, except the bunny's little open one", () => {
+    for (const species of SPECIES) {
+      const { mouth } = buildCreature(species, '#a9d4f5');
+      expect(mouth.open).toBeGreaterThan(mouth.rest);
+      expect(mouth.node.scale.y).toBeCloseTo(mouth.rest);
+      expect(mouth.node.visible).toBe(species === 'bunny');
+    }
+  });
+
   for (const species of SPECIES) {
     it(`builds a ${species} that stands on the floor, faces -z and casts no shadow`, () => {
       const c = buildCreature(species, '#f7b2c4');
