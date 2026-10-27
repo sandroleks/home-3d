@@ -1,4 +1,4 @@
-import { CanvasTexture, Group, LinearFilter, type Material, Sprite, SpriteMaterial, SRGBColorSpace } from 'three';
+import { CanvasTexture, Group, LinearFilter, type Material, Sprite, SpriteMaterial, SRGBColorSpace, type Vector3 } from 'three';
 import { CONFIG } from './config';
 import { buildCreature, type Creature, makeMatcaps, type Matcaps, type Species, speciesFor } from './creatures';
 import { hashId, shortestTurn, smoothPose, type Pose } from './presence';
@@ -31,6 +31,8 @@ export interface Figure {
   nextGlance: number;
   /** When the next blink starts. */
   nextBlink: number;
+  /** How loud its visitor is talking, 0..1 (voice.ts): opens the mouth and nods the body. */
+  talk: number;
 }
 
 /** Draws a name on a canvas: white on a soft dark pill, so it reads against anything. */
@@ -146,7 +148,7 @@ export class Avatars {
     const f: Figure = {
       root, creature, label: sprite, pose, target: [...pose] as Pose, speed: 0, phase: 0, light: 1, seed: (hashId(id) % 1000) / 159,
       pupils: creature.eyes.map(() => ({ at: [0, 0], vel: [0, 0] })), glance: [0, 0], nextGlance: 0,
-      nextBlink: this.time + blink[0] + this.random() * (blink[1] - blink[0]),
+      nextBlink: this.time + blink[0] + this.random() * (blink[1] - blink[0]), talk: 0,
     };
     this.place(f);
     return f;
@@ -171,7 +173,10 @@ export class Avatars {
     const squash = walk * 0.06 * (hop - 0.5); // stretched mid-step, squashed on landing
     creature.body.position.y = creature.rest + hop * cfg.bounce * walk;
     creature.body.scale.set(1 - (breathe + squash) * 0.5, 1 + breathe + squash, 1 - (breathe + squash) * 0.5);
-    creature.body.rotation.x = Math.max(-0.3, Math.min(0.3, f.pose[3] * 0.35));
+    creature.body.rotation.x = Math.max(-0.3, Math.min(0.3, f.pose[3] * 0.35)) + f.talk * CONFIG.multiplayer.voice.nod;
+    const mouth = creature.mouth;
+    mouth.node.scale.y = mouth.rest + (mouth.open - mouth.rest) * f.talk;
+    mouth.node.visible = mouth.node.scale.y > 1e-3;
     creature.body.rotation.z = s * 0.08 * walk;
     for (const w of creature.wags) {
       w.node.rotation[w.axis] = w.base
@@ -194,6 +199,18 @@ export class Avatars {
     this.figures.set(id, f);
     this.root.add(f.root);
     return f;
+  }
+
+  /** How loud a visitor is talking, 0..1; the figure shows it from the next update. */
+  setTalk(id: string, level: number): void {
+    const f = this.figures.get(id);
+    if (f) f.talk = Math.max(0, Math.min(1, level));
+  }
+
+  /** Where a visitor's voice comes from: their animal's mouth, in world space; null until it has a pose. */
+  mouth(id: string, out: Vector3): Vector3 | null {
+    const f = this.figures.get(id);
+    return f?.root.visible ? f.creature.mouth.node.getWorldPosition(out) : null;
   }
 
   setName(id: string, name: string): void {

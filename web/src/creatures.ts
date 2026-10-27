@@ -41,6 +41,8 @@ export interface Creature {
   eyes: Eye[];
   wags: Wag[];
   tints: Tint[];
+  /** The open mouth: its `scale.y` runs from `rest` (0 for a closed smile, hidden) to `open` as its visitor talks. */
+  mouth: { node: Object3D; rest: number; open: number };
   /** The highest point (m), for the name label. */
   top: number;
 }
@@ -53,6 +55,7 @@ export const FACE_COLOURS = {
   ink: '#4a3a40',
   blush: '#ff9fb4',
   tongue: '#ff7a92',
+  mouth: '#5a2630',
   rudolph: '#ff4a4a',
   bunnyNose: '#ff8fae',
 };
@@ -274,6 +277,15 @@ function smile(face: Object3D, geometry: BufferGeometry, material: MeshMatcapMat
   return m;
 }
 
+/** A dark open mouth below a smile's line, flat and hidden until its visitor talks. */
+function openMouth(face: Object3D, material: MeshMatcapMaterial, y: number, width: number, open: number): Creature['mouth'] {
+  const m = onFace(blob(material, [width, open, 0.008]), 0, y, 0.001);
+  m.scale.y = 0;
+  m.visible = false;
+  face.add(m);
+  return { node: m, rest: 0, open };
+}
+
 export function buildCreature(species: Species, colour: string, matcaps: Matcaps = { matte: null, gloss: null }): Creature {
   const geo = geometries();
   const pal = creaturePalette(colour);
@@ -338,6 +350,7 @@ export function buildCreature(species: Species, colour: string, matcaps: Matcaps
   const wags: Wag[] = [];
   let top = CENTRE + RY;
   const back = (y: number) => -eggFront(0, y);
+  let mouth: Creature['mouth'];
   if (species === 'reindeer') {
     for (const side of [-1, 1]) {
       const a = antler(darkM, side);
@@ -347,6 +360,7 @@ export function buildCreature(species: Species, colour: string, matcaps: Matcaps
     }
     face.add(onFace(blob(material(FACE_COLOURS.rudolph, true), [0.056, 0.05, 0.05]), 0, 0.035, 0.03));
     smile(face, geo.smile, inkM, -0.05);
+    mouth = openMouth(face, material(FACE_COLOURS.mouth), -0.077, 0.034, 0.026);
   } else if (species === 'bear') {
     for (const side of [-1, 1]) {
       const x = side * 0.21;
@@ -360,6 +374,7 @@ export function buildCreature(species: Species, colour: string, matcaps: Matcaps
     }
     face.add(onFace(blob(material(FACE_COLOURS.ink, true), [0.044, 0.031, 0.026]), 0, 0.04, 0.012));
     smile(face, geo.smile, inkM, -0.025);
+    mouth = openMouth(face, material(FACE_COLOURS.mouth), -0.052, 0.034, 0.028);
     face.add(onFace(blob(material(FACE_COLOURS.tongue), [0.026, 0.034, 0.012]), 0.012, -0.088, 0.006)); // cheeky, a bit to one side
     body.add(blob(bodyM, [0.06, 0.06, 0.06], [0, -0.2, back(-0.2) + 0.03]));
   } else if (species === 'bunny') {
@@ -382,7 +397,9 @@ export function buildCreature(species: Species, colour: string, matcaps: Matcaps
     }
     face.add(onFace(blob(material(FACE_COLOURS.bunnyNose, true), [0.03, 0.022, 0.018]), 0, 0.035, 0.008));
     // A little open mouth, so the buck teeth show against it
-    face.add(onFace(blob(inkM, [0.036, 0.03, 0.008]), 0, -0.068, 0.001));
+    const little = onFace(blob(inkM, [0.036, 0.03, 0.008]), 0, -0.068, 0.001);
+    face.add(little);
+    mouth = { node: little, rest: 0.03, open: 0.05 };
     for (const side of [-1, 1]) face.add(onFace(mesh(geo.tooth, whiteM), side * 0.0115, -0.062, 0.009));
     body.add(blob(material(FACE_COLOURS.white), [0.09, 0.09, 0.09], [0, -0.18, back(-0.18) + 0.04]));
   } else {
@@ -408,6 +425,7 @@ export function buildCreature(species: Species, colour: string, matcaps: Matcaps
     }
     face.add(onFace(blob(material(FACE_COLOURS.ink, true), [0.036, 0.028, 0.022]), 0, 0.045, 0.01));
     smile(face, geo.grin, inkM, -0.015);
+    mouth = openMouth(face, material(FACE_COLOURS.mouth), -0.05, 0.05, 0.032);
     const tail = new Group();
     tail.position.set(0, -0.14, back(-0.14) - 0.04);
     tail.rotation.x = 1.05; // swept back and up
@@ -417,5 +435,5 @@ export function buildCreature(species: Species, colour: string, matcaps: Matcaps
     body.add(tail);
     wags.push({ node: tail, axis: 'z', base: 0, idle: 0.35, freq: 5, walk: 0.3, offset: 0 });
   }
-  return { species, root, body, rest: CENTRE, legs, eyes, wags, tints, top };
+  return { species, root, body, rest: CENTRE, legs, eyes, wags, tints, top, mouth: mouth! };
 }

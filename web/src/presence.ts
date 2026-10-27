@@ -229,4 +229,9 @@ export class Peers {
   names(fallback = CONFIG.multiplayer.defaultName): string[] {
     return [...this.table.values()].map((p) => p.name ?? fallback);
   }
+
+  /** Ids and names, in join order, for showing who is talking. */
+  list(fallback = CONFIG.multiplayer.defaultName): { id: string; name: string }[] {
+    return [...this.table].map(([id, p]) => ({ id, name: p.name ?? fallback }));
+  }
 }

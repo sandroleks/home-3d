@@ -1,4 +1,4 @@
-import { Sprite } from 'three';
+import { Sprite, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Avatars, blinkAmount, drawLabel, figureLight, type Googly, stepGoogly } from '../src/avatars';
 import type { CanvasFactory } from '../src/screens';
@@ -22,6 +22,39 @@ function fakeCanvas() {
 }
 
 describe('Avatars', () => {
+  it('opens its mouth and nods as its visitor talks', () => {
+    const a = new Avatars(null);
+    const f = a.add('p1', '#ff0000', 'Ana', 'fox');
+    a.setPose('p1', [0, 0, 0, 0]);
+    a.update(0.016);
+    const tilt = f.creature.body.rotation.x;
+    expect(f.creature.mouth.node.visible).toBe(false);
+    a.setTalk('p1', 1);
+    a.update(0.016);
+    expect(f.creature.mouth.node.visible).toBe(true);
+    expect(f.creature.mouth.node.scale.y).toBeCloseTo(f.creature.mouth.open);
+    expect(f.creature.body.rotation.x).toBeCloseTo(tilt + 0.06);
+    a.setTalk('p1', 0);
+    a.update(0.016);
+    expect(f.creature.mouth.node.visible).toBe(false);
+    a.setTalk('nobody', 1); // no figure: nothing happens
+  });
+
+  it("gives a voice's place: its animal's mouth, once it has a pose", () => {
+    const a = new Avatars(null);
+    a.add('p1', '#ff0000', 'Ana', 'bear');
+    const out = new Vector3();
+    expect(a.mouth('p1', out)).toBeNull(); // no pose yet
+    a.setPose('p1', [2, -3, 0, 0]);
+    const m = a.mouth('p1', out)!;
+    expect(m).toBe(out);
+    expect(m.x).toBeCloseTo(2, 0);
+    expect(m.z).toBeLessThan(-3); // on its front: figures face -z
+    expect(m.y).toBeGreaterThan(0.5);
+    expect(m.y).toBeLessThan(1.6);
+    expect(a.mouth('nobody', out)).toBeNull();
+  });
+
   it('keeps a hidden spare so the warm-up compiles its shaders', () => {
     const a = new Avatars(null);
     expect(a.root.children).toHaveLength(1);

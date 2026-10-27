@@ -27,6 +27,10 @@ The page asks `api/turn` for the list as soon as it loads (not with `?autostart`
 
 Anyone can call `/api/turn` and get credentials, as anyone can open the site. Cloudflare's free tier (1,000 GB a month) is far above what a handful of visitors' small JSON messages use.
 
+## Voice
+
+Added 2026-10-27: visitors talk, with their voices placed at their animals and muffled by walls. See `2026-10-27-proximity-voice-design.md`.
+
 ## Joining
 
 - The start screen gets a name field ("Your name", optional). It is remembered in `localStorage` (`walkthrough.name`) and sent to the others; blank means "Guest". Names are trimmed and cut to 24 characters.

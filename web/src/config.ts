@@ -145,6 +145,28 @@ export const CONFIG = {
       blink: [2, 6] as [number, number],
       blinkTime: 0.16,
     },
+    /** Proximity voice (voice.ts): how voices fall off with distance, how walls muffle them, and how a voice opens
+     * its animal's mouth. */
+    voice: {
+      /** The voices' bus, against the other sounds. */
+      level: 1,
+      /** Metres within which a voice is at full level, how fast it falls off beyond, and where it stops falling. */
+      refDistance: 1.5,
+      rolloff: 1.2,
+      maxDistance: 15,
+      /** Wall checks per second per voice, and seconds a change in walls takes to fade in. */
+      occlusionRate: 10,
+      occlusionFade: 0.15,
+      /** Metres within which hits along the ray count as one wall (both faces of it). */
+      mergeHits: 0.3,
+      /** Gain and low-pass cutoff (Hz) for 0, 1, 2 and 3 or more walls or closed doors in the way. */
+      walls: [[1, 20000], [0.5, 1800], [0.25, 900], [0.12, 500]] as [number, number][],
+      /** A voice's loudness as a mouth: the RMS of silence and of a full voice, seconds to open and to close, and the
+       * level above which the "With …" line marks them talking, held for `hold` seconds. */
+      talk: { floor: 0.01, full: 0.12, rise: 0.03, fall: 0.12, shown: 0.25, hold: 0.5 },
+      /** Radians the body nods forward at full voice. */
+      nod: 0.06,
+    },
   },
   /** The office's Nanoleaf panels (nanoleaf.ts): a gradient between two hues (0..1: teal to magenta, through blue)
    * drifting across the panels, `speed` radians a second, `spread` radians a metre along the wall. `glow` scales the

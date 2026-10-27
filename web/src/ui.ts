@@ -1,4 +1,5 @@
 import { blackBody, type HueScene, levelFor } from './hue';
+import type { MicState } from './voice';
 
 export const COPY = {
   ready: 'Click to explore',
@@ -30,6 +31,7 @@ export interface SunPanelHandlers {
 export interface TouchBarHandlers {
   light(): void;
   mute(): void;
+  mic(): void;
   pause(): void;
 }
 export interface SunPanelState {
@@ -87,11 +89,34 @@ export class UI {
     this.el<HTMLInputElement>('name').value = name;
   }
 
-  /** Who else is here, under the room name; hidden when alone. */
-  setPeople(names: string[]): void {
+  /** The start screen's voice checkbox: whether the start click asks for the mic. */
+  getVoice(): boolean {
+    return this.el<HTMLInputElement>('voice').checked;
+  }
+
+  setVoice(on: boolean): void {
+    this.el<HTMLInputElement>('voice').checked = on;
+  }
+
+  /** The mic's state, in the corner and on the touch bar: on, off (V), or none (refused or unticked: listening only). */
+  setMic(state: MicState): void {
+    const label = state === 'on' ? 'Mic on' : state === 'off' ? 'Mic off' : 'No mic: listening only';
+    const mark = this.el('mic');
+    mark.hidden = false;
+    mark.classList.toggle('off', state !== 'on');
+    mark.querySelector('svg')?.setAttribute('aria-label', label);
+    const b = this.el<HTMLButtonElement>('touch-mic');
+    b.hidden = false;
+    b.disabled = state === 'none';
+    b.setAttribute('aria-pressed', String(state === 'on'));
+    b.setAttribute('aria-label', label);
+  }
+
+  /** Who else is here, under the room name, with a mark after whoever is talking; hidden when alone. */
+  setPeople(people: { name: string; talking: boolean }[]): void {
     const p = this.el('people');
-    p.hidden = names.length === 0;
-    const text = names.length ? `With ${names.join(', ')}` : '';
+    p.hidden = people.length === 0;
+    const text = people.length ? `With ${people.map((x) => (x.talking ? `${x.name} 🔊` : x.name)).join(', ')}` : '';
     if (p.textContent !== text) p.textContent = text;
   }
 
@@ -151,6 +176,7 @@ export class UI {
   bindTouchBar(h: TouchBarHandlers): void {
     this.el('touch-light').addEventListener('click', () => h.light());
     this.el('touch-sound').addEventListener('click', () => h.mute());
+    this.el('touch-mic').addEventListener('click', () => h.mic());
     this.el('touch-pause').addEventListener('click', () => h.pause());
     const sun = this.el('touch-sun');
     sun.addEventListener('click', () => {

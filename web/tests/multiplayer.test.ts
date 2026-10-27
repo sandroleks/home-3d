@@ -16,19 +16,24 @@ function fakeRoom() {
   let join: (id: string) => void = () => {};
   let leave: (id: string) => void = () => {};
   let left = false;
+  const streams: { stream: MediaStream; to?: string }[] = [];
+  let streamHandler: (stream: MediaStream, peerId: string) => void = () => {};
   const room: Room = {
     selfId: 'me',
     send: (kind, data, to) => void sent.push({ kind, data, ...(to ? { to } : {}) }),
     onMessage: (kind, h) => void handlers.set(kind, h),
     onPeerJoin: (cb) => { join = cb; },
     onPeerLeave: (cb) => { leave = cb; },
+    addStream: (stream, to) => void streams.push({ stream, ...(to ? { to } : {}) }),
+    onPeerStream: (cb) => { streamHandler = cb; },
     leave: () => { left = true; },
   };
   return {
-    room, sent,
+    room, sent, streams,
     join: (id: string) => join(id),
     leave: (id: string) => leave(id),
     receive: (kind: MessageKind, data: unknown, from: string) => handlers.get(kind)!(data, from),
+    stream: (stream: MediaStream, from: string) => streamHandler(stream, from),
     get left() { return left; },
   };
 }
@@ -47,6 +52,84 @@ function setup(joinedAt = 1000) {
 }
 
 describe('Multiplayer', () => {
+  const voiceLink = (mic: MediaStream | null) => {
+    const added: [string, MediaStream][] = [];
+    const removed: string[] = [];
+    return { mic, added, removed, add: (id: string, s: MediaStream) => void added.push([id, s]), remove: (id: string) => void removed.push(id) };
+  };
+
+  it('sends the mic to everyone, and to each peer who joins later', () => {
+    const { fake, mp } = setup();
+    const mic = {} as MediaStream;
+    mp.setVoice(voiceLink(mic));
+    expect(fake.streams).toEqual([{ stream: mic }]);
+    fake.join('p1');
+    expect(fake.streams.at(-1)).toEqual({ stream: mic, to: 'p1' });
+    mp.shareMic(); // already shared: not again
+    expect(fake.streams).toHaveLength(2);
+  });
+
+  it('shares the mic once it arrives after joining', () => {
+    const { fake, mp } = setup();
+    const link = voiceLink(null);
+    mp.setVoice(link);
+    expect(fake.streams).toEqual([]);
+    const mic = {} as MediaStream;
+    link.mic = mic;
+    mp.shareMic();
+    expect(fake.streams).toEqual([{ stream: mic }]);
+  });
+
+  it('listening only, sends nothing but still hears', () => {
+    const { fake, mp, avatars } = setup();
+    const link = voiceLink(null);
+    mp.setVoice(link);
+    fake.join('p1');
+    expect(fake.streams).toEqual([]);
+    const voice = {} as MediaStream;
+    fake.stream(voice, 'p2');
+    expect(link.added).toEqual([['p2', voice]]);
+    expect(avatars.has('p2')).toBe(true); // a stream counts as a sign of life, like any message
+  });
+
+  it("drops a peer's voice when it leaves or goes silent", () => {
+    const { fake, mp, setNow } = setup();
+    const link = voiceLink(null);
+    mp.setVoice(link);
+    fake.stream({} as MediaStream, 'p1');
+    fake.leave('p1');
+    expect(link.removed).toEqual(['p1']);
+    fake.stream({} as MediaStream, 'p2');
+    setNow(100);
+    mp.tick();
+    expect(link.removed).toEqual(['p1', 'p2']);
+  });
+
+  it("brings a timed-out peer's voice back with its animal, but not one who left", () => {
+    const { fake, mp, avatars, setNow } = setup();
+    const link = voiceLink(null);
+    mp.setVoice(link);
+    const voice = {} as MediaStream;
+    fake.stream(voice, 'p1');
+    setNow(100);
+    mp.tick(); // a backgrounded tab stops sending poses
+    expect(link.removed).toEqual(['p1']);
+    expect(avatars.has('p1')).toBe(false);
+    fake.receive('pose', [0, 0, 0, 0], 'p1');
+    expect(avatars.has('p1')).toBe(true);
+    expect(link.added).toEqual([['p1', voice], ['p1', voice]]);
+    fake.leave('p1');
+    fake.receive('pose', [0, 0, 0, 0], 'p1');
+    expect(link.added).toHaveLength(2); // gone for good: Trystero would send a new stream if it came back
+  });
+
+  it('lists the people here with their ids', () => {
+    const { fake, mp } = setup();
+    fake.join('p1');
+    fake.receive('hello', { name: 'Rui', since: 2000 }, 'p1');
+    expect(mp.people).toEqual([{ id: 'p1', name: 'Rui' }]);
+  });
+
   it('greets a joining peer, shows it as Guest until its hello, then by name', () => {
     const { fake, avatars, mp, peers } = setup();
     fake.join('p1');
