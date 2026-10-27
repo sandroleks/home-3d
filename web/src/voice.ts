@@ -1,3 +1,4 @@
+import { type Object3D, Raycaster, Vector3 } from 'three';
 import type { KeyValueStore } from './audio';
 import { CONFIG } from './config';
 
@@ -49,6 +50,24 @@ export function countWalls(distances: number[], merge: number, cap: number): num
     last = d;
   }
   return Math.min(cap, walls);
+}
+
+/**
+ * Counts the walls and closed doors between two points (a listener's ear and a speaker's mouth) with a ray against the
+ * occluders. A door's mesh turns as it opens, so an open door is out of the way without any door logic.
+ */
+export function wallCounter(occluders: Object3D[], cfg = CONFIG.multiplayer.voice): (from: Vector3, to: Vector3) => number {
+  const ray = new Raycaster();
+  const dir = new Vector3();
+  return (from, to) => {
+    dir.subVectors(to, from);
+    const far = dir.length();
+    if (far < 1e-3) return 0;
+    ray.set(from, dir.divideScalar(far));
+    ray.far = far;
+    const hits = ray.intersectObjects(occluders, false).map((h) => h.distance);
+    return countWalls(hits, cfg.mergeHits, cfg.walls.length - 1);
+  };
 }
 
 export function rmsOf(samples: Float32Array): number {

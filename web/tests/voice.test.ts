@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { countWalls, loadVoice, occlusionFor, openMic, rmsOf, saveVoice, smoothTalk, talkLevel } from '../src/voice';
+import { BoxGeometry, DoubleSide, Mesh, MeshBasicMaterial, Vector3 } from 'three';
+import { countWalls, loadVoice, occlusionFor, openMic, rmsOf, saveVoice, smoothTalk, talkLevel, wallCounter } from '../src/voice';
 
 const store = (initial: Record<string, string> = {}) => {
   const data = { ...initial };
@@ -53,6 +54,31 @@ describe('countWalls', () => {
     expect(countWalls([2.0, 2.15], 0.3, 3)).toBe(1); // both faces of one wall
     expect(countWalls([4.1, 1.0, 1.2, 4.0], 0.3, 3)).toBe(2); // any order
     expect(countWalls([1, 2, 3, 4, 5], 0.3, 3)).toBe(3);
+  });
+});
+
+describe('wallCounter', () => {
+  // A wall 0.2 m thick across the x axis at x = at, 4 m wide and 3 m tall
+  const wall = (at: number, doubleSided = false) => {
+    const m = new Mesh(new BoxGeometry(0.2, 3, 4), new MeshBasicMaterial({ side: doubleSided ? DoubleSide : undefined }));
+    m.position.set(at, 1.5, 0);
+    m.updateMatrixWorld();
+    return m;
+  };
+  const ear = new Vector3(0, 1.6, 0);
+
+  it('counts the walls between two points, once each whatever their sides', () => {
+    expect(wallCounter([])(ear, new Vector3(5, 1.4, 0))).toBe(0);
+    expect(wallCounter([wall(2)])(ear, new Vector3(5, 1.4, 0))).toBe(1);
+    expect(wallCounter([wall(2, true)])(ear, new Vector3(5, 1.4, 0))).toBe(1);
+    expect(wallCounter([wall(2), wall(4, true)])(ear, new Vector3(5, 1.4, 0))).toBe(2);
+  });
+  it('ignores walls beyond the speaker or off to the side', () => {
+    expect(wallCounter([wall(6)])(ear, new Vector3(5, 1.4, 0))).toBe(0);
+    expect(wallCounter([wall(2)])(ear, new Vector3(0, 1.4, 5))).toBe(0);
+  });
+  it('is zero for a speaker on top of the listener', () => {
+    expect(wallCounter([wall(2)])(ear, ear.clone())).toBe(0);
   });
 });
 
