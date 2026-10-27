@@ -12,6 +12,7 @@
       <p id="layout-note" hidden></p>
       <div class="progress"><div id="progress-bar"></div></div>
       <label class="name-field"><span>Your name, for anyone else here</span><input id="name" type="text" maxlength="24" autocomplete="nickname" placeholder="Guest" /></label>
+      <label class="voice-field"><input id="voice" type="checkbox" checked /> Talk with your voice</label>
       <button id="start-button" disabled>Loading…</button>
       <ul class="controls keys-only">
         <li><kbd>W A S D</kbd> walk</li>
@@ -20,6 +21,7 @@
         <li><kbd>Click</kbd> open doors, flip light switches</li>
         <li><kbd>L</kbd> toggle this room's light</li>
         <li><kbd>M</kbd> mute sound</li>
+        <li><kbd>V</kbd> mic on or off</li>
         <li><kbd>,</kbd><kbd>.</kbd> change the time</li>
         <li><kbd>Shift</kbd> + <kbd>,</kbd><kbd>.</kbd> change the date</li>
         <li><kbd>P</kbd> play the day</li>
@@ -27,14 +29,14 @@
         <li><kbd>K</kbd> kitchen wall up (as it is now) or down</li>
         <li><kbd>Tab</kbd> free the mouse for the sun panel, keep walking</li>
         <li><kbd>Esc</kbd> pause</li>
-        <li>Anyone else exploring now walks the flat with you</li>
+        <li>Anyone else exploring now walks the flat with you, and you can talk</li>
       </ul>
       <ul class="controls touch-only">
         <li><kbd>Drag left</kbd> walk, push further to go faster</li>
         <li><kbd>Drag right</kbd> look around</li>
         <li><kbd>Tap</kbd> open doors, flip light switches</li>
-        <li>Buttons, top right: date and time (and the kitchen wall), room light, sound, pause</li>
-        <li>Anyone else exploring now walks the flat with you</li>
+        <li>Buttons, top right: date and time (and the kitchen wall), room light, sound, mic, pause</li>
+        <li>Anyone else exploring now walks the flat with you, and you can talk</li>
       </ul>
       <p id="error" hidden></p>
       <button id="retry-button" hidden>Try again</button>
@@ -55,12 +57,18 @@
         <button type="button" id="touch-sound" aria-label="Mute" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path class="sound-on" d="M16.5 9a4 4 0 0 1 0 6M18.8 6.5a7.5 7.5 0 0 1 0 11" /><path class="sound-off" d="M16 9l5 6M21 9l-5 6" /></svg>
         </button>
+        <button type="button" id="touch-mic" aria-label="Mic" aria-pressed="false" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /><path class="mic-off" d="M4 4l16 16" /></svg>
+        </button>
         <button type="button" id="touch-pause" aria-label="Pause">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5.5v13M15 5.5v13" /></svg>
         </button>
       </div>
       <div id="muted" hidden>
         <svg viewBox="0 0 24 24" role="img" aria-label="Sound muted"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 9l5 6M21 9l-5 6" /></svg>
+      </div>
+      <div id="mic" hidden>
+        <svg viewBox="0 0 24 24" role="img" aria-label="Mic"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /><path class="mic-off" d="M4 4l16 16" /></svg>
       </div>
       <section id="sun-panel" aria-label="Sun">
         <div class="sun-head">

@@ -17,6 +17,7 @@ import { applyMovable } from './movables';
 import { Avatars, figureLight } from './avatars';
 import { Multiplayer, trysteroRoom } from './multiplayer';
 import { fetchIceServers } from './turn';
+import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
 import { applyState, cleanName, collectState, lightValue, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
 import { activeScene, groupsIn, HUE_SCENES, levelFor, nextScene, NO_HUE_LINK, sceneById } from './hue';
 import { Player, screenFov, vfovFromHfov } from './player';
@@ -109,6 +110,8 @@ async function run(): Promise<void> {
   world.root.add(halos.root);
   const avatars = new Avatars(); // the other visitors; in the scene now so the warm-up compiles them
   scene.add(avatars.root);
+  const ear = new Vector3();
+  const wallsBetween = wallCounter(world.occluders); // walls and closed doors between a voice and the listener
   // How lit a visitor's figure is: its room's ceiling light and lamps, or the daylight
   const roomGroups = new Map<string, { id: string; weight: number }[]>();
   for (const g of assets.manifest.groups) {
@@ -146,7 +149,7 @@ async function run(): Promise<void> {
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
-  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL } }); // tuning from the console
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; } } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;
@@ -184,11 +187,15 @@ async function run(): Promise<void> {
   };
   /** The others here, once joined: their avatars, and the doors, lights and screens shared with them. */
   let others: Multiplayer | null = null;
+  /** The others' voices and the local mic, once started (not with ?solo). */
+  let voices: Voices | null = null;
+  const showPeople = () => ui.setPeople((others?.people ?? []).map((p) => ({ name: p.name, talking: voices?.talking(p.id) ?? false })));
   const byKey = new Map([...world.targets.values()].map((t) => [stateKey(t), t] as const));
   const share = (t: Target | null) => {
     if (t) others?.broadcast(stateDelta(t, world.lights));
   };
   ui.setName(loadName(() => localStorage));
+  ui.setVoice(loadVoice(() => localStorage));
   // TURN credentials, asked for while the visitor reads the start screen so joining doesn't wait on them
   const joins = !params.has('autostart') && !params.has('solo');
   const iceServers = joins ? fetchIceServers(fetch, CONFIG.multiplayer.turn.url, CONFIG.multiplayer.turn.timeout) : Promise.resolve([]);
@@ -205,8 +212,9 @@ async function run(): Promise<void> {
       others = new Multiplayer(trysteroRoom(room, selfId), world, avatars, cleanName(typed), {
         now: () => performance.now() / 1000,
         onChanged: (keys) => keys.forEach((k) => used(byKey.get(k) ?? null)), // the sounds a local click would make
-        onPeers: (names) => ui.setPeople(names),
+        onPeers: () => showPeople(),
       });
+      if (voices) others.setVoice(voices);
       window.addEventListener('pagehide', () => others?.leave(), { once: true });
     } catch (err) {
       console.warn('Could not reach the other visitors; exploring alone.', err);
@@ -233,7 +241,19 @@ async function run(): Promise<void> {
     sound.setMusic(turntable?.isOpen ?? false);
     ui.setMuted(muted);
     void sound.load();
-    if (!params.has('solo')) void joinOthers();
+    if (!params.has('solo')) {
+      const v = (voices = new Voices(sound.context, sound.voiceOutput(CONFIG.multiplayer.voice.level)));
+      const talk = ui.getVoice();
+      saveVoice(() => localStorage, talk);
+      ui.setMic('none');
+      // Asked inside the click, the gesture browsers want for the mic; joining doesn't wait for the answer
+      void (talk ? openMic(navigator.mediaDevices) : Promise.resolve(null)).then((mic) => {
+        v.setMic(mic);
+        others?.shareMic();
+        ui.setMic(v.micState);
+      });
+      void joinOthers();
+    }
     if (touch) fullscreen();
     else canvas.requestPointerLock();
   };
@@ -294,6 +314,7 @@ async function run(): Promise<void> {
     paused = on;
     ui.setPaused(on);
     sound?.setPaused(on);
+    voices?.setPaused(on);
     if (on) {
       for (const k of Object.keys(player.keys) as (keyof typeof player.keys)[]) player.keys[k] = false;
       controls?.reset();
@@ -332,6 +353,11 @@ async function run(): Promise<void> {
     sound.setMuted(muted);
     ui.setMuted(muted);
   };
+  const toggleMic = () => {
+    if (!voices?.mic) return;
+    voices.setMicOn(voices.micState !== 'on');
+    ui.setMic(voices.micState);
+  };
   const controls = touch ? new TouchControls(canvas, document.getElementById('stick')!, document.getElementById('stick-knob')!, {
     stick: (s) => { player.stick = s; },
     look: (dx, dy) => {
@@ -348,6 +374,7 @@ async function run(): Promise<void> {
   ui.bindTouchBar({
     light: toggleRoomLight,
     mute: toggleMute,
+    mic: toggleMic,
     pause: () => {
       if (started && !autostart) setPausedState(true);
     },
@@ -401,6 +428,7 @@ async function run(): Promise<void> {
     if (e.code === 'KeyL') toggleRoomLight();
     if (e.code === 'KeyH' && !e.metaKey && !e.ctrlKey && !e.altKey) applyScene(nextScene(activeScene(world.lights, sceneGroups(currentRoom))).id, 'room');
     if (e.code === 'KeyM') toggleMute();
+    if (e.code === 'KeyV' && !e.metaKey && !e.ctrlKey && !e.altKey) toggleMic();
   });
 
   const screenCentre = new Vector3();
@@ -440,6 +468,11 @@ async function run(): Promise<void> {
       others.tick();
     }
     avatars.update(dt, avatarLight);
+    if (voices) {
+      voices.update(dt, camera.getWorldPosition(ear), (id, out) => avatars.mouth(id, out), wallsBetween);
+      for (const id of voices.ids) avatars.setTalk(id, voices.talk(id));
+    }
+    if (others) showPeople();
     currentRoom = world.rooms.locate(player.x, player.z, currentRoom);
     sound?.setRoom(currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');

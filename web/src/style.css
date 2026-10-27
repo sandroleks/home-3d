@@ -28,6 +28,8 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .name-field input:focus { outline: none; border-color: var(--accent); }
 .name-field input::placeholder { color: var(--muted); opacity: 0.7; }
+.voice-field { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.voice-field input { accent-color: var(--accent); }
 .controls { list-style: none; padding: 0; margin: 0; color: var(--muted); line-height: 1.9; }
 kbd {
   font: inherit; font-size: 0.85em; color: var(--ink); border: 1px solid rgba(255, 255, 255, 0.3);
@@ -35,7 +37,7 @@ kbd {
 }
 #error { color: #f2a19a; max-width: 420px; }
 .hint { color: var(--muted); }
-#crosshair, #room-name, #people, #prompt, #muted { pointer-events: none; } /* touches go through to the view */
+#crosshair, #room-name, #people, #prompt, #muted, #mic { pointer-events: none; } /* touches go through to the view */
 #people {
   position: fixed; left: calc(20px + env(safe-area-inset-left)); top: calc(40px + env(safe-area-inset-top)); font-size: 13px;
   color: var(--muted); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); max-width: min(50vw, 360px);
@@ -61,6 +63,15 @@ kbd {
   width: 100%; height: 100%; fill: none; stroke: var(--ink); stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round;
 }
+#mic {
+  position: fixed; right: 50px; bottom: 16px; width: 22px; height: 22px; opacity: 0.85;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+#mic svg {
+  width: 100%; height: 100%; fill: none; stroke: var(--ink); stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+#mic:not(.off) .mic-off, #touch-mic[aria-pressed='true'] .mic-off { display: none; }
 
 /* The sun panel stays on screen, bottom left. While walking the mouse is captured, so it only shows.
    Tab frees the mouse without pausing, so the panel takes clicks while the keys keep walking; with
@@ -104,6 +115,8 @@ body.walking .sun-hint-cursor, body.cursor .sun-hint-walking { display: none; }
 body:not(.touch) .touch-only, body.touch .keys-only { display: none; }
 body.touch { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 body.touch #muted { display: none; } /* the bar's sound button shows it */
+body.touch #mic { display: none; } /* the bar's mic button shows it */
+#touch-bar button[hidden] { display: none; }
 #stick {
   position: fixed; left: 0; top: 0; box-sizing: border-box; border-radius: 50%;
   border: 2px solid rgba(244, 241, 234, 0.4); background: rgba(18, 17, 15, 0.25); pointer-events: none;
