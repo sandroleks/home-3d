@@ -16,6 +16,7 @@ import { lightmapTextures, UploadQueue, warmUpShaders } from './warmup';
 import { applyMovable } from './movables';
 import { Avatars, figureLight } from './avatars';
 import { Multiplayer, trysteroRoom } from './multiplayer';
+import { fetchIceServers } from './turn';
 import { applyState, cleanName, collectState, lightValue, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
 import { activeScene, groupsIn, HUE_SCENES, levelFor, nextScene, NO_HUE_LINK, sceneById } from './hue';
 import { Player, screenFov, vfovFromHfov } from './player';
@@ -188,12 +189,19 @@ async function run(): Promise<void> {
     if (t) others?.broadcast(stateDelta(t, world.lights));
   };
   ui.setName(loadName(() => localStorage));
+  // TURN credentials, asked for while the visitor reads the start screen so joining doesn't wait on them
+  const joins = !params.has('autostart') && !params.has('solo');
+  const iceServers = joins ? fetchIceServers(fetch, CONFIG.multiplayer.turn.url, CONFIG.multiplayer.turn.timeout) : Promise.resolve([]);
   const joinOthers = async () => {
     const typed = ui.getName().trim();
     saveName(() => localStorage, typed);
     try {
-      const { joinRoom, selfId } = await import('trystero');
-      const room = joinRoom({ appId: CONFIG.multiplayer.appId }, params.get('room') || CONFIG.multiplayer.room);
+      const [{ joinRoom, selfId }, turnConfig] = await Promise.all([import('trystero'), iceServers]);
+      const room = joinRoom(
+        { appId: CONFIG.multiplayer.appId, ...(turnConfig.length ? { turnConfig } : {}) },
+        params.get('room') || CONFIG.multiplayer.room,
+        { onJoinError: ({ peerId, error }) => console.warn(`Could not connect to visitor ${peerId}: ${error}`) },
+      );
       others = new Multiplayer(trysteroRoom(room, selfId), world, avatars, cleanName(typed), {
         now: () => performance.now() / 1000,
         onChanged: (keys) => keys.forEach((k) => used(byKey.get(k) ?? null)), // the sounds a local click would make
