@@ -1,16 +1,23 @@
-import { Camera, Color, Mesh, MeshStandardMaterial, Object3D, Raycaster, Vector2 } from 'three';
+import { Camera, Color, Mesh, MeshStandardMaterial, Object3D, Raycaster, Vector2, type Vector3 } from 'three';
 import { CONFIG } from './config';
 import type { DoorState } from './doors';
 import type { LightGroups } from './lightmaps';
 import { movableNoun, type MovableState } from './movables';
 import type { Screen } from './screens';
+import type { Seat, Spot } from './seats';
 
 export type Target =
   | { kind: 'door'; door: DoorState; node: Object3D }
   | { kind: 'switch'; room: string; node: Object3D }
   | { kind: 'movable'; movable: MovableState; node: Object3D }
   | { kind: 'lamp'; group: string; name: string; node: Object3D }
-  | { kind: 'screen'; screen: Screen; node: Object3D };
+  | { kind: 'screen'; screen: Screen; node: Object3D }
+  /** Somewhere to sit or lie, part of the room's mesh: `spot` is the free place nearest the crosshair, null if all are
+   * taken; `node` is a stand-in with nothing to highlight. */
+  | { kind: 'seat'; seat: Seat; spot: Spot | null; node: Object3D };
+
+/** The seat at a point where the crosshair meets the room, if any. */
+export type SeatFinder = (point: Vector3) => Target | null;
 
 const HIGHLIGHT = new Color(0.12, 0.12, 0.09);
 const tint = new Color();
@@ -28,6 +35,7 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
       if (t.movable.info.kind === 'spin') return `${verb}: ${t.movable.isOpen ? 'stop the record' : 'play a record'}`;
       return `${verb}: ${t.movable.isOpen ? 'close' : 'open'} ${movableNoun(t.movable.info)}`;
     case 'lamp': return `${verb}: turn ${lampName(t.name)} ${lights.isOn(t.group) ? 'off' : 'on'}`;
+    case 'seat': return t.spot ? `${verb}: ${t.seat.pose === 'lie' ? 'lie down' : 'sit down'}` : 'Someone is here';
     case 'screen': {
       const s = t.screen;
       if (!s.isTv) return `${verb}: turn screen ${s.on ? 'off' : 'on'}`;
@@ -37,9 +45,10 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
   }
 }
 
-/** `now`: seconds, for the screens' pictures. */
+/** `now`: seconds, for the screens' pictures. Sitting down is the player's (main.ts). */
 export function activate(t: Target, lights: LightGroups, now = 0): void {
   switch (t.kind) {
+    case 'seat': return;
     case 'door': return t.door.toggle();
     case 'movable': return t.movable.toggle();
     case 'lamp': return lights.toggle(t.group);
@@ -86,18 +95,20 @@ export class Interactions {
     private targets: Map<Object3D, Target>,
     private lights: LightGroups,
     private now: () => number = () => performance.now() / 1000,
+    private seats: SeatFinder | null = null,
   ) {
     this.raycaster.far = CONFIG.interactDistance;
   }
 
   /** What's under a point on screen (normalised device coordinates); walls in `pickables` occlude targets behind them,
-   * glass doesn't (the record under the turntable's lid, a sliding leaf behind the fixed panel). */
+   * glass doesn't (the record under the turntable's lid, a sliding leaf behind the fixed panel). Where the room itself
+   * is hit, it may be a seat. */
   at(point: Vector2): Target | null {
     this.raycaster.setFromCamera(point, this.camera);
     for (const hit of this.raycaster.intersectObjects(this.pickables, true)) {
       const t = findTarget(hit.object, this.targets);
       if (t) return t;
-      if (!seeThrough(hit.object)) return null;
+      if (!seeThrough(hit.object)) return this.seats?.(hit.point) ?? null;
     }
     return null;
   }
@@ -105,7 +116,7 @@ export class Interactions {
   /** Raycast from the crosshair and highlight what it's on. */
   update(): Target | null {
     const t = this.at(CENTER);
-    if (t !== this.current) {
+    if (t !== this.current) { // a seat is a new target every frame, with nothing to highlight
       if (this.current) setHighlight(this.current.node, false);
       if (t) setHighlight(t.node, true);
       this.current = t;

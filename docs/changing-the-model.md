@@ -16,6 +16,7 @@ The lighting is baked in Blender (Cycles) into lightmaps, and each lightmap fits
 | Move, add or remove walls, furniture, doors or windows | Blender | Yes |
 | Change a light, the sun, or a material for real | Blender | Yes |
 | Change the neighbourhood seen through the windows | Blender (`Exterior - neighbourhood` collection) | Only `make export-surroundings` (about 30 seconds) |
+| Add a seat or bed visitors can use, or stop one being used | `web_seat` on the mesh in Blender, or `SEATS` in `blender/pipeline/config.py` | Only `make export-seats` (seconds), and again with `VARIANT=kitchen-wall` |
 | Move a light switch, flip a door's hinge or swing | `SWITCH_OVERRIDES`, `DOOR_OVERRIDES` in `blender/pipeline/config.py` | Yes |
 | Change where visitors start or the viewpoints | The `Cam_Entrada` / `Cam_Sala` / `Cam_Kitchen` / `Cam_Bedroom` cameras in Blender | Yes |
 
@@ -50,6 +51,7 @@ cp ~/Documents/Untitled.blend .
 | `make export-preview` | about 1 minute | Checking a change. Low-quality lighting. |
 | `make export-final` | about 35 minutes on the GPU | What gets published. |
 | `make export-surroundings` | about 30 seconds | Only the view through the windows changed. |
+| `make export-seats` | seconds | Only where visitors can sit and lie changed. Full exports include it. |
 
 The export never writes to either `.blend`. It runs Blender on a staged copy in `/private/tmp` with factory settings, so your add-ons don't load.
 

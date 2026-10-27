@@ -6,7 +6,7 @@ import { LightGroups } from '../src/lightmaps';
 import type { DoorInfo, MovableInfo, ScreenInfo } from '../src/manifest';
 import { MovableState } from '../src/movables';
 import {
-  applyState, cleanName, collectState, colourFor, encodePose, hashId, isPose, isStateMap, loadName, Peers, poseMoved, saveName,
+  applyState, cleanName, collectState, colourFor, encodePose, hashId, isPose, isStateMap, loadName, Peers, poseMoved, saveName, splitPose,
   shortestTurn, shouldSend, smoothPose, stateDelta, stateKey, stateValue,
 } from '../src/presence';
 import { Screen } from '../src/screens';
@@ -62,6 +62,19 @@ describe('poses', () => {
     expect(isPose([1, 2, 3, 'x'])).toBe(false);
     expect(isPose([1, 2, 3, NaN])).toBe(false);
     expect(isPose({ x: 1 })).toBe(false);
+  });
+  it('adds sitting or lying, and reads it back', () => {
+    const p = encodePose(1, 2, 0.5, 0, [1, 0.4712, -1.5708]);
+    expect(p).toEqual([1, 2, 0.5, 0, 1, 0.471, -1.571]);
+    expect(isPose(p)).toBe(true);
+    expect(isPose([1, 2, 3, 4, 1])).toBe(false);
+    expect(splitPose(p)).toEqual({ pose: [1, 2, 0.5, 0], seating: [1, 0.471, -1.571] });
+    expect(splitPose([1, 2, 0.5, 0]).seating).toBeNull();
+    expect(splitPose([1, 2, 0.5, 0, 7, 0, 0]).seating).toBeNull(); // not a posture this version knows
+  });
+  it('counts sitting down or standing up as moving', () => {
+    expect(poseMoved([0, 0, 0, 0], [0, 0, 0, 0, 1, 0.45, 0])).toBe(true);
+    expect(poseMoved([0, 0, 0, 0, 1, 0.45, 0], [0, 0, 0, 0, 1, 0.45, 0])).toBe(false);
   });
   it('knows when a pose moved', () => {
     expect(poseMoved(null, [0, 0, 0, 0])).toBe(true);

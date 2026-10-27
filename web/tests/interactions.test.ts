@@ -1,4 +1,5 @@
-import { Color, Mesh, MeshStandardMaterial, Object3D, BoxGeometry, PerspectiveCamera, Vector2 } from 'three';
+import { Color, Mesh, MeshStandardMaterial, Object3D, BoxGeometry, PerspectiveCamera, Vector2, type Vector3 } from 'three';
+import type { Seat } from '../src/seats';
 import { describe, expect, it } from 'vitest';
 import { DoorState } from '../src/doors';
 import { activate, findTarget, Interactions, promptFor, setHighlight, type Target } from '../src/interactions';
@@ -122,5 +123,23 @@ describe('interactions', () => {
     expect(lights.isOn('sala')).toBe(false);
     expect(interactions.tap(new Vector2(0.5, 0))).toBe(t);
     expect(lights.isOn('sala')).toBe(true);
+  });
+
+  it('offers the seat where the room is hit, and none through a target or past a wall', () => {
+    const lights = new LightGroups(['sala']);
+    const room = new Mesh(new BoxGeometry(1, 1, 0.01), new MeshStandardMaterial());
+    room.position.set(0, 0, -1);
+    room.updateMatrixWorld();
+    const seat: Seat = { name: 'Sofa', pose: 'sit', min: [-1, -1, -1.1], max: [1, 1, -0.9], spots: [{ at: [0, 0, -1], yaw: 0 }] };
+    const marker = new Object3D();
+    const finder = (p: Vector3): Target | null => (Math.abs(p.z + 1) < 0.1 ? { kind: 'seat', seat, spot: seat.spots[0], node: marker } : null);
+    const camera = new PerspectiveCamera();
+    const interactions = new Interactions(camera, [room], new Map(), lights, undefined, finder);
+    const t = interactions.update();
+    expect(t?.kind).toBe('seat');
+    expect(promptFor(t!, lights)).toBe('Click: sit down');
+    expect(promptFor({ kind: 'seat', seat: { ...seat, pose: 'lie' }, spot: seat.spots[0], node: marker }, lights, 'Tap')).toBe('Tap: lie down');
+    expect(promptFor({ kind: 'seat', seat, spot: null, node: marker }, lights)).toBe('Someone is here');
+    expect(interactions.click()).toBe(t); // sitting down is main.ts's
   });
 });

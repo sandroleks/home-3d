@@ -72,6 +72,21 @@ SCREEN_PROP = "web_screen"  # "tv" | "monitor" | "laptop"
 # turntable, which plays the music). "slide" on a `Door leaf` makes a sliding door instead of a movable.
 MOVE_PROP = "web_move"
 LEAF_PROP = "web_leaf"  # a part joined into the named door leaf (French door glass)
+SEAT_PROP = "web_seat"  # "sit" | "lie": where visitors can sit down or lie (seats.py); SEATS below covers the model
+# Seats by object name, for furniture without web_seat: (regex, "sit" | "lie"). Toilets are left out on purpose.
+SEATS = (
+    (r"^Corner sofa seat long \d+$", "sit"),
+    (r"^Sofa bed seat cushion \d+$", "sit"),
+    (r"^Dining chair [NS]\d+$", "sit"),
+    (r"^Bistro chair seat \d+$", "sit"),
+    (r"^Chair seat$", "sit"),  # Quarto 02's desk chair
+    (r"^Sala desk chair$", "sit"),
+    (r"^(Bar stool|Stool) seat( \d+)?$", "sit"),
+    (r"^(Entrada|Window) bench cushion$", "sit"),
+    (r"^Mattress$", "lie"),
+)
+# One spot per this many metres across a seat: a sofa cushion seats two, a bed sleeps two.
+SEAT_SPACING = {"sit": 0.55, "lie": 0.8}
 # The light a screen casts, baked for an all-white picture (W); the viewer scales it by the picture's brightness.
 SCREEN_LIGHT_WATTS = {"tv": 100.0, "monitor": 20.0}
 # Movables baked together must be at least this far apart (m), so one open front doesn't shade the other's bake.

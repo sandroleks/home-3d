@@ -25,6 +25,23 @@ export const CONFIG = {
   /** Share of each room's own baked lamp light that is always there, lights off or not: light spilling in from elsewhere, so unlit rooms keep their shape rather than going flat or black. */
   lightSpill: 0.02,
   interactDistance: 2.5,
+  /** Sitting and lying (seats.ts): click a seat or the bed, C to sit on the floor; moving stands you up. */
+  seats: {
+    /** Eye height (m) above the seat or floor sitting, and above the mattress lying down. */
+    sitEye: 0.72,
+    lieEye: 0.2,
+    /** Metres the eyes are back from the spot's middle: a seated back, a head on the pillow. */
+    sitBack: 0.1,
+    lieBack: 0.45,
+    /** Where the view starts lying down: looking along the bed and up toward the ceiling (radians). */
+    liePitch: 0.5,
+    /** Seconds to sit down, lie down or stand up. */
+    transition: 0.45,
+    /** Metres in front of a seat where standing up puts you (or the nearest free spot to it). */
+    standStep: 0.6,
+    /** A spot is taken when another visitor sits or lies within this many metres of it. */
+    takenRadius: 0.3,
+  },
   /** Blender renders at +0.5 EV; the walkthrough runs 0.8 EV brighter than the Cycles references, which read too dark on screen. */
   exposure: Math.pow(2, 1.3),
   /** Cycles' diffuse light pass is outgoing/albedo; three.js wants irradiance (×π). */
@@ -139,6 +156,8 @@ export const CONFIG = {
       lamp: 0.7,
       /** Metres the body bounces with each step. */
       bounce: 0.05,
+      /** Time constant (s) of sitting down, lying down and getting up. */
+      settle: 0.15,
       /** The googly pupils: how stiff and how damped their spring is (lower damping wobbles longer), and how far they roll (radians). */
       googly: { stiffness: 80, damping: 3.2, range: 0.55 },
       /** Seconds between blinks, at random within this range, and how long one lasts. */

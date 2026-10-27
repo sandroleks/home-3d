@@ -81,6 +81,38 @@ describe('Avatars', () => {
     for (let i = 0; i < 100; i++) a.update(0.05);
     expect(f.root.position.x).toBeCloseTo(4);
   });
+  it('sits on the seat, legs out in front, turned the way the seat faces', () => {
+    const a = new Avatars(null);
+    const f = a.add('p1', '#ff0000', 'Ana', 'bunny');
+    a.setPose('p1', [1, 2, 0, 0]);
+    const standing = f.creature.body.position.y;
+    a.setPose('p1', [0.9, 6.6, 0.3, 0, 1, 0.47, -Math.PI / 2]);
+    for (let i = 0; i < 40; i++) a.update(0.05);
+    expect(f.sit).toBeCloseTo(1);
+    expect(f.root.position.y).toBeCloseTo(0.47);
+    expect(f.root.position.x).toBeCloseTo(0.9);
+    expect(f.creature.body.position.y).toBeLessThan(standing - 0.3);
+    expect(f.creature.legs[3].rotation.x).toBeGreaterThan(1.2); // out forward
+    expect(Math.abs(f.root.rotation.y + Math.PI / 2)).toBeLessThan(0.7); // facing the seat's way, head a little toward the look
+    expect(f.speed).toBeLessThan(0.05);
+    expect(a.occupied(0.9, 6.6)).toBe(true);
+    expect(a.occupied(0.9, 7.2)).toBe(false);
+  });
+  it('lies on its back on the bed and gets up again', () => {
+    const a = new Avatars(null);
+    const f = a.add('p1', '#ff0000', 'Ana', 'fox');
+    a.setPose('p1', [-1.9, -7.3, 0, 0.9, 2, 0.53, -Math.PI / 2]);
+    expect(f.lie).toBe(1); // the first pose places it outright
+    a.update(0.016);
+    expect(f.creature.body.rotation.x).toBeCloseTo(Math.PI / 2, 1); // face up
+    expect(f.root.position.y).toBeCloseTo(0.53);
+    a.setPose('p1', [-1.9, -7.3, 0, 0]);
+    expect(a.occupied(-1.9, -7.3)).toBe(false);
+    for (let i = 0; i < 40; i++) a.update(0.05);
+    expect(f.lie).toBeLessThan(0.01);
+    expect(f.root.position.y).toBeCloseTo(0.53 * f.lie);
+    expect(Math.abs(f.creature.body.rotation.x)).toBeLessThan(0.05);
+  });
   it('walks its legs while moving and stands still at rest', () => {
     const a = new Avatars(null);
     const f = a.add('p1', '#ff0000', 'Ana', 'reindeer');

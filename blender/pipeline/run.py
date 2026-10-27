@@ -6,7 +6,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 from . import (bake, bpyutil, chunks, checks, collision, config, debug_map, doors, export, geom, lamps, layers,
-               manifest, movables, openings, packs, proc_materials, rooms, scene_select, screens, state, surroundings,
+               manifest, movables, openings, packs, proc_materials, rooms, scene_select, screens, seats, state, surroundings,
                switches, uvs, variants, windows)
 
 
@@ -67,6 +67,7 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs", variant=None):
         variants.apply_variant(variant, bpy.context.view_layer)
 
     surroundings.export_surroundings(scene, bpy.context.view_layer, quality, out_dir)  # before prepare_scene deletes them
+    seats.export_seats(scene, bpy.context.view_layer, out_dir)  # before prepare_scene joins and deletes meshes
     meshes, day_lights = scene_select.prepare_scene(scene, bpy.context.view_layer)
     floor_index, room_list = rooms.collect_rooms(meshes, scene)
     window_list = windows.exterior_windows(meshes, floor_index)  # before French door glass joins its leaf

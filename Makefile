@@ -14,7 +14,7 @@ VARIANT ?=
 DEST = $(if $(VARIANT),$(OUT)/variants/$(VARIANT),$(OUT))
 BUILD_DEST = $(if $(VARIANT),$(BUILD)/variants/$(VARIANT),$(BUILD))
 
-.PHONY: test-blender export-preview export-final export-surroundings render-refs web-test
+.PHONY: test-blender export-preview export-final export-surroundings export-seats render-refs web-test
 
 test-blender:
 	$(SYNC)
@@ -30,6 +30,12 @@ export-surroundings:
 	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && rm -rf $(STAGE)/out
 	$(IN_STAGE) -b --factory-startup source.blend --python-exit-code 1 --python blender/export_web.py -- --quality final --stage surroundings --out out/assets --build out/build
 	mkdir -p $(OUT) && cp $(STAGE)/out/assets/surroundings.glb $(OUT)/
+
+# Only where visitors can sit and lie (seats.json): no bake, and the other assets stay as they are.
+export-seats:
+	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && rm -rf $(STAGE)/out
+	$(IN_STAGE) -b --factory-startup source.blend --python-exit-code 1 --python blender/export_web.py -- --stage seats $(if $(VARIANT),--variant $(VARIANT)) --out out/assets --build out/build
+	mkdir -p $(DEST) && cp $(STAGE)/out/assets/seats.json $(DEST)/
 
 # Cycles renders of the viewpoints. SUN=2026-12-21T10:00 (Lisbon time) lights them like the viewer at that
 # moment: the real sun and the month's typical sky, with lamps off.

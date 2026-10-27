@@ -5,6 +5,7 @@ Run it through the Makefile, never by pointing Blender at files in ~/Documents:
     make export-preview     # about 1 minute
     make export-final       # about 35 minutes on the GPU
     make export-surroundings  # about 1 minute: only the neighbourhood seen through the windows
+    make export-seats       # seconds: only where visitors can sit and lie (seats.json)
     make export-final VARIANT=kitchen-wall  # another layout (config.VARIANTS), into assets/variants/kitchen-wall/
 
 The Makefile stages a copy of the code and the .blend in /private/tmp and runs Blender there with
@@ -23,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bpy  # noqa: E402
 
-from pipeline import checks, config, run, surroundings  # noqa: E402
+from pipeline import checks, config, run, seats, surroundings, variants  # noqa: E402
 
 
 def parse_args(argv):
@@ -31,7 +32,7 @@ def parse_args(argv):
     p.add_argument("--quality", choices=sorted(config.QUALITY), default="preview")
     p.add_argument("--out", default="web/public/assets")
     p.add_argument("--build", default="build")
-    p.add_argument("--stage", choices=("all", "bake", "export", "surroundings"), default="all")
+    p.add_argument("--stage", choices=("all", "bake", "export", "surroundings", "seats"), default="all")
     p.add_argument("--variant", choices=sorted(config.VARIANTS), help="export this layout instead of the model as saved")
     return p.parse_args(argv)
 
@@ -46,6 +47,10 @@ def main():
     scene = bpy.context.scene
     if args.stage == "all":
         errors = run.run_all(args.quality, out_dir, build_dir, variant=args.variant)
+    elif args.stage == "seats":
+        if args.variant:
+            variants.apply_variant(args.variant, bpy.context.view_layer)
+        errors = [] if seats.export_seats(scene, bpy.context.view_layer, out_dir) else ["no seats found (config.SEATS)"]
     elif args.stage == "surroundings":
         names = surroundings.export_surroundings(scene, bpy.context.view_layer, quality, out_dir)
         errors = checks.check_surroundings(out_dir) if names else [f"no meshes in {config.SURROUNDINGS_COLLECTION_PREFIXES}"]

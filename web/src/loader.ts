@@ -4,12 +4,15 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG } from './config';
 import { type Climate, parseClimate } from './climate';
 import { type CollisionData, type LightmapRef, type Manifest, parseCollision, parseManifest } from './manifest';
+import { parseSeats, type Seat } from './seats';
 
 export interface LoadedMap { texture: Texture; range: number }
 export interface LoadedAssets {
   manifest: Manifest;
   collision: CollisionData;
   climate: Climate;
+  /** Where visitors can sit and lie; none when the export has no seats.json. */
+  seats: Seat[];
   scene: Group;
   day: Map<string, LoadedMap>;
   light: Promise<Map<string, LoadedMap>>;
@@ -69,6 +72,10 @@ export async function loadAssets(
   const manifest = parseManifest(await fetchJson(`${base}manifest.json`));
   const collision = parseCollision(await fetchJson(`${base}collision.json`));
   const climate = parseClimate(await fetchJson(`${shared}climate.json`));
+  const seats = fetchJson(`${base}seats.json`).then(parseSeats, (err) => {
+    console.warn('seats.json failed to load; visitors can only sit on the floor.', err);
+    return [];
+  });
 
   const draco = new DRACOLoader().setDecoderPath(CONFIG.dracoPath);
   const gltfLoader = new GLTFLoader().setDRACOLoader(draco);
@@ -129,5 +136,5 @@ export async function loadAssets(
   const light = Promise.all(lightRefs.map(async (ref) => [ref.file, await loadMap(ref, !packFiles.has(ref.file))] as const)).then(
     (entries) => new Map(entries),
   );
-  return { manifest, collision, climate, scene: gltf.scene, day: new Map(dayEntries), light, surroundings };
+  return { manifest, collision, climate, seats: await seats, scene: gltf.scene, day: new Map(dayEntries), light, surroundings };
 }

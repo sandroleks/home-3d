@@ -8,6 +8,11 @@ import type { Screen } from './screens';
 
 /** Where a visitor stands and looks: x, z (m), yaw, pitch (radians). */
 export type Pose = [number, number, number, number];
+/** Sitting or lying: 1 sitting, 2 lying, then the seat's height (m) and the way it faces (yaw). */
+export type Seating = [number, number, number];
+/** A pose as sent: standing, or with how the visitor sits or lies (x, z are then the seat's spot). Visitors from before
+ * seats existed drop the longer form, so they see a seated visitor standing where they last stood. */
+export type PoseMessage = Pose | [number, number, number, number, number, number, number];
 /** The flat's shared state: "door:<node>", "movable:<node>" → 0 or 1; "light:<group>" → 0 off, else its brightness
  * (1: as baked); "ct:<group>" → its colour temperature in mireds (0: as baked); "screen:<node>" → -1 off, else the channel. */
 export type StateMap = Record<string, number>;
@@ -59,21 +64,28 @@ export function colourFor(id: string, palette: readonly string[] = CONFIG.multip
 
 const round = (v: number) => Math.round(v * 1000) / 1000;
 
-export function encodePose(x: number, z: number, yaw: number, pitch: number): Pose {
-  return [round(x), round(z), round(yaw), round(pitch)];
+export function encodePose(x: number, z: number, yaw: number, pitch: number, seating: Seating | null = null): PoseMessage {
+  const pose: Pose = [round(x), round(z), round(yaw), round(pitch)];
+  return seating ? [...pose, seating[0], round(seating[1]), round(seating[2])] : pose;
 }
 
-export function isPose(v: unknown): v is Pose {
-  return Array.isArray(v) && v.length === 4 && v.every((n) => typeof n === 'number' && Number.isFinite(n));
+export function isPose(v: unknown): v is PoseMessage {
+  return Array.isArray(v) && (v.length === 4 || v.length === 7) && v.every((n) => typeof n === 'number' && Number.isFinite(n));
+}
+
+/** The pose and, sitting or lying, the seating; anything but 1 or 2 is standing. */
+export function splitPose(m: PoseMessage): { pose: Pose; seating: Seating | null } {
+  const pose: Pose = [m[0], m[1], m[2], m[3]];
+  return { pose, seating: m.length === 7 && (m[4] === 1 || m[4] === 2) ? [m[4], m[5], m[6]] : null };
 }
 
 export function isStateMap(v: unknown): v is StateMap {
   return !!v && typeof v === 'object' && !Array.isArray(v) && Object.values(v as object).every((n) => typeof n === 'number' && Number.isFinite(n));
 }
 
-/** Whether two poses differ by more than rounding. */
-export function poseMoved(a: Pose | null, b: Pose): boolean {
-  return !a || a.some((v, i) => Math.abs(v - b[i]) > 1e-4);
+/** Whether two poses differ by more than rounding, or one sits and the other doesn't. */
+export function poseMoved(a: PoseMessage | null, b: PoseMessage): boolean {
+  return !a || a.length !== b.length || a.some((v, i) => Math.abs(v - b[i]) > 1e-4);
 }
 
 /** Send at the pose rate while moving, else at the idle rate as a heartbeat. */
@@ -100,8 +112,11 @@ export function smoothPose(current: Pose, target: Pose, dt: number, tau = CONFIG
   ];
 }
 
+/** What a click changes in the flat: everything but a seat (where a visitor sits travels with their pose). */
+export type SharedTarget = Exclude<Target, { kind: 'seat' }>;
+
 /** The shared-state key a click on a target changes. A room's switch is the light group with the room's id. */
-export function stateKey(t: Target): string {
+export function stateKey(t: SharedTarget): string {
   switch (t.kind) {
     case 'door': return `door:${t.door.info.node}`;
     case 'movable': return `movable:${t.movable.info.node}`;
@@ -112,7 +127,7 @@ export function stateKey(t: Target): string {
 }
 
 /** The target's state now, in shared form: what to tell the others after a click. */
-export function stateValue(t: Target, lights: LightGroups): number {
+export function stateValue(t: SharedTarget, lights: LightGroups): number {
   switch (t.kind) {
     case 'door': return t.door.isOpen ? 1 : 0;
     case 'movable': return t.movable.isOpen ? 1 : 0;
@@ -128,7 +143,7 @@ export function lightValue(lights: LightGroups, id: string): number {
 }
 
 export function stateDelta(t: Target, lights: LightGroups): StateMap {
-  return { [stateKey(t)]: stateValue(t, lights) };
+  return t.kind === 'seat' ? {} : { [stateKey(t)]: stateValue(t, lights) };
 }
 
 /** Everything shared, for a newcomer. */

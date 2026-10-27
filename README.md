@@ -1,6 +1,6 @@
 # Apartment Walkthrough
 
-A first-person web walkthrough of the apartment, built from the Blender model. Visitors walk around with the keyboard and mouse, or by touch on phones and tablets, open doors (the glazed ones slide), drawers and cupboards, flip the light switches and lamps, watch TV and put a record on. Visitors who are there at the same time see each other and share the flat.
+A first-person web walkthrough of the apartment, built from the Blender model. Visitors walk around with the keyboard and mouse, or by touch on phones and tablets, open doors (the glazed ones slide), drawers and cupboards, flip the light switches and lamps, watch TV and put a record on, sit on the sofas and chairs and lie on the bed. Visitors who are there at the same time see each other and share the flat.
 
 It has two halves: `blender/` turns the .blend into web assets (headless Blender, run through the Makefile), and `web/` is the viewer (Vite, TypeScript, three.js).
 
@@ -31,6 +31,7 @@ Good to know:
 make export-preview    # about 1 minute, low-quality lighting, good for checking changes
 make export-final      # about 1 to 1.5 hours on the GPU
 make export-surroundings   # about 30 seconds: only the view through the windows, nothing else changes
+make export-seats          # seconds: only where visitors can sit and lie (seats.json); add VARIANT=kitchen-wall for that layout too
 make export-final VARIANT=kitchen-wall   # the kitchen with its wall, as it is now (see Kitchen wall, below)
 ```
 
@@ -61,6 +62,7 @@ Keep these names in Blender, or the export won't find things:
 Custom properties (Object Properties > Custom Properties):
 
 - `web_lamp = "<name>"` on a light, and on the meshes around it (shade, base, bulb), makes a lamp that switches on its own: click it in the walkthrough. Its glowing materials glow with it. Lamps with the same name in one room switch together.
+- `web_seat = "sit" | "lie"` on a mesh: visitors can sit on it (a sofa cushion, chair, stool or bench) or lie on it (a bed). The export finds the seat's height, which way it faces (away from its back, toward the table a stool is pulled up to, or away from the wall behind a bench; a bed's head is at its pillows) and one spot per 55 cm across it (80 cm on a bed). The model's own furniture is matched by name instead (`SEATS` in `blender/pipeline/config.py`); the toilets are left out on purpose.
 - `web_screen = "tv" | "monitor" | "laptop"` on a screen mesh: it shows a generated picture when switched on. The TV's bias light is lamp group `tv` and follows the TV.
 - `web_move` makes a mesh open. `"slide"` with `web_dir` (a world direction, e.g. `[1, 0, 0]`) and `web_dist` (m) for a drawer; `"hinge"` with `web_pivot` (a world point on the hinge line), `web_axis` (the hinge direction) and `web_angle` (radians, right-handed about the axis) for a door or flap; `"spin"` with `web_pivot`, `web_axis` and `web_rpm` for the turntable's platter, which turns while the record plays. On a `Door leaf`, `"slide"` makes a sliding door. Give the carcass behind it a hollow (a boolean against a hidden cutter, as the script does) so there is an inside to see.
 - A mesh that casts no shadow (Object Properties > Visibility > Shadow off) and only uses glowing materials is a bulb or LED strip: it is exported unlit and glows with its lamp, and it never blocks the lamp inside it.
@@ -76,6 +78,7 @@ When the automatic choice is wrong, adjust the tables in `blender/pipeline/confi
 - `DOOR_OVERRIDES`: fix a door leaf's hinge side or swing direction (`sign` alone also works for a leaf modelled closed in its doorway, as the French doors are).
 - `QUALITY`: bake resolution and samples for preview and final.
 - `SURROUNDINGS_COLLECTION_PREFIXES`: which collections make the view through the windows.
+- `SEATS`, `SEAT_SPACING`: which furniture visitors can sit or lie on, and how many fit.
 
 ## Sound
 
@@ -106,9 +109,9 @@ Linking the real bridge comes later: fill in `CONFIG.hue` (the bridge's address,
 cd web && npm run dev      # http://localhost:5173
 ```
 
-Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors, drawers and cupboards and to use switches, lamps, screens and the turntable (the TV steps through its channels, then switches off), L toggles the current room's light, H steps through the Hue scenes in the current room, M mutes sound, `,` and `.` move the time back and forward 15 minutes (hold to keep going), Shift + `,` and `.` move the date a week, P plays the day (one hour of sun every two seconds), R turns the real sun and sky on or off, K puts the kitchen wall up or takes it down, and Esc pauses. The sun panel at the bottom left is always on screen. Press Tab to free the mouse and use it while you keep walking with WASD; press Tab again, or click the view, to look around. It also works while paused.
+Controls: WASD to walk, Shift to walk faster, mouse to look, click to open doors, drawers and cupboards and to use switches, lamps, screens and the turntable (the TV steps through its channels, then switches off), click a sofa, chair, stool or bench to sit on it or the bed to lie on it (moving gets you up), C sits on the floor or gets you up, L toggles the current room's light, H steps through the Hue scenes in the current room, M mutes sound, `,` and `.` move the time back and forward 15 minutes (hold to keep going), Shift + `,` and `.` move the date a week, P plays the day (one hour of sun every two seconds), R turns the real sun and sky on or off, K puts the kitchen wall up or takes it down, and Esc pauses. The sun panel at the bottom left is always on screen. Press Tab to free the mouse and use it while you keep walking with WASD; press Tab again, or click the view, to look around. It also works while paused.
 
-On phones and tablets (no mouse): drag on the left half of the screen to walk (a stick appears under your thumb; push past its ring to walk faster), drag on the right half to look around, and tap doors, switches, lamps, screens and the turntable. Both thumbs work at once. The buttons at the top right open the sun panel, toggle the room's light, mute and pause. Android goes fullscreen on start; iPhones can't. Tuning (stick size, dead zone, look speed, tap timing) is in `CONFIG.touch`. To try it on a desktop, use the browser's device toolbar with a phone selected and reload.
+On phones and tablets (no mouse): drag on the left half of the screen to walk (a stick appears under your thumb; push past its ring to walk faster), drag on the right half to look around, and tap doors, switches, lamps, screens, the turntable, seats and the bed. Both thumbs work at once. The buttons at the top right open the sun panel, toggle the room's light, mute, sit on the floor (or get up) and pause. Android goes fullscreen on start; iPhones can't. Tuning (stick size, dead zone, look speed, tap timing) is in `CONFIG.touch`. To try it on a desktop, use the browser's device toolbar with a phone selected and reload.
 
 Handy URL options:
 
@@ -141,6 +144,8 @@ People who open the walkthrough at the same time see each other as little pastel
 There is no server. The browsers connect to each other with WebRTC through [Trystero](https://github.com/dmotz/trystero), which finds the other visitors through public Nostr relays. Everyone on the site shares one room by default; `?room=<name>` gives a group a room of their own, and `?solo` stays alone. Trystero loads only after the start click, and if it can't load or a network blocks WebRTC, the walkthrough carries on alone (a warning in the console). Visitors whose networks block a direct connection (strict NAT, mobile carriers, some offices) are relayed through Cloudflare's TURN service, once it is set up (see Deploy); without it they explore alone. It connects everyone to everyone, so it suits a handful of people, not a crowd. Reference renders (`?autostart`) never join.
 
 Visitors can talk. The start screen's "Talk with your voice" checkbox (on by default, remembered) asks for the mic on the start click; without it, or if the mic is refused, they still hear the others. A voice comes from its animal's mouth, quieter with distance and muffled by walls and closed doors, and the animal's mouth moves with it; the "With …" line marks whoever is talking. V turns the mic off and on (a mic button on touch), M mutes everyone's voices with the other sounds, and pausing turns the mic off. Everyone's mic goes to everyone, so it suits a handful of people. Headphones are recommended: on speakers, the others may hear themselves echoed back. Tuning is in `CONFIG.multiplayer.voice`; the design note is `docs/superpowers/specs/2026-10-27-proximity-voice-design.md`.
+
+Visitors sit and lie down where the others can see it: on a sofa, chair, stool or bench their animal sits leaning back with its legs out in front, swinging its front ones; on the bed it lies on its back, head on the pillows and feet in the air; C sits it on the floor. A seat someone is on is taken ("Someone is here"); a sofa cushion seats two and the bed sleeps two. Getting up puts you a step in front of the seat. Visitors still on a version from before seats see a seated visitor standing where they last stood. Eye heights, the lying view and timing are in `CONFIG.seats`, and the animals' sitting and lying in `avatars.ts`.
 
 Tuning is in `CONFIG.multiplayer` (`web/src/config.ts`): the room, how often poses are sent, how long a silent visitor stays, the colours, and the creatures' size, walk, bounce, googly eyes, blinking and how they dim with the room's light. The design note is `docs/superpowers/specs/2026-10-25-multiplayer-design.md`.
 
