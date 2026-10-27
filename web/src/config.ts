@@ -109,6 +109,9 @@ export const CONFIG = {
     appId: 'apartment-walkthrough',
     /** Everyone on the site shares this room; `?room=<name>` gives a group one of its own. */
     room: 'apartment',
+    /** Where TURN credentials come from (`api/turn.ts`), for visitors whose networks block a direct connection, and
+     * how long (ms) to wait for them before joining without. */
+    turn: { url: 'api/turn', timeout: 3000 },
     /** Poses sent per second while moving or turning, and while still (a heartbeat). */
     poseRate: 15,
     idleRate: 1,

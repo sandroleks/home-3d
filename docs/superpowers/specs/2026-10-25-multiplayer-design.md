@@ -14,10 +14,18 @@ The site is static (Vercel). Visitors connect to each other directly with WebRTC
 Limits that follow from this, and are accepted:
 
 - Everyone connects to everyone: fine for a handful of people, not for a crowd. The default room is the whole site; `?room=<name>` puts a group in a room of its own.
-- A network that blocks WebRTC (some corporate ones) leaves that visitor alone in the flat; the walkthrough carries on. Trystero's default STUN servers apply; no TURN server is configured.
+- A network that blocks direct WebRTC connections (strict NAT, mobile carriers, some offices) needs a TURN relay. Cloudflare's TURN service provides one (added 2026-10-27, see "TURN" below). Without it, or on a network that blocks TURN too, that visitor is alone in the flat; the walkthrough carries on.
 - Nobody is in charge. Each visitor owns their own position; the flat's state is "last message wins", which converges because messages carry the resulting state (open or closed, on or off), never a toggle.
 
 The networking is behind a small `Room` interface in `src/multiplayer.ts` (join, send, receive, peer joined, peer left, leave) so a WebSocket server could replace Trystero later without touching the rest. The Trystero module is imported dynamically on the start click: it is not in the first bundle, and if it fails to load the walkthrough runs alone with a console warning.
+
+## TURN
+
+Added 2026-10-27. Its one piece of server code is a Vercel function, `web/api/turn.ts`. Given `CLOUDFLARE_TURN_KEY_ID` and `CLOUDFLARE_TURN_API_TOKEN`, it asks Cloudflare for ICE servers with credentials that last 24 h and answers `{ iceServers }` (`Cache-Control: no-store`). It drops the port 53 URLs, which browsers block. Without the variables, or if Cloudflare fails, it answers an empty list. The token stays on the server.
+
+The page asks `api/turn` for the list as soon as it loads (not with `?autostart` or `?solo`), so it is usually there by the start click. `fetchIceServers` (`src/turn.ts`) waits at most `CONFIG.multiplayer.turn.timeout` and never fails: no function (local dev, another host), a bad answer or a timeout all give an empty list. A non-empty list goes to Trystero as `turnConfig`, which keeps its default STUN servers. WebRTC still tries a direct connection first, and only pairs that can't connect directly use the relay. `onJoinError` logs a pair that could not connect at all.
+
+Anyone can call `/api/turn` and get credentials, as anyone can open the site. Cloudflare's free tier (1,000 GB a month) is far above what a handful of visitors' small JSON messages use.
 
 ## Joining
 
@@ -77,3 +85,4 @@ Under the room name, a line lists who else is here ("With Ana, Rui"), hidden whe
 - Modify `web/src/config.ts`: `CONFIG.multiplayer` (app id, default room, send rates, timeout, smoothing, palette, the creatures' scale, walk, eyes and light).
 - Modify `web/src/lightmaps.ts`: `LightGroups.ids()`; `web/src/screen-content.ts`: `TvContent.setChannel`.
 - Modify `README.md`.
+- TURN (2026-10-27): create `web/api/turn.ts` (the Vercel function) and `web/src/turn.ts` (`fetchIceServers`), with tests in `web/tests/turn.test.ts`; `CONFIG.multiplayer.turn`; `api` added to `web/tsconfig.json`.
