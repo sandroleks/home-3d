@@ -44,6 +44,7 @@ make export-preview
 
 - `export-preview` (~1 min) to check a change. Run it first.
 - `export-surroundings` (~30 s) when only the neighbourhood changed; no bake, other assets untouched.
+- `export-seats` (seconds) when only where visitors sit and lie changed (`web_seat`, `SEATS`); run it with `VARIANT=kitchen-wall` too. Full exports include it.
 - `export-final` (~35 min on GPU) for what gets published. Run it in the background and tell the user it's running. Don't start it until the user has seen the preview and agreed. If the GPU bake hangs, the user quits Blender and retries, or use `WEB_BAKE_DEVICE=CPU make export-final` (much slower).
 
 Read the end of the output. `Export OK` means assets were replaced; `EXPORT CHECKS FAILED` lists reasons and leaves the old assets in place. Usual causes: a renamed object, a door count mismatch, an unpacked texture. Fix the cause rather than loosening a check.
