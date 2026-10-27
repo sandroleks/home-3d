@@ -159,6 +159,12 @@ describe('shared state', () => {
 });
 
 describe('Peers', () => {
+  it('lists ids with names, the default until a hello', () => {
+    const p = new Peers(15);
+    p.seen('a', 0);
+    p.hello('b', 'Rui', 100, 0);
+    expect(p.list()).toEqual([{ id: 'a', name: 'Guest' }, { id: 'b', name: 'Rui' }]);
+  });
   it('tracks arrivals, hellos, names and departures', () => {
     const peers = new Peers(15);
     expect(peers.seen('a', 0)).toBe(true);

@@ -18,6 +18,9 @@ export interface Room {
   onMessage(kind: MessageKind, handler: (data: unknown, peerId: string) => void): void;
   onPeerJoin(cb: (peerId: string) => void): void;
   onPeerLeave(cb: (peerId: string) => void): void;
+  /** Media (the mic) to one peer, or to everyone here now. */
+  addStream(stream: MediaStream, to?: string): void;
+  onPeerStream(cb: (stream: MediaStream, peerId: string) => void): void;
   leave(): void;
 }
 
@@ -29,6 +32,8 @@ export function trysteroRoom(room: TrysteroRoom, selfId: string): Room {
     onMessage: (kind, handler) => { actions.get(kind)!.onMessage = (data, { peerId }) => handler(data, peerId); },
     onPeerJoin: (cb) => { room.onPeerJoin = cb; },
     onPeerLeave: (cb) => { room.onPeerLeave = cb; },
+    addStream: (stream, to) => void Promise.all(room.addStream(stream, to ? { target: to } : undefined)).catch(() => {}),
+    onPeerStream: (cb) => { room.onPeerStream = (stream, peerId) => cb(stream, peerId); },
     leave: () => void room.leave().catch(() => {}),
   };
 }
@@ -36,6 +41,13 @@ export function trysteroRoom(room: TrysteroRoom, selfId: string): Room {
 interface Hello { name: string; since: number }
 const isHello = (v: unknown): v is Hello =>
   !!v && typeof v === 'object' && typeof (v as Hello).name === 'string' && typeof (v as Hello).since === 'number';
+
+/** What multiplayer needs from the voices: the mic to send (null when listening only) and where peers' voices go. */
+export interface VoiceLink {
+  readonly mic: MediaStream | null;
+  add(peerId: string, stream: MediaStream): void;
+  remove(peerId: string): void;
+}
 
 export interface MultiplayerHooks {
   /** Seconds, monotonic. */
@@ -57,14 +69,21 @@ export class Multiplayer {
   private settled = false;
   private lastSent = -Infinity;
   private lastPose: Pose | null = null;
+  private voice: VoiceLink | null = null;
+  private sharedMic: MediaStream | null = null;
 
   constructor(private room: Room, world: StateWorld, private avatars: Avatars, name: string, private hooks: MultiplayerHooks, joinedAt = Date.now()) {
     this.since = joinedAt;
     room.onPeerJoin((id) => {
       this.arrive(id);
       room.send('hello', { name, since: this.since }, id);
+      if (this.sharedMic) room.addStream(this.sharedMic, id); // Trystero only sends a stream to the peers here when it's added
     });
     room.onPeerLeave((id) => this.depart(id));
+    room.onPeerStream((stream, id) => {
+      this.arrive(id);
+      this.voice?.add(id, stream);
+    });
     room.onMessage('hello', (data, id) => {
       if (!isHello(data)) return;
       this.arrive(id);
@@ -93,6 +112,25 @@ export class Multiplayer {
     return this.peers.names();
   }
 
+  /** Ids and names of the others here, for marking who is talking. */
+  get people(): { id: string; name: string }[] {
+    return this.peers.list();
+  }
+
+  /** The voices: incoming streams go to them, and their mic goes to everyone. */
+  setVoice(voice: VoiceLink): void {
+    this.voice = voice;
+    this.shareMic();
+  }
+
+  /** Sends the mic to everyone here, once it's there; later peers get it as they join. */
+  shareMic(): void {
+    const mic = this.voice?.mic ?? null;
+    if (!mic || mic === this.sharedMic) return;
+    this.sharedMic = mic;
+    this.room.addStream(mic);
+  }
+
   private arrive(id: string): void {
     if (!this.peers.seen(id, this.hooks.now())) return;
     this.avatars.add(id, colourFor(id), CONFIG.multiplayer.defaultName);
@@ -102,6 +140,7 @@ export class Multiplayer {
   private depart(id: string): void {
     if (!this.peers.remove(id)) return;
     this.avatars.remove(id);
+    this.voice?.remove(id);
     this.hooks.onPeers(this.peers.names());
   }
 
@@ -124,7 +163,10 @@ export class Multiplayer {
   /** Every frame: drop the silent. */
   tick(): void {
     const gone = this.peers.prune(this.hooks.now());
-    for (const id of gone) this.avatars.remove(id);
+    for (const id of gone) {
+      this.avatars.remove(id);
+      this.voice?.remove(id);
+    }
     if (gone.length) this.hooks.onPeers(this.peers.names());
   }
 
