@@ -225,6 +225,11 @@ async function run(): Promise<void> {
       ui.setMic(voices?.micState ?? 'none');
     }
   };
+  /** Chrome refuses the lock for a moment after a reload or an Esc, and returns a promise that rejects; Safari and
+   * Firefox only fire pointerlockerror, which is handled below. */
+  const lockPointer = () => {
+    (canvas.requestPointerLock() as Promise<void> | undefined)?.catch?.(() => {});
+  };
   const autostart = params.has('autostart');
   let started = false;
   let currentRoom: string | null = null;
@@ -261,7 +266,7 @@ async function run(): Promise<void> {
       void joinOthers();
     }
     if (touch) fullscreen();
-    else canvas.requestPointerLock();
+    else lockPointer();
   };
   ui.setReady();
   ui.onStart(start);
@@ -310,7 +315,7 @@ async function run(): Promise<void> {
     if (touch) {
       setPausedState(false); // no pointer lock to wait for
       fullscreen();
-    } else canvas.requestPointerLock();
+    } else lockPointer();
   });
   if (autostart) start();
   let paused = false;
@@ -396,9 +401,17 @@ async function run(): Promise<void> {
     ui.setCursor(cursor);
     setPausedState(started && !autostart && !locked && !cursor);
   });
+  document.addEventListener('pointerlockerror', () => {
+    if (!started || autostart || touch) return;
+    // No lock (refused, or a frame without it): not stuck on a start screen that is gone, the mouse is free as with
+    // Tab, the keys walk, and a click on the view asks again.
+    cursor = true;
+    ui.setCursor(true);
+    setPausedState(false);
+  });
   window.addEventListener('mousedown', (e) => {
     if (touch) return; // taps are handled by the touch controls
-    if (cursor && e.button === 0 && e.target === canvas) return void canvas.requestPointerLock(); // a click on the view looks around again
+    if (cursor && e.button === 0 && e.target === canvas) return lockPointer(); // a click on the view looks around again
     if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
     const t = interactions.click();
     used(t);
@@ -408,7 +421,7 @@ async function run(): Promise<void> {
     if (e.code === 'Tab') {
       e.preventDefault(); // Tab toggles the free mouse, never focus cycling
       if (touch || !started || paused || autostart || e.repeat) return;
-      if (cursor) canvas.requestPointerLock();
+      if (cursor) lockPointer();
       else {
         freeing = true;
         document.exitPointerLock();

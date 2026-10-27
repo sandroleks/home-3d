@@ -148,9 +148,9 @@ describe('Multiplayer', () => {
     fake.receive('hello', { name: 'Zé', since: 1500 }, 'young');
     expect(fake.sent.length).toBe(before);
   });
-  it('stops asking once it has a state or changed something itself', () => {
-    const { fake, world, mp } = setup(1000);
-    fake.receive('state', { 'door:Door_1': 1 }, 'old');
+  it('stops asking once it has the whole state or changed something itself', () => {
+    const { fake, world } = setup(1000);
+    fake.receive('state', { 'door:Door_1': 1, full: 1 }, 'old');
     expect(world.doors[0].state.isOpen).toBe(true);
     fake.receive('hello', { name: 'Rui', since: 500 }, 'old');
     expect(fake.sent.filter((s) => s.kind === 'state')).toEqual([]);
@@ -158,13 +158,33 @@ describe('Multiplayer', () => {
     other.mp.broadcast({ 'light:sala': 1 });
     other.fake.receive('hello', { name: 'Rui', since: 500 }, 'old');
     expect(other.fake.sent).toEqual([{ kind: 'state', data: { 'light:sala': 1 } }]);
-    void mp;
   });
-  it('answers a state request with everything', () => {
+  it('still asks for the whole state after a click someone made reached it first', () => {
+    const { fake, world } = setup(1000);
+    fake.receive('state', { 'door:Door_1': 1 }, 'old'); // a delta, not the snapshot
+    expect(world.doors[0].state.isOpen).toBe(true);
+    fake.receive('hello', { name: 'Rui', since: 500 }, 'old');
+    expect(fake.sent.at(-1)).toEqual({ kind: 'state', data: { want: 1 }, to: 'old' });
+  });
+  it('answers a state request with everything, marked as the whole state', () => {
     const { fake, world } = setup();
     world.lights.set('sala', true);
     fake.receive('state', { want: 1 }, 'p1');
-    expect(fake.sent.at(-1)).toEqual({ kind: 'state', data: { 'door:Door_1': 0, 'light:sala': 1 }, to: 'p1' });
+    expect(fake.sent.at(-1)).toEqual({ kind: 'state', data: { 'door:Door_1': 0, 'light:sala': 1, full: 1 }, to: 'p1' });
+  });
+  it('asks a peer that comes back after timing out who it is, and answers when asked', () => {
+    const { fake, mp, setNow } = setup();
+    fake.receive('hello', { name: 'Rui', since: 500 }, 'p1');
+    setNow(20);
+    mp.tick(); // p1's tab was hidden: no poses for 20 s
+    expect(mp.names).toEqual([]);
+    fake.receive('pose', [0, 0, 0, 0], 'p1');
+    expect(fake.sent.at(-1)).toEqual({ kind: 'hello', data: { name: 'Ana', since: 1000, ask: 1 }, to: 'p1' });
+    fake.receive('hello', { name: 'Rui', since: 500 }, 'p1');
+    expect(mp.names).toEqual(['Rui']);
+    const n = fake.sent.length;
+    fake.receive('hello', { name: 'Rui', since: 500, ask: 1 }, 'p1');
+    expect(fake.sent.slice(n).filter((s) => s.kind === 'hello')).toEqual([{ kind: 'hello', data: { name: 'Ana', since: 1000 }, to: 'p1' }]);
   });
   it('applies deltas and reports what changed, ignoring junk', () => {
     const { fake, world, changed } = setup();
