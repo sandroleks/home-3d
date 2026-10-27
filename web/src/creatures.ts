@@ -38,6 +38,8 @@ export interface Creature {
   rest: number;
   /** Front left, front right, back left, back right; each pivots at its hip. */
   legs: Object3D[];
+  /** Each leg's hip standing (x, y, z), and its splay (rotation about z): sitting and lying move them. */
+  hips: { at: [number, number, number]; splay: number }[];
   eyes: Eye[];
   wags: Wag[];
   tints: Tint[];
@@ -81,12 +83,12 @@ export function speciesFor(id: string): Species {
 
 // The body: an egg, slightly narrower at the top. Metres.
 const RX = 0.36;
-const RY = 0.42;
-const RZ = 0.38;
+export const RY = 0.42;
+export const RZ = 0.38;
 const TAPER = 0.08;
 /** The body's centre above the floor; its underside clears the floor by about 0.38 m of leg. */
-const CENTRE = 0.8;
-const HIP = 0.5;
+export const CENTRE = 0.8;
+export const HIP = 0.5;
 const FACE_Y = -0.03;
 const FACE_R: [number, number, number] = [0.215, 0.19, 0.13];
 /** The face disc tips up a little, like the original's. */
@@ -338,10 +340,12 @@ export function buildCreature(species: Species, colour: string, matcaps: Matcaps
 
   // Legs: dowels hanging from hips inside the body, splayed a touch, on round feet
   const legs: Object3D[] = [];
+  const hips: Creature['hips'] = [];
   for (const [x, z] of [[-0.14, -0.13], [0.14, -0.13], [-0.14, 0.13], [0.14, 0.13]]) {
     const hip = new Object3D();
     hip.position.set(x, HIP, z);
     hip.rotation.z = Math.sign(x) * 0.06;
+    hips.push({ at: [x, HIP, z], splay: hip.rotation.z });
     hip.add(mesh(geo.leg, darkM), blob(darkM, [0.062, 0.036, 0.078], [0, -HIP + 0.036, -0.018]));
     root.add(hip);
     legs.push(hip);
@@ -435,5 +439,5 @@ export function buildCreature(species: Species, colour: string, matcaps: Matcaps
     body.add(tail);
     wags.push({ node: tail, axis: 'z', base: 0, idle: 0.35, freq: 5, walk: 0.3, offset: 0 });
   }
-  return { species, root, body, rest: CENTRE, legs, eyes, wags, tints, top, mouth: mouth! };
+  return { species, root, body, rest: CENTRE, legs, hips, eyes, wags, tints, top, mouth: mouth! };
 }

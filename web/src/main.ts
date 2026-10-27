@@ -1,5 +1,5 @@
 import {
-  AgXToneMapping, BufferGeometry, Mesh, MeshStandardMaterial, PerspectiveCamera, PMREMGenerator,
+  AgXToneMapping, BufferGeometry, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, PMREMGenerator,
   Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
@@ -21,6 +21,7 @@ import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
 import { applyState, cleanName, collectState, lightValue, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
 import { activeScene, groupsIn, HUE_SCENES, levelFor, nextScene, NO_HUE_LINK, sceneById } from './hue';
 import { Player, screenFov, vfovFromHfov } from './player';
+import { freeSpot, seatAt, seatedOn, seatingCode } from './seats';
 import { shrinkLightmap } from './shrink';
 import { Sound } from './sound';
 import { Halos } from './halos';
@@ -174,7 +175,27 @@ async function run(): Promise<void> {
     }
   }
 
-  const interactions = new Interactions(camera, world.pickables, world.targets, world.lights);
+  // Seats are part of the rooms' meshes: where the crosshair meets one, the free spot on it nearest the crosshair
+  const seatNode = new Object3D();
+  const seatTarget = (p: Vector3): Target | null => {
+    const seat = seatAt(assets.seats, p.x, p.y, p.z);
+    if (!seat) return null;
+    const spot = freeSpot(seat, p.x, p.z, (x, z) => avatars.occupied(x, z));
+    const s = player.seat;
+    if (spot && s && spot.at[0] === s.x && spot.at[2] === s.z) return null; // the one you're on
+    return { kind: 'seat', seat, spot, node: seatNode };
+  };
+  const interactions = new Interactions(camera, world.pickables, world.targets, world.lights, undefined, seatTarget);
+  /** A click or tap on a free seat sits you down (or lies you down, on the bed). */
+  const sitOn = (t: Target | null) => {
+    if (t?.kind === 'seat' && t.spot && !player.frozen) player.sit(seatedOn(t.spot, t.seat.pose));
+  };
+  /** C, or the touch bar's button: sit down on the floor where you are, or get up. */
+  const toggleSit = () => {
+    if (player.frozen) return;
+    if (player.seat) player.stand();
+    else player.sit({ posture: 'sit', x: player.x, y: 0, z: player.z, yaw: player.yaw }, false);
+  };
   const turntable = world.movables.find((m) => m.state.info.kind === 'spin')?.state;
   /** Sounds for what a click or tap just used; doors and drawers sound from the frame loop as they move. */
   const used = (t: Target | null) => {
@@ -190,7 +211,7 @@ async function run(): Promise<void> {
   /** The others' voices and the local mic, once started (not with ?solo). */
   let voices: Voices | null = null;
   const showPeople = () => ui.setPeople((others?.people ?? []).map((p) => ({ name: p.name, talking: voices?.talking(p.id) ?? false })));
-  const byKey = new Map([...world.targets.values()].map((t) => [stateKey(t), t] as const));
+  const byKey = new Map([...world.targets.values()].flatMap((t) => (t.kind === 'seat' ? [] : [[stateKey(t), t] as const])));
   const share = (t: Target | null) => {
     if (t) others?.broadcast(stateDelta(t, world.lights));
   };
@@ -378,6 +399,7 @@ async function run(): Promise<void> {
       if (!started || paused) return;
       const r = canvas.getBoundingClientRect();
       const t = interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2));
+      sitOn(t);
       used(t);
       share(t);
     },
@@ -386,6 +408,9 @@ async function run(): Promise<void> {
     light: toggleRoomLight,
     mute: toggleMute,
     mic: toggleMic,
+    sit: () => {
+      if (started && !paused) toggleSit();
+    },
     pause: () => {
       if (started && !autostart) setPausedState(true);
     },
@@ -414,6 +439,7 @@ async function run(): Promise<void> {
     if (cursor && e.button === 0 && e.target === canvas) return lockPointer(); // a click on the view looks around again
     if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
     const t = interactions.click();
+    sitOn(t);
     used(t);
     share(t);
   });
@@ -448,6 +474,7 @@ async function run(): Promise<void> {
     if (e.code === 'KeyH' && !e.metaKey && !e.ctrlKey && !e.altKey) applyScene(nextScene(activeScene(world.lights, sceneGroups(currentRoom))).id, 'room');
     if (e.code === 'KeyM') toggleMute();
     if (e.code === 'KeyV' && !e.metaKey && !e.ctrlKey && !e.altKey) toggleMic();
+    if (e.code === 'KeyC' && !e.metaKey && !e.ctrlKey && !e.altKey) toggleSit();
   });
 
   const screenCentre = new Vector3();
@@ -481,9 +508,9 @@ async function run(): Promise<void> {
       player.update(dt);
       if (sound && steps.update(Math.hypot(player.x - x, player.z - z), player.running)) sound.step();
     }
-    if (!player.frozen && world.collision.isBlocked(player.x, player.z)) player.resolve();
+    if (!player.frozen && !player.seat && world.collision.isBlocked(player.x, player.z)) player.resolve();
     if (others) {
-      others.sendPose(player.x, player.z, player.yaw, player.pitch);
+      others.sendPose(player.x, player.z, player.yaw, player.pitch, seatingCode(player.seat));
       others.tick();
     }
     avatars.update(dt, avatarLight);
@@ -496,7 +523,8 @@ async function run(): Promise<void> {
     sound?.setRoom(currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');
     const target = started ? interactions.update() : null;
-    ui.setPrompt(target ? promptFor(target, world.lights, touch ? 'Tap' : 'Click') : null);
+    ui.setPrompt(target ? promptFor(target, world.lights, touch ? 'Tap' : 'Click') : player.seat && started ? COPY.stand : null);
+    ui.setSitting(player.seat !== null);
     ui.setRoomLight(currentRoom && world.lights.has(currentRoom) ? world.lights.isOn(currentRoom) : null);
     ui.setScenes(currentRoom ? names.get(currentRoom) ?? null : null, activeScene(world.lights, sceneGroups(currentRoom)));
     clock.tick(dt);

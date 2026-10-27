@@ -2,6 +2,7 @@ import type { PerspectiveCamera } from 'three';
 import type { Collision } from './collision';
 import { CONFIG } from './config';
 import type { Spawn } from './manifest';
+import { eyeOf, type Seated, standPoint } from './seats';
 
 export interface MoveKeys { forward: boolean; back: boolean; left: boolean; right: boolean; run: boolean }
 /** The touch stick: forward and right in [-1, 1] with a length of at most 1, and whether it's pushed far enough to run. */
@@ -43,6 +44,12 @@ export function applyLook(yaw: number, pitch: number, mx: number, my: number, se
   return [yaw - mx * sens, Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch - my * sens))];
 }
 
+/** Smoothstep: eases a 0..1 transition in and out. */
+export function ease(t: number): number {
+  const c = Math.max(0, Math.min(1, t));
+  return c * c * (3 - 2 * c);
+}
+
 export function vfovFromHfov(hfov: number, aspect: number): number {
   return (2 * Math.atan(Math.tan(hfov / 2) / aspect) * 180) / Math.PI;
 }
@@ -60,6 +67,13 @@ export class Player {
   frozen = false;
   keys: MoveKeys = { forward: false, back: false, left: false, right: false, run: false };
   stick: Stick = STILL;
+  /** Sitting or lying, and where; null standing. */
+  seat: Seated | null = null;
+  /** The camera easing from where it was when the visitor sat down or stood up: its start, and how far along (0..1). */
+  private from: [number, number, number] | null = null;
+  private eased = 1;
+  /** Movement held while sitting down doesn't stand you straight back up: it has to be let go first. */
+  private holdingMove = false;
 
   constructor(
     private camera: PerspectiveCamera,
@@ -99,12 +113,57 @@ export class Player {
     return this.keys.run || this.stick.run;
   }
 
+  /** Any walking input, keys or stick. */
+  get moving(): boolean {
+    const k = this.keys;
+    return k.forward || k.back || k.left || k.right || this.stick.forward !== 0 || this.stick.right !== 0;
+  }
+
+  /** Sits or lies down: on a seat the view turns the way it faces (lying, up toward the ceiling); on the floor it
+   * stays where it was looking. */
+  sit(s: Seated, turn = true): void {
+    this.startEase();
+    this.seat = s;
+    this.x = s.x;
+    this.z = s.z;
+    if (turn) {
+      this.yaw = s.yaw;
+      this.pitch = s.posture === 'lie' ? CONFIG.seats.liePitch : 0;
+    }
+    this.holdingMove = this.moving;
+  }
+
+  /** Gets up, a step in front of the seat (or the nearest free spot to it). */
+  stand(): void {
+    if (!this.seat) return;
+    const [x, z] = standPoint(this.seat);
+    this.startEase();
+    this.seat = null;
+    [this.x, this.z] = this.collision.nearestFree(x, z);
+  }
+
+  private startEase(): void {
+    const p = this.camera.position;
+    this.from = [p.x, p.y, p.z];
+    this.eased = 0;
+  }
+
   update(dt: number): void {
-    if (!this.frozen) {
+    if (this.seat) {
+      if (!this.moving) this.holdingMove = false;
+      else if (!this.holdingMove && !this.frozen) this.stand();
+    }
+    if (!this.frozen && !this.seat) {
       const [dx, dz] = moveDelta(this.keys, this.yaw, dt, CONFIG.walkSpeed, CONFIG.runSpeed, this.stick);
       [this.x, this.z] = this.collision.move(this.x, this.z, dx, dz);
     }
-    this.camera.position.set(this.x, this.eyeHeight, this.z);
+    const [x, y, z] = this.seat ? eyeOf(this.seat) : [this.x, this.eyeHeight, this.z];
+    if (this.from) {
+      this.eased = Math.min(1, this.eased + dt / CONFIG.seats.transition);
+      const k = ease(this.eased);
+      this.camera.position.set(this.from[0] + (x - this.from[0]) * k, this.from[1] + (y - this.from[1]) * k, this.from[2] + (z - this.from[2]) * k);
+      if (this.eased >= 1) this.from = null;
+    } else this.camera.position.set(x, y, z);
     this.camera.rotation.set(this.pitch, this.yaw, 0);
   }
 
@@ -113,6 +172,8 @@ export class Player {
   }
 
   teleport(x: number, z: number, yaw: number, pitch: number, eyeHeight = this.eyeHeight): void {
+    this.seat = null;
+    this.from = null;
     this.x = x;
     this.z = z;
     this.yaw = yaw;

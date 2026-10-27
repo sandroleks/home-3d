@@ -11,6 +11,7 @@ export const COPY = {
   kitchenWall: 'Kitchen wall up, as it is now',
   noKitchenWall: "The kitchen-wall version hasn't been exported yet. Open the flat without it instead.",
   thisRoom: 'This room',
+  stand: 'Move to stand up',
 };
 
 /** Where a Hue scene goes: the room the visitor is in, or every room. */
@@ -32,6 +33,8 @@ export interface TouchBarHandlers {
   light(): void;
   mute(): void;
   mic(): void;
+  /** Sit down on the floor, or get up. */
+  sit(): void;
   pause(): void;
 }
 export interface SunPanelState {
@@ -47,6 +50,7 @@ export interface SunPanelState {
 
 export class UI {
   private lastRoom = '';
+  private lastSitting = false;
   private lastRoomLight: boolean | null | undefined;
   private touch = false;
 
@@ -177,6 +181,7 @@ export class UI {
     this.el('touch-light').addEventListener('click', () => h.light());
     this.el('touch-sound').addEventListener('click', () => h.mute());
     this.el('touch-mic').addEventListener('click', () => h.mic());
+    this.el('touch-sit').addEventListener('click', () => h.sit());
     this.el('touch-pause').addEventListener('click', () => h.pause());
     const sun = this.el('touch-sun');
     sun.addEventListener('click', () => {
@@ -186,6 +191,15 @@ export class UI {
   }
 
   /** The current room's light on the touch bar: null when the room has none. */
+  /** Sitting or lying: the touch bar's sit button shows it pressed. */
+  setSitting(on: boolean): void {
+    if (on === this.lastSitting) return;
+    this.lastSitting = on;
+    const b = this.el<HTMLButtonElement>('touch-sit');
+    b.setAttribute('aria-pressed', String(on));
+    b.setAttribute('aria-label', on ? 'Stand up' : 'Sit on the floor');
+  }
+
   setRoomLight(on: boolean | null): void {
     if (on === this.lastRoomLight) return;
     this.lastRoomLight = on;

@@ -206,6 +206,16 @@ describe('Multiplayer', () => {
     fake.receive('pose', 'x', 'p2');
     expect(avatars.has('p2')).toBe(false);
   });
+  it('sends sitting down at once, and seats the other visitors it hears from', () => {
+    const { fake, mp, avatars, setNow } = setup();
+    mp.sendPose(1, 2, 0.5, 0);
+    setNow(0.1);
+    mp.sendPose(1, 2, 0.5, 0, [1, 0.47, -1.5708]); // sat down where it stood
+    expect(fake.sent.at(-1)).toEqual({ kind: 'pose', data: [1, 2, 0.5, 0, 1, 0.47, -1.571] });
+    fake.receive('pose', [0.9, 6.6, 0, 0, 2, 0.53, 0], 'p1');
+    expect(avatars.get('p1')!.seating).toEqual([2, 0.53, 0]);
+    expect(avatars.occupied(0.9, 6.6)).toBe(true);
+  });
   it('sends its pose at the moving rate, then as a heartbeat', () => {
     const { fake, mp, setNow } = setup();
     mp.sendPose(1, 2, 0.5, 0);

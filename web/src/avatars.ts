@@ -1,7 +1,7 @@
 import { CanvasTexture, Group, LinearFilter, type Material, Sprite, SpriteMaterial, SRGBColorSpace, type Vector3 } from 'three';
 import { CONFIG } from './config';
-import { buildCreature, type Creature, makeMatcaps, type Matcaps, type Species, speciesFor } from './creatures';
-import { hashId, shortestTurn, smoothPose, type Pose } from './presence';
+import { buildCreature, type Creature, makeMatcaps, type Matcaps, RY, RZ, type Species, speciesFor } from './creatures';
+import { hashId, type PoseMessage, type Seating, shortestTurn, smoothPose, splitPose, type Pose } from './presence';
 import { type CanvasFactory, domCanvas } from './screens';
 
 const LABEL_PX: [number, number] = [384, 68];
@@ -33,7 +33,21 @@ export interface Figure {
   nextBlink: number;
   /** How loud its visitor is talking, 0..1 (voice.ts): opens the mouth and nods the body. */
   talk: number;
+  /** Sitting or lying, as last sent; null standing. */
+  seating: Seating | null;
+  /** The last seat's height and facing, kept as it stands up so it rises from where it sat. */
+  seatY: number;
+  seatYaw: number;
+  /** How far it has sat down and lain down, eased: 0 standing, 1 all the way. */
+  sit: number;
+  lie: number;
 }
+
+/** Sitting and lying, in the figure's own metres: the body's height, lean and offset back, and how far its head turns
+ * with where its visitor looks (a share of the turn, at most `turn` radians). */
+const SIT = { y: RY * 0.92, lean: 0.12, back: 0.04, turn: 0.6, share: 0.5 };
+const LIE = { y: RZ * 0.95, share: 0.2 };
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** Draws a name on a canvas: white on a soft dark pill, so it reads against anything. */
 export function drawLabel(ctx: CanvasRenderingContext2D, name: string, width: number, height: number): void {
@@ -149,31 +163,58 @@ export class Avatars {
       root, creature, label: sprite, pose, target: [...pose] as Pose, speed: 0, phase: 0, light: 1, seed: (hashId(id) % 1000) / 159,
       pupils: creature.eyes.map(() => ({ at: [0, 0], vel: [0, 0] })), glance: [0, 0], nextGlance: 0,
       nextBlink: this.time + blink[0] + this.random() * (blink[1] - blink[0]), talk: 0,
+      seating: null, seatY: 0, seatYaw: 0, sit: 0, lie: 0,
     };
     this.place(f);
     return f;
   }
 
-  /** Puts the figure where its pose says, and moves its parts for the walk, the breathing, the eyes and the look. */
+  /**
+   * Puts the figure where its pose says, and moves its parts for the walk, the breathing, the eyes and the look. Sitting,
+   * it rests on the seat leaning back a little, legs out in front (the front ones swinging); lying, it is on its back,
+   * face up and feet in the air. In between, the poses blend.
+   */
   private place(f: Figure): void {
     const { root, creature } = f;
     const cfg = CONFIG.multiplayer.creature;
-    root.position.set(f.pose[0], 0, f.pose[1]);
-    root.rotation.y = f.pose[2];
-    const walk = Math.min(1, f.speed / CONFIG.walkSpeed);
+    const seated = Math.min(1, f.sit + f.lie);
+    const stand = 1 - seated;
+    root.position.set(f.pose[0], f.seatY * seated, f.pose[1]);
+    const look = f.pose[2];
+    const share = seated > 0 ? (SIT.share * f.sit + LIE.share * f.lie) / (f.sit + f.lie) : 0;
+    const body = f.seatYaw + clamp(shortestTurn(f.seatYaw, look) * share, -SIT.turn, SIT.turn);
+    root.rotation.y = look + shortestTurn(look, body) * seated;
+    const walk = Math.min(1, f.speed / CONFIG.walkSpeed) * stand;
     const s = Math.sin(f.phase);
     const swing = s * 0.55 * walk;
-    const [fl, fr, bl, br] = creature.legs;
-    fl.rotation.x = swing; // diagonal pairs, like a trotting toy
-    br.rotation.x = swing;
-    fr.rotation.x = -swing;
-    bl.rotation.x = -swing;
     const hop = Math.abs(s); // 0 as a foot lands, 1 mid-step
+    const dangle = Math.sin(this.time * 1.7 + f.seed) * 0.12; // a seated toy swings its front legs
+    creature.legs.forEach((leg, i) => {
+      const [x, y, z] = creature.hips[i].at;
+      const front = i < 2;
+      const walkSwing = (i === 0 || i === 3 ? swing : -swing); // diagonal pairs, like a trotting toy
+      // Sitting: hips low in the body, legs out forward; lying, the standing hips turned with the body onto its back
+      const sx = x * (front ? 1.1 : 1.45);
+      const sy = front ? 0.17 : 0.1;
+      const sz = front ? -0.1 : 0;
+      const sitRot = front ? 1.1 + dangle * (i === 0 ? 1 : -1) : 1.5;
+      const lieRot = Math.PI / 2 + 0.35 + dangle * 0.5 * (i % 2 ? 1 : -1);
+      leg.position.set(
+        x * stand + sx * f.sit + x * f.lie,
+        y * stand + sy * f.sit + (LIE.y - z) * f.lie,
+        z * stand + sz * f.sit + (y - creature.rest) * f.lie,
+      );
+      leg.rotation.x = walkSwing * stand + sitRot * f.sit + lieRot * f.lie;
+      leg.rotation.z = creature.hips[i].splay * (1 + seated);
+    });
     const breathe = (1 - walk) * 0.014 * Math.sin(this.time * 2.4 + f.seed);
     const squash = walk * 0.06 * (hop - 0.5); // stretched mid-step, squashed on landing
-    creature.body.position.y = creature.rest + hop * cfg.bounce * walk;
+    const tilt = clamp(f.pose[3] * 0.35, -0.3, 0.3);
+    const nod = f.talk * CONFIG.multiplayer.voice.nod;
+    creature.body.position.y = (creature.rest + hop * cfg.bounce * walk) * stand + SIT.y * f.sit + LIE.y * f.lie;
+    creature.body.position.z = SIT.back * f.sit;
     creature.body.scale.set(1 - (breathe + squash) * 0.5, 1 + breathe + squash, 1 - (breathe + squash) * 0.5);
-    creature.body.rotation.x = Math.max(-0.3, Math.min(0.3, f.pose[3] * 0.35)) + f.talk * CONFIG.multiplayer.voice.nod;
+    creature.body.rotation.x = tilt * stand + (SIT.lean + tilt * 0.6) * f.sit + (Math.PI / 2) * f.lie + nod;
     const mouth = creature.mouth;
     mouth.node.scale.y = mouth.rest + (mouth.open - mouth.rest) * f.talk;
     mouth.node.visible = mouth.node.scale.y > 1e-3;
@@ -188,6 +229,10 @@ export class Avatars {
       e.lid.scale.y = 1 - 0.88 * shut;
       e.pupil.rotation.set(f.pupils[i].at[1], f.pupils[i].at[0], 0);
     });
+    if (f.label) {
+      const top = creature.top + cfg.labelGap;
+      f.label.position.y = top * stand + (top - creature.rest + SIT.y) * f.sit + (LIE.y + RZ + 0.2 + cfg.labelGap) * f.lie;
+    }
   }
 
   add(id: string, colour: string, name: string, species: Species = speciesFor(id)): Figure {
@@ -223,16 +268,29 @@ export class Avatars {
     texture.needsUpdate = true;
   }
 
-  /** A new pose to ease toward; the first one places the figure outright. */
-  setPose(id: string, pose: Pose): void {
+  /** A new pose to ease toward, sitting or lying or not; the first one places the figure outright. */
+  setPose(id: string, message: PoseMessage): void {
     const f = this.figures.get(id);
     if (!f) return;
-    f.target = [...pose] as Pose;
+    const { pose, seating } = splitPose(message);
+    f.target = pose;
+    f.seating = seating;
+    if (seating) [, f.seatY, f.seatYaw] = seating;
     if (!f.root.visible) {
       f.pose = [...pose] as Pose;
+      f.sit = seating?.[0] === 1 ? 1 : 0;
+      f.lie = seating?.[0] === 2 ? 1 : 0;
       f.root.visible = true;
       this.place(f);
     }
+  }
+
+  /** Whether another visitor sits or lies within `radius` m of x, z: that spot is taken. */
+  occupied(x: number, z: number, radius = CONFIG.seats.takenRadius): boolean {
+    for (const f of this.figures.values()) {
+      if (f.root.visible && f.seating && Math.hypot(f.target[0] - x, f.target[1] - z) < radius) return true;
+    }
+    return false;
   }
 
   remove(id: string): void {
@@ -274,6 +332,9 @@ export class Avatars {
       const v = dt > 0 ? Math.min(4, Math.hypot(f.pose[0] - x, f.pose[1] - z) / dt) : 0;
       const turnRate = dt > 0 ? shortestTurn(yaw, f.pose[2]) / dt : 0;
       f.speed += (v - f.speed) * k;
+      const settle = 1 - Math.exp(-dt / CONFIG.multiplayer.creature.settle);
+      f.sit += ((f.seating?.[0] === 1 ? 1 : 0) - f.sit) * settle;
+      f.lie += ((f.seating?.[0] === 2 ? 1 : 0) - f.lie) * settle;
       f.phase = (f.phase + (f.speed * dt / CONFIG.multiplayer.creature.stride) * 2 * Math.PI) % (2 * Math.PI);
       if (dt > 0) this.moveEyes(f, dt, turnRate, Math.min(1, f.speed / CONFIG.walkSpeed));
       const l = light(f.pose[0], f.pose[1]);

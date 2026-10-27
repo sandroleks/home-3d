@@ -2,8 +2,8 @@ import type { Room as TrysteroRoom } from 'trystero';
 import type { Avatars } from './avatars';
 import { CONFIG } from './config';
 import {
-  applyState, cleanName, collectState, colourFor, encodePose, isPose, isStateMap, Peers, type Pose, poseMoved, shouldSend,
-  type StateMap, type StateWorld,
+  applyState, cleanName, collectState, colourFor, encodePose, isPose, isStateMap, Peers, type PoseMessage, poseMoved,
+  type Seating, shouldSend, type StateMap, type StateWorld,
 } from './presence';
 
 export type MessageKind = 'hello' | 'pose' | 'state';
@@ -70,7 +70,7 @@ export class Multiplayer {
   private since: number;
   private settled = false;
   private lastSent = -Infinity;
-  private lastPose: Pose | null = null;
+  private lastPose: PoseMessage | null = null;
   private voice: VoiceLink | null = null;
   private sharedMic: MediaStream | null = null;
   /** Each peer's voice until the peer leaves: Trystero won't send it again over a connection that stayed up. */
@@ -158,9 +158,10 @@ export class Multiplayer {
     this.hooks.onPeers(this.peers.names());
   }
 
-  /** Call every frame with the local pose; it sends at the pose rate while moving and as a heartbeat while still. */
-  sendPose(x: number, z: number, yaw: number, pitch: number): void {
-    const pose = encodePose(x, z, yaw, pitch);
+  /** Call every frame with the local pose (and seating, sitting or lying); it sends at the pose rate while moving and as
+   * a heartbeat while still. */
+  sendPose(x: number, z: number, yaw: number, pitch: number, seating: Seating | null = null): void {
+    const pose = encodePose(x, z, yaw, pitch, seating);
     const now = this.hooks.now();
     if (!shouldSend(this.lastSent, now, poseMoved(this.lastPose, pose))) return;
     this.lastSent = now;
