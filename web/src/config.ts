@@ -225,6 +225,28 @@ export const CONFIG = {
       wood: '#d8b077', lines: '#3b2c1e', white: '#f2eee4', black: '#2b2a28',
     },
   },
+  /** The wine on the kitchen's back counter (wine.ts) and getting drunk on it (drunk.ts). */
+  wine: {
+    /** Where the bottle stands (x, z): on the back counter between the sink and the hob, the same in both kitchens;
+     * the worktop's height (m), and where the glass stands from the bottle (x, z). */
+    at: [-2.95, 4.3] as [number, number],
+    counterTop: 0.9,
+    glass: [0.07, -0.13] as [number, number],
+    /** Drunkenness each sip adds, the most it builds up to (effects top out at 1, so more only lasts longer), and how
+     * much wears off a second: three minutes from fully drunk to sober. */
+    sip: 0.25,
+    max: 1.5,
+    soberRate: 1 / 180,
+    /** Seconds the bottle takes to lift, tip toward you and set back down. */
+    sipTime: 1,
+    /** The view fully drunk: roll, yaw and pitch sway (radians), sideways and up-down sway (m), how fast it all
+     * wanders (one sway every 1/speed seconds or so), and the blur (CSS px). */
+    wobble: { roll: 0.09, yaw: 0.05, pitch: 0.03, side: 0.05, bob: 0.02, speed: 0.35 },
+    blur: 3,
+    /** A drunk visitor's animal fully drunk: how far it tilts side to side and forward and back (radians). */
+    sway: { roll: 0.22, pitch: 0.1 },
+    colours: { glass: '#1f3a26', label: '#efe4cc', capsule: '#6e1424', wine: '#5a0d1c', stemware: '#dfe8ea' },
+  },
   /** The office's Nanoleaf panels (nanoleaf.ts): a gradient between two hues (0..1: teal to magenta, through blue)
    * drifting across the panels, `speed` radians a second, `spread` radians a metre along the wall. `glow` scales the
    * panels' baked glow so the colours stay deep instead of clipping to white. */

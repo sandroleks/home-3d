@@ -98,6 +98,29 @@ describe('Avatars', () => {
     expect(a.occupied(0.9, 6.6)).toBe(true);
     expect(a.occupied(0.9, 7.2)).toBe(false);
   });
+  it('sways while its visitor is drunk, and stands straight again sober', () => {
+    const a = new Avatars(null);
+    const f = a.add('p1', '#ff0000', 'Ana', 'bear');
+    a.setPose('p1', [1, 2, 0, 0]);
+    let most = 0;
+    for (let i = 0; i < 40; i++) {
+      a.update(0.05);
+      most = Math.max(most, Math.abs(f.root.rotation.z));
+    }
+    expect(most).toBe(0);
+    a.setPose('p1', [1, 2, 0, 0, 0, 0, 0, 1]);
+    for (let i = 0; i < 80; i++) {
+      a.update(0.05);
+      most = Math.max(most, Math.abs(f.root.rotation.z));
+    }
+    expect(f.sit).toBe(0); // standing: the seat fields are zeros
+    expect(f.sway).toBeCloseTo(1);
+    expect(most).toBeGreaterThan(0.05);
+    a.setPose('p1', [1, 2, 0, 0]);
+    for (let i = 0; i < 80; i++) a.update(0.05);
+    expect(Math.abs(f.root.rotation.z)).toBeLessThan(0.01);
+  });
+
   it('lies on its back on the bed and gets up again', () => {
     const a = new Avatars(null);
     const f = a.add('p1', '#ff0000', 'Ana', 'fox');

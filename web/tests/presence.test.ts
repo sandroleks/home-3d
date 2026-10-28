@@ -68,9 +68,22 @@ describe('poses', () => {
     expect(p).toEqual([1, 2, 0.5, 0, 1, 0.471, -1.571]);
     expect(isPose(p)).toBe(true);
     expect(isPose([1, 2, 3, 4, 1])).toBe(false);
-    expect(splitPose(p)).toEqual({ pose: [1, 2, 0.5, 0], seating: [1, 0.471, -1.571] });
+    expect(splitPose(p)).toEqual({ pose: [1, 2, 0.5, 0], seating: [1, 0.471, -1.571], drunk: 0 });
     expect(splitPose([1, 2, 0.5, 0]).seating).toBeNull();
     expect(splitPose([1, 2, 0.5, 0, 7, 0, 0]).seating).toBeNull(); // not a posture this version knows
+  });
+  it('adds how drunk, only while drunk, and reads it back', () => {
+    expect(encodePose(1, 2, 0.5, 0, null, 0)).toEqual([1, 2, 0.5, 0]);
+    expect(encodePose(1, 2, 0.5, 0, null, 0.004)).toEqual([1, 2, 0.5, 0]); // rounds to sober
+    const standing = encodePose(1, 2, 0.5, 0, null, 0.4567);
+    expect(standing).toEqual([1, 2, 0.5, 0, 0, 0, 0, 0.46]);
+    expect(isPose(standing)).toBe(true);
+    expect(splitPose(standing)).toEqual({ pose: [1, 2, 0.5, 0], seating: null, drunk: 0.46 });
+    const seated = encodePose(1, 2, 0.5, 0, [1, 0.47, -1.5708], 2);
+    expect(seated).toEqual([1, 2, 0.5, 0, 1, 0.47, -1.571, 1]); // at most fully drunk
+    expect(splitPose(seated)).toEqual({ pose: [1, 2, 0.5, 0], seating: [1, 0.47, -1.571], drunk: 1 });
+    expect(splitPose([1, 2, 0.5, 0, 0, 0, 0, 5]).drunk).toBe(1);
+    expect(isPose([1, 2, 3, 4, 0, 0, 0, 0.5, 1])).toBe(false);
   });
   it('counts sitting down or standing up as moving', () => {
     expect(poseMoved([0, 0, 0, 0], [0, 0, 0, 0, 1, 0.45, 0])).toBe(true);
