@@ -142,6 +142,8 @@ export interface TvPanelHandlers {
   join(): void;
   start(): void;
   close(): void;
+  /** Esc in the guess box: closes the panel like Esc elsewhere (default: `close`). */
+  escape?(): void;
   choose(word: string): void;
   guess(text: string): void;
   /** The drawer's pen on the canvas, in grid units. */
@@ -198,7 +200,7 @@ export class TvPanel {
     });
     input.addEventListener('keydown', (e) => {
       e.stopPropagation(); // typing never walks, toggles lights or closes the panel by its letter
-      if (e.key === 'Escape') h.close();
+      if (e.key === 'Escape') (h.escape ?? h.close)();
     });
     input.addEventListener('keyup', (e) => e.stopPropagation());
     const canvas = this.el<HTMLCanvasElement>('draw-canvas');

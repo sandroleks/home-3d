@@ -206,7 +206,7 @@ async function run(): Promise<void> {
   };
   /** C, or the touch bar's button: sit down on the floor where you are, or get up. */
   const toggleSit = () => {
-    if (player.frozen) return;
+    if (player.frozen || (tvPanel.isOpen && !atBoard)) return; // the TV panel holds you like a board does
     if (atBoard) return standFromBoard(); // at a game board: asks first while a game runs
     if (player.seat) player.stand();
     else player.sit({ posture: 'sit', x: player.x, y: 0, z: player.z, yaw: player.yaw }, false);
@@ -382,6 +382,7 @@ async function run(): Promise<void> {
     join: () => sendDraw(draw.setJoined(!draw.joined)),
     start: () => sendDraw(draw.start(visitors(), performance.now())),
     close: () => closeTv(true),
+    escape: () => closeTv(false), // Esc frees the mouse; the next Esc pauses
     choose: (word) => sendDraw(draw.choose(word, performance.now())),
     guess: (text) => sendDraw(draw.guess(text)),
     penDown: (colour, width, x, y) => draw.penDown(colour, width, x, y),
