@@ -7,6 +7,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { doorSound, loadMuted, saveMuted, StepTimer } from './audio';
 import { CONFIG } from './config';
+import { makeMatcaps } from './creatures';
+import { Holding } from './holding';
 import { Interactions, promptFor, type Target } from './interactions';
 import { LIGHT_SPILL } from './lightmaps';
 import { loadAssets, type LoadedAssets, type LoadedMap } from './loader';
@@ -16,6 +18,10 @@ import { lightmapTextures, UploadQueue, warmUpShaders } from './warmup';
 import { applyMovable } from './movables';
 import { Avatars, figureLight } from './avatars';
 import { Multiplayer, trysteroRoom } from './multiplayer';
+import { meshRaycast } from './prop-physics';
+import { drawerHeights, placesFor } from './prop-places';
+import { CARRIED_LAYER, type PropMessage, Props } from './props';
+import { domCanvas } from './screens';
 import { guestList } from './guests';
 import { BackgammonBoard } from './backgammon-board';
 import { BoardPanel, GAME_COPY, type PanelBoard } from './board-panel';
@@ -83,6 +89,7 @@ async function run(): Promise<void> {
   });
 
   const scene = new Scene();
+  const UP = new Vector3(0, 1, 0);
   const surroundings = new Surroundings();
   scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = CONFIG.envIntensity;
@@ -134,6 +141,62 @@ async function run(): Promise<void> {
     const lamps = (room && roomGroups.get(room)) || [];
     return figureLight(lamps.reduce((a, g) => Math.max(a, g.weight * world.lights.uniform(g.id).value), 0), world.sky.value);
   };
+
+  // The loose things in the drawers and cupboards (props.ts): built now, so the warm-up compiles them and the crosshair
+  // finds them; held and flying ones are drawn on their own layer, which the crosshair leaves out.
+  const solidRay = meshRaycast(world.solids);
+  const movableNodes = new Set(world.movables.map((m) => m.node));
+  const drawerOf = (o: Object3D): Object3D | null => {
+    for (let p: Object3D | null = o; p; p = p.parent) if (movableNodes.has(p)) return p;
+    return null;
+  };
+  const fronts = new Set(assets.manifest.movables.map((m) => m.node));
+  const heights = drawerHeights(fronts);
+  const handAt = new Vector3();
+  const props = new Props(placesFor(fronts), {
+    root: world.root,
+    node: (name) => world.root.getObjectByName(name) ?? null,
+    drawerOf,
+    raycast: solidRay,
+    light: avatarLight,
+    selfId: () => selfId(),
+    hand: (id, p, q) => {
+      if (id === selfId()) {
+        holding.hand(p, q);
+        return true;
+      }
+      const figure = avatars.get(id);
+      if (!figure || !avatars.mouth(id, p)) return false;
+      const yaw = figure.pose[2];
+      const [ahead, below] = CONFIG.props.otherHand;
+      p.add(handAt.set(-Math.sin(yaw) * ahead, -below, -Math.cos(yaw) * ahead));
+      q.setFromAxisAngle(UP, yaw);
+      return true;
+    },
+  }, makeMatcaps(domCanvas));
+  for (const p of props.list) {
+    world.targets.set(p.root, { kind: 'prop', prop: p, node: p.root });
+    world.pickables.push(p.root);
+  }
+  const holding = new Holding(props, camera, {
+    raycast: solidRay,
+    overlaps: (box) => props.overlaps(box),
+    drawerOf: (o) => {
+      const node = drawerOf(o);
+      return node ? { node, height: heights.get(node.name) ?? null } : null;
+    },
+  }, (m) => sendProp(m));
+  scene.add(holding.ghost);
+  camera.layers.enable(CARRIED_LAYER);
+  const sendProp = (m: PropMessage | null) => {
+    if (m) others?.sendProp(m);
+  };
+  /** Picks up a loose thing under the crosshair or a tap; false when it wasn't one. */
+  const pickUp = (t: Target | null): boolean => {
+    if (t?.kind !== 'prop') return false;
+    if (!holding.holding && !player.frozen) sendProp(props.pickUp(t.prop));
+    return true;
+  };
   const site = assets.manifest.site;
   const clock = new SunClock(carry?.utc ?? parseSunParam(params.get('sun'), site.timeZone) ?? Date.now(), site.timeZone);
   const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings, touch ? CONFIG.touch.shadowMapSize : undefined);
@@ -161,7 +224,7 @@ async function run(): Promise<void> {
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
-  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; } } }); // tuning from the console
+    if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; }, props, holding } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;
@@ -380,6 +443,16 @@ async function run(): Promise<void> {
         onHost: () => { guestsDue = 0; },
         onGame: (g) => { games.receive(g); },
         games: () => games.messages(),
+        onProp: (m) => {
+          const had = props.held;
+          props.receive(m);
+          if (had && !props.held) holding.lost();
+        },
+        props: () => props.messages(),
+        onLeave: (id) => {
+          const f = avatars.get(id);
+          props.leave(id, f ? new Vector3(f.pose[0], 1, f.pose[1]) : null);
+        },
       }, joinedAt, arrived);
       if (voices) others.setVoice(voices);
       window.addEventListener('pagehide', () => others?.leave(), { once: true });
@@ -464,6 +537,7 @@ async function run(): Promise<void> {
   /** The other kitchen is another export: reload into it, keeping the visitor's place, the time and the lights. */
   const setKitchen = (k: Kitchen) => {
     if (k === kitchen) return;
+    holding.drop(); // the other kitchen reloads the page: let go first
     saveCarry(() => sessionStorage, {
       x: player.x, z: player.z, yaw: player.yaw, pitch: player.pitch, utc: clock.utc, state: collectState(world),
     });
@@ -553,7 +627,11 @@ async function run(): Promise<void> {
     tap: (x, y) => {
       if (!started || paused) return;
       const r = canvas.getBoundingClientRect();
-      const t = interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2));
+      const aim = new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2);
+      if (holding.holding && holding.placeAt(aim)) return;
+      if (holding.holding && interactions.at(aim)?.kind === 'prop') return;
+      const t = interactions.tap(aim);
+      if (pickUp(t)) return;
       sitOn(t);
       used(t);
       share(t);
@@ -569,6 +647,11 @@ async function run(): Promise<void> {
     pause: () => {
       if (started && !autostart) setPausedState(true);
     },
+  });
+  ui.bindHoldBar({
+    throwStart: () => holding.startThrow(),
+    throwEnd: () => holding.releaseThrow(),
+    drop: () => holding.drop(),
   });
   document.addEventListener('visibilitychange', () => {
     if (touch && document.hidden && started && !autostart) setPausedState(true); // with a mouse, losing the pointer lock pauses
@@ -595,12 +678,23 @@ async function run(): Promise<void> {
       if (!boardPanel.isOpen) lockPointer();
       return;
     }
-    if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
+    if (!(autostart || document.pointerLockElement === canvas)) return;
+    if (e.button === 2) return holding.startThrow();
+    if (e.button !== 0) return;
+    if (holding.holding) {
+      if (holding.place()) return;
+      if (interactions.current?.kind === 'prop') return; // another loose thing: one at a time
+    }
     const t = interactions.click();
+    if (pickUp(t)) return;
     sitOn(t);
     used(t);
     share(t);
   });
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 2) holding.releaseThrow();
+  });
+  window.addEventListener('contextmenu', (e) => e.preventDefault()); // the right button throws
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') {
       e.preventDefault(); // Tab toggles the free mouse, never focus cycling
@@ -627,6 +721,8 @@ async function run(): Promise<void> {
       return;
     }
     if (e.repeat) return;
+    if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey && !e.altKey) holding.startThrow();
+    if (e.code === 'KeyQ' && !e.metaKey && !e.ctrlKey && !e.altKey) holding.drop();
     if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey && !e.altKey) setReal(!real);
     if (e.code === 'KeyK' && !e.metaKey && !e.ctrlKey && !e.altKey) switchKitchen(kitchen === 'wall' ? 'open' : 'wall');
     if (e.code === 'KeyL') toggleRoomLight();
@@ -634,6 +730,9 @@ async function run(): Promise<void> {
     if (e.code === 'KeyM') toggleMute();
     if (e.code === 'KeyV' && !e.metaKey && !e.ctrlKey && !e.altKey) toggleMic();
     if (e.code === 'KeyC' && !e.metaKey && !e.ctrlKey && !e.altKey) toggleSit();
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'KeyF') holding.releaseThrow();
   });
 
   const screenCentre = new Vector3();
@@ -673,6 +772,8 @@ async function run(): Promise<void> {
       others.tick();
     }
     avatars.update(dt, avatarLight);
+    for (const m of props.update(dt)) sendProp(m);
+    holding.update(dt);
     updateGames(dt, now / 1000);
     if (voices) {
       voices.update(dt, camera.getWorldPosition(ear), (id, out) => avatars.mouth(id, out), wallsBetween);
@@ -684,7 +785,12 @@ async function run(): Promise<void> {
     sound?.setRoom(currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');
     const target = started ? interactions.update() : null;
-    ui.setPrompt(boardPanel.isOpen ? null : target ? promptFor(target, world.lights, touch ? 'Tap' : 'Click') : player.seat && started ? COPY.stand : null);
+    const verb = touch ? 'Tap' : 'Click';
+    props.highlight(!holding.holding && target?.kind === 'prop' ? props.top(target.prop) : null);
+    const handPrompt = started ? holding.prompt(verb, touch, target !== null && target.kind !== 'prop') : null;
+    const aimed = target && !(holding.holding && target.kind === 'prop') ? promptFor(target, world.lights, verb) : null;
+    ui.setPrompt(boardPanel.isOpen ? null : handPrompt ?? aimed ?? (player.seat && started ? COPY.stand : null));
+    ui.setHolding(touch && holding.holding);
     ui.setSitting(player.seat !== null);
     ui.setRoomLight(currentRoom && world.lights.has(currentRoom) ? world.lights.isOn(currentRoom) : null);
     ui.setScenes(currentRoom ? names.get(currentRoom) ?? null : null, activeScene(world.lights, sceneGroups(currentRoom)));
