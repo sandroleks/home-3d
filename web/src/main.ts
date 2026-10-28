@@ -117,6 +117,7 @@ async function run(): Promise<void> {
   const avatars = new Avatars(); // the other visitors; in the scene now so the warm-up compiles them
   scene.add(avatars.root);
   const tables = new TableGames(); // the dining table's games, in the scene now so the warm-up compiles them too
+  tables.root.visible = !params.has('autostart'); // ?autostart reference views match the Cycles renders, which have no games
   scene.add(tables.root);
   const [tableX, tableZ] = CONFIG.games.slots[1]; // the table's middle, for how lit the pieces are
   const ear = new Vector3();
@@ -269,31 +270,40 @@ async function run(): Promise<void> {
     const m = atBoard && games.play(atBoard.slot, entry);
     if (m) others?.sendGame(m);
   };
-  /** Resigns, if the game is still running and it is still this player's move (a confirm can outlive the game). */
-  const resignIfDue = (slot: number, side: Side) => {
+  /** This visitor's running game at the board: its slot, side and id; null when none runs. */
+  const myGame = () => {
+    const g = atBoard && games.at(atBoard.slot);
+    return atBoard && g && g[atBoard.side] === selfId() && !endOf(g) ? { ...atBoard, id: g.id } : null;
+  };
+  /** Resigns, if the game asked about still runs and it is still this player's move (a confirm can outlive the game,
+   * and a rematch can open meanwhile). */
+  const resignIfDue = ({ slot, side, id }: { slot: number; side: Side; id: string }) => {
     const g = games.at(slot);
-    if (g && g[side] === selfId() && !endOf(g) && g.rules.turn() === side) playEntry('resign');
+    if (g && g.id === id && g[side] === selfId() && !endOf(g) && g.rules.turn() === side) playEntry('resign');
   };
   /** Gets up from the board; the frame loop closes the panel, and the view looks around again. */
   const standUp = () => {
     player.stand();
     if (cursor && !touch) lockPointer();
   };
-  /** The panel's Stand up, or C: while your game runs it asks first, and on your move standing resigns it. */
-  const standFromBoard = () => {
-    const g = atBoard && games.at(atBoard.slot);
-    if (!atBoard || !g || g[atBoard.side] !== selfId() || endOf(g)) return standUp();
-    const { slot, side } = atBoard;
-    boardPanel.confirm(GAME_COPY.standAndResign, GAME_COPY.standUp, () => {
-      resignIfDue(slot, side);
+  /** The panel's Stand up, or C: while your game runs it asks first, and on your move standing resigns it. `then`
+   * runs once standing (another kitchen's reload). */
+  const standFromBoard = (then?: () => void) => {
+    const mine = myGame();
+    if (!mine) {
       standUp();
+      return then?.();
+    }
+    boardPanel.confirm(GAME_COPY.standAndResign, GAME_COPY.standUp, () => {
+      resignIfDue(mine);
+      standUp();
+      then?.();
     });
   };
   const boardPanel = new BoardPanel(document, {
     resign: () => {
-      if (!atBoard) return;
-      const { slot, side } = atBoard;
-      boardPanel.confirm(GAME_COPY.resignGame, GAME_COPY.resign, () => resignIfDue(slot, side));
+      const mine = myGame();
+      if (mine) boardPanel.confirm(GAME_COPY.resignGame, GAME_COPY.resign, () => resignIfDue(mine));
     },
     draw: () => {
       const g = atBoard && games.at(atBoard.slot);
@@ -456,7 +466,13 @@ async function run(): Promise<void> {
     });
     location.assign(urlFor(location.href, k)); // pagehide says goodbye to the others
   };
-  ui.onKitchenWall((wall) => setKitchen(wall ? 'wall' : 'open'));
+  /** K or the kitchen-wall box: in a running game it asks first, as standing up does; Keep playing keeps the kitchen. */
+  const switchKitchen = (k: Kitchen) => {
+    if (k === kitchen || !player.held || !myGame()) return setKitchen(k);
+    ui.setKitchenWall(kitchen === 'wall'); // the box shows this kitchen until the answer
+    standFromBoard(() => setKitchen(k));
+  };
+  ui.onKitchenWall((wall) => switchKitchen(wall ? 'wall' : 'open'));
   const setReal = (on: boolean) => {
     real = on;
     saveRealLighting(() => localStorage, on);
@@ -609,7 +625,7 @@ async function run(): Promise<void> {
     }
     if (e.repeat) return;
     if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey && !e.altKey) setReal(!real);
-    if (e.code === 'KeyK' && !e.metaKey && !e.ctrlKey && !e.altKey) setKitchen(kitchen === 'wall' ? 'open' : 'wall');
+    if (e.code === 'KeyK' && !e.metaKey && !e.ctrlKey && !e.altKey) switchKitchen(kitchen === 'wall' ? 'open' : 'wall');
     if (e.code === 'KeyL') toggleRoomLight();
     if (e.code === 'KeyH' && !e.metaKey && !e.ctrlKey && !e.altKey) applyScene(nextScene(activeScene(world.lights, sceneGroups(currentRoom))).id, 'room');
     if (e.code === 'KeyM') toggleMute();
