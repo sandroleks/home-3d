@@ -37,8 +37,8 @@ describe('modelKind', () => {
     const { kind, rest } = modelKind(node, info('Prop_knife', [0.004, 0.26, 0.025]));
     expect(kind.tips).toBe(false);
     expect(kind.size[2]).toBeCloseTo(0.26);
-    expect(kind.size[1]).toBeGreaterThanOrEqual(0.004);
-    expect(kind.size[1]).toBeLessThanOrEqual(0.0251);
+    expect(kind.size[1]).toBeCloseTo(0.004);
+    expect(kind.size[0]).toBeCloseTo(0.025);
     const up = new Vector3(0, 1, 0).transformDirection(rest);
     expect(Math.abs(up.z)).toBeCloseTo(1);
     const b = new Box3();
@@ -46,6 +46,17 @@ describe('modelKind', () => {
     expect(b.min.y).toBeCloseTo(0);
     expect((b.min.x + b.max.x) / 2).toBeCloseTo(0);
     expect((b.min.z + b.max.z) / 2).toBeCloseTo(0);
+  });
+});
+
+describe('modelKind, already flat after the first turn', () => {
+  it('needs no extra turn', () => {
+    const node = new Mesh(new BoxGeometry(0.03, 0.3, 0.01).translate(0, 0.15, 0), new MeshStandardMaterial());
+    const { kind, rest } = modelKind(node, info('Prop_board', [0.03, 0.3, 0.01]));
+    expect(kind.size[0]).toBeCloseTo(0.03);
+    expect(kind.size[1]).toBeCloseTo(0.01);
+    expect(kind.size[2]).toBeCloseTo(0.3);
+    expect(Math.abs(new Vector3(0, 1, 0).transformDirection(rest).z)).toBeCloseTo(1);
   });
 });
 

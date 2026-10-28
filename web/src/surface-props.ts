@@ -42,6 +42,12 @@ export function modelKind(node: Object3D, info: PropInfo): { kind: KindInfo; res
   if (h > LIE_RATIO * Math.max(w, l)) {
     rest.makeRotationX(-Math.PI / 2);
     for (const p of parts) p.geometry.applyMatrix4(rest).computeBoundingBox();
+    const flat = boxOf().getSize(new Vector3());
+    if (flat.y > flat.x) { // on its edge: a quarter turn about its length puts its flattest side down
+      const edge = new Matrix4().makeRotationZ(Math.PI / 2);
+      for (const p of parts) p.geometry.applyMatrix4(edge).computeBoundingBox();
+      rest.premultiply(edge);
+    }
     const b = boxOf();
     const lay = new Matrix4().makeTranslation(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
     for (const p of parts) p.geometry.applyMatrix4(lay).computeBoundingBox();
