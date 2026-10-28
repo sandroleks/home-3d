@@ -1,4 +1,4 @@
-import { Object3D, PerspectiveCamera, Quaternion, Vector2, Vector3 } from 'three';
+import { Mesh, Object3D, PerspectiveCamera, Quaternion, Vector2, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import { Holding } from '../src/holding';
@@ -38,6 +38,7 @@ describe('Holding', () => {
     holding.update(0);
     expect(holding.ghost.visible).toBe(true);
     expect(holding.ghost.position.y).toBeCloseTo(0.9);
+    holding.ghost.traverse((o) => { if (o instanceof Mesh) expect(o.material).toBe(holding.ghostMaterial); }); // the one warmed up
     expect(holding.prompt('Click', false, false)).toBe('Click: put down glass');
     expect(holding.place()).toBe(true);
     expect(sent.at(-1)).toMatchObject({ s: 'rest' });

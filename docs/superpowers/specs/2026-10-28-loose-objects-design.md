@@ -60,8 +60,9 @@ A new message kind, `prop`, beside `state` and `game`: `{id, n, s, by, ...}` whe
 - **`held`** `{by}`: others show it in front of that visitor's animal, which already follows their pose. Nothing more is sent while it's held.
 - **`fly`** `{by, p, v, w}`: the launch — position, velocity, spin. Every browser runs the same flight with the same physics.
 - **`rest`** `{parent, p, q}`: where it is now: after a place or a drop, and from the thrower once its flight stops (the others move theirs there; it's within a few centimetres anyway).
+- **`home`** `{id, n, by, s: 'home'}`: back at its place, after falling out of the flat or a leave with nowhere to drop it.
 
-The higher `n` wins; on equal `n`, the lower visitor id. So when two visitors grab the same glass at once, both see the same one holding it, and the other sees it leave their hand ("Someone else took it"). A visitor who leaves or times out while holding something drops it on the floor where their animal was: every browser applies the same rule and gets the same pose, with `n` one higher. A newcomer is sent every object that isn't at home along with the flat's state, as the games are.
+The higher `n` wins; on equal `n`, the lower visitor id. So when two visitors grab the same glass at once, both see the same one holding it, and the other sees it leave their hand ("Someone else took it"). A visitor who leaves or times out while holding something drops it onto whatever is under where their animal was: every browser applies the same rule and gets the same pose, with `n` one higher and `by` empty (below every id, so it wins over the holder's own late change if their tab comes back; a peer back from a timeout is sent the objects again). A newcomer is sent every object changed since the flat loaded along with the flat's state, as the games are: held and flying ones as they are now, the others as their last change said (home included, so the counts agree, and a rest in the other layout's drawer passed on as it was).
 
 ## The model
 
@@ -85,7 +86,7 @@ It runs headless on a staged copy of the repo's `Untitled.blend` (the repo's cop
 
 ## Performance
 
-About 150 meshes with shared geometry per kind and a handful of matcap materials; most are inside closed drawers and are culled. Flights cost a few raycasts a frame per flying object, against the room's chunks only. Nothing new casts shadows. Every interaction should stay within 20 ms a frame at 60 Hz, as now.
+About 150 objects with shared geometry per kind; each object has its own matcap materials (one per part, for its own light). Things resting in shut drawers and cupboards are hidden, so they cost no draw calls. Flights cost a few raycasts a frame per flying object, against the room's chunks only. Nothing new casts shadows. Every interaction should stay within 20 ms a frame at 60 Hz, as now.
 
 ## Testing
 

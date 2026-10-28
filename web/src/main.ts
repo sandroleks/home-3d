@@ -222,13 +222,13 @@ async function run(): Promise<void> {
     const size = renderer.getDrawingBufferSize(new Vector2()).multiplyScalar(CONFIG.mirrorScale).round();
     mirrorTarget.setSize(size.x, size.y);
   }
-  warmUpShaders(renderer, scene, camera, world.screens.map((s) => s.pictureMaterial), mirrorTarget ? [mirrorTarget] : [])
+  warmUpShaders(renderer, scene, camera, [...world.screens.map((s) => s.pictureMaterial), holding.ghostMaterial], mirrorTarget ? [mirrorTarget] : [])
     .catch((err) => console.warn('Shader warm-up failed; shaders compile when first needed.', err));
   const names = new Map(assets.manifest.rooms.map((r) => [r.id, CONFIG.roomNames[r.id] ?? r.name]));
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
-    if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; }, props, holding } }); // tuning from the console
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; }, props, holding } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;

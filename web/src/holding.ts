@@ -18,7 +18,8 @@ export class Holding {
   private noticeUntil = -Infinity;
   private ghostOf: Prop | null = null;
   private ray = new Raycaster();
-  private ghostMaterial = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: CONFIG.props.ghostOpacity, depthWrite: false });
+  /** The ghost's look, shared by its meshes (compiled with the rest at load). */
+  readonly ghostMaterial = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: CONFIG.props.ghostOpacity, depthWrite: false });
 
   constructor(private props: Props, private camera: PerspectiveCamera, private probe: PlaceProbe, private send: (m: PropMessage) => void,
     private now: () => number = () => performance.now() / 1000) {
