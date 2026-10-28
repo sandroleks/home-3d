@@ -214,6 +214,8 @@ async function run(): Promise<void> {
   const showPeople = () => ui.setPeople((others?.people ?? []).map((p) => ({ name: p.name, talking: voices?.talking(p.id) ?? false })));
   /** When this visitor first came to the room: kept through a reload, so a host who reloads stays host (set on joining). */
   let arrived = Date.now();
+  /** When this page joined: with `arrived`, it breaks a tie against this visitor's own old page. */
+  const joinedAt = Date.now();
   /** Each visitor's last room for the guest list: outside every room, `locate` keeps the last one, as with your own. */
   const guestRooms = new Map<string, string | null>();
   let guestsDue = 0;
@@ -221,14 +223,15 @@ async function run(): Promise<void> {
   const showGuests = (now: number) => {
     if (!ui.guestsOpen || now < guestsDue) return;
     guestsDue = now + 1000 / CONFIG.multiplayer.guestListRate;
-    const self = { id: others?.selfId ?? 'self', name: cleanName(ui.getName()), arrived };
+    const self = { id: others?.selfId ?? 'self', name: cleanName(ui.getName()), arrived, since: joinedAt };
     ui.setGuests(guestList({
       self,
       people: others?.people ?? [],
       host: others?.host ?? self.id,
       roomOf: (id) => {
-        const pose = id === self.id ? [player.x, player.z] : avatars.get(id)?.pose;
-        if (!pose) return null;
+        const figure = id === self.id ? null : avatars.get(id);
+        if (id !== self.id && !figure?.root.visible) return null; // not placed yet: it sits at the origin
+        const pose = figure ? figure.pose : [player.x, player.z];
         const room = world.rooms.locate(pose[0], pose[1], guestRooms.get(id) ?? null);
         guestRooms.set(id, room);
         return room ? names.get(room) ?? null : null;
@@ -269,7 +272,7 @@ async function run(): Promise<void> {
         onChanged: (keys) => keys.forEach((k) => used(byKey.get(k) ?? null)), // the sounds a local click would make
         onPeers: () => showPeople(),
         onHost: () => { guestsDue = 0; },
-      }, Date.now(), arrived);
+      }, joinedAt, arrived);
       if (voices) others.setVoice(voices);
       window.addEventListener('pagehide', () => others?.leave(), { once: true });
     } catch (err) {

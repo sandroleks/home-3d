@@ -1,7 +1,7 @@
 # Party: Host and Guest List — Design
 
 **Date:** 2026-10-28
-**Status:** Approved, not yet implemented
+**Status:** Implemented
 
 ## Goal
 
@@ -21,7 +21,7 @@ Not in A: a doorbell or an arrival flow (guests appear at the entrance as they d
 
 ## Who is host
 
-- The host is whoever arrived first: the earliest **arrival time** among yourself and everyone you have a hello from, ties going to the lower peer id. Every browser works it out alone from the same data, so all agree without any new message or any chance of two claims.
+- The host is whoever arrived first: the earliest **arrival time** among yourself and everyone you have a hello from, a tie going to the later join (`since`), then the lower peer id. The later join matters after a reload: the new page has a new peer id but keeps its `arrived`, and if the old id's leave hasn't arrived yet, both are listed for a moment; the new page wins, so no two browsers disagree and the list shows no duplicate for long. Every browser works it out alone from the same data, so all agree without any new message or any chance of two claims.
 - **Arrival time** (`arrived`) is new, and separate from the existing `since`. `since` stays this page's join time and keeps its job of choosing whom a newcomer asks for the flat's state; `arrived` only decides the host. (Reusing `since` across a reload would make a reloading host look like the oldest visitor: it would stop asking for the state, and the others could take its fresh, default flat as the truth.)
 - `arrived` is kept in `sessionStorage` per room (`walkthrough.arrived.<room>`), so a host who reloads the tab stays host. Closing the tab forgets it, and the role passes on. Another `?room=` starts a time of its own. Storage blocked: `arrived` is the page's join time.
 - The hello carries `arrived` beside `since`. A peer on an older version sends none: its `since` stands in.
@@ -32,7 +32,7 @@ Not in A: a doorbell or an arrival flow (guests appear at the entrance as they d
 
 ## Guest list panel
 
-- **G** opens and closes it, as does clicking or tapping the "With …" line under the room name. On touch, a people button in the top-right bar does the same. It opens and closes like the sun panel, and works while paused. The "With …" line stays as the summary while the panel is closed.
+- **G** opens and closes it. With the mouse free (the cursor shown), clicking the "With …" line under the room name does the same. On touch that line is click-through, so only the people button in the top-right bar opens the panel. It opens and closes like the sun panel, and works while paused. The "With …" line stays as the summary while the panel is closed, and is hidden while the panel is open, since the panel lists the same people and would cover a wrapped line.
 - One row per person, in arrival order, so the host comes first:
   - a dot in their animal's colour (`colourFor(id)`);
   - their name, "(you)" on your own row;
@@ -51,7 +51,7 @@ Not in A: a doorbell or an arrival flow (guests appear at the entrance as they d
 ## Testing
 
 - Unit tests (`web/tests`):
-  - `hostOf`: the earliest arrival wins; a tie goes to the lower id; a peer without a hello doesn't count; an older peer's `since` stands in for `arrived`; the role passes when the host leaves or times out.
+  - `hostOf`: the earliest arrival wins; a tie goes to the later join, then the lower id (a reloaded host beats its old self); a peer without a hello doesn't count; an older peer's `since` stands in for `arrived`; the role passes when the host leaves or times out.
   - `arrived`: kept per room in `sessionStorage`, reused on reload, fresh for another room, the join time when storage is blocked.
   - `guestList`: order, the crown, "(you)", rooms, talking, the empty list.
 - By hand: two or three tabs on one `?room=`. The first gets the crown; reloading it keeps the crown and the flat's state; closing it moves the crown to the next tab. Rooms and 🔊 follow as people walk and talk. Then on a phone-sized viewport with the touch button.

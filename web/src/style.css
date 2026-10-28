@@ -89,6 +89,7 @@ kbd {
 #guest-rows .room { color: var(--muted); }
 #guests-alone { margin: 6px 0 0; color: var(--muted); line-height: 1.4; }
 body.cursor #people { pointer-events: auto; cursor: pointer; }
+body.guests-open #people { display: none; } /* the open panel lists the same people, and would cover a wrapped line */
 
 /* The sun panel stays on screen, bottom left. While walking the mouse is captured, so it only shows.
    Tab frees the mouse without pausing, so the panel takes clicks while the keys keep walking; with

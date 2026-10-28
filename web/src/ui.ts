@@ -155,6 +155,7 @@ export class UI {
     const panel = this.el('guests');
     panel.hidden = !panel.hidden;
     this.el('touch-guests').setAttribute('aria-expanded', String(!panel.hidden));
+    this.doc.body.classList.toggle('guests-open', !panel.hidden); // the panel shows the people the "With …" line names
     if (!panel.hidden && this.touch) { // on a phone the sun panel and the guest list would overlap: one at a time
       this.doc.body.classList.remove('sun-open');
       this.el('touch-sun').setAttribute('aria-expanded', 'false');
@@ -233,6 +234,7 @@ export class UI {
       sun.setAttribute('aria-expanded', String(open));
       if (open && this.touch) { // on a phone the sun panel and the guest list would overlap: one at a time
         this.el('guests').hidden = true;
+        this.doc.body.classList.remove('guests-open');
         this.el('touch-guests').setAttribute('aria-expanded', 'false');
       }
     });
