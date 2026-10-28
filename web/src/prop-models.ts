@@ -21,7 +21,7 @@ export interface KindInfo {
 }
 
 const STEEL: Look = { colour: '#c9cbcd', gloss: true };
-const GLASS: Look = { colour: '#dfeeee', gloss: true, opacity: 0.35 };
+const GLASS: Look = { colour: '#cfe0e4', gloss: true, opacity: 0.18 };
 const STONEWARE: Look[] = [{ colour: '#ebe8e0', gloss: true }, { colour: '#4f6c8c', gloss: true }];
 const BLACK: Look = { colour: '#1c1c1c', gloss: true };
 const BOTTLE: Look = { colour: '#3e5c3e', gloss: true, opacity: 0.8 };
