@@ -189,6 +189,9 @@ async function run(): Promise<void> {
   }, (m) => sendProp(m));
   scene.add(holding.ghost);
   camera.layers.enable(CARRIED_LAYER);
+  // Things in shut drawers and cupboards aren't drawn (props.hideShut, each frame).
+  const movableAt = new Map(world.movables.map((m) => [m.state.info.node, m.state]));
+  const shut = (node: string) => movableAt.get(node)?.progress === 0;
   const sendProp = (m: PropMessage | null) => {
     if (m) others?.sendProp(m);
   };
@@ -764,6 +767,7 @@ async function run(): Promise<void> {
       before.target = m.state.target;
       before.progress = m.state.progress;
     });
+    props.hideShut(shut);
     if (started && !paused) {
       const x = player.x;
       const z = player.z;

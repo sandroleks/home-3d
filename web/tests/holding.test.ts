@@ -16,7 +16,7 @@ function setup(planes = [floor(0.9)], crowded = false) {
   const raycast = planesRaycast(planes);
   const sent: PropMessage[] = [];
   let holding!: Holding;
-  const props = new Props([{ id: 'a/tumbler/0', kind: 'tumbler', variant: 0, node: null, position: new Vector3(5, 0.9, 5), quaternion: new Quaternion(), on: null, place: 'A' }], {
+  const props = new Props([{ id: 'a/tumbler/0', kind: 'tumbler', variant: 0, node: null, front: 'Move_a', position: new Vector3(5, 0.9, 5), quaternion: new Quaternion(), on: null, place: 'A' }], {
     root, node: () => null, drawerOf: () => null, raycast, light: () => 1, selfId: () => 'me',
     hand: (id, p, q) => (id === 'me' ? (holding.hand(p, q), true) : false),
   }, { matte: null, gloss: null });

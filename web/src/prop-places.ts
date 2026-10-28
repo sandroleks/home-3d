@@ -12,9 +12,9 @@ export interface PropFrame { source: string; fill: Fill; node: string | null; fr
 /** One object in a level: `a` across from the edge `levelFrame` starts at (its right, facing it), `b` in from the front, `c` up from the floor (m);
  * `yaw` about up (0: its length runs inward); `on`: the slot it lies on, by its index in the level's list. */
 export interface Slot { kind: PropKind; variant?: number; a: number; b: number; c?: number; yaw?: number; on?: number }
-/** An object at home: its world pose with the drawers shut, the drawer node it rides with (null: the room), and what it
- * lies on (picking up takes the top of a stack). */
-export interface PlacedProp { id: string; kind: PropKind; variant: number; node: string | null; position: Vector3; quaternion: Quaternion; on: string | null; place: string }
+/** An object at home: its world pose with the drawers shut, the drawer node it rides with (null: the room), the movable
+ * that opens its place, and what it lies on (picking up takes the top of a stack). */
+export interface PlacedProp { id: string; kind: PropKind; variant: number; node: string | null; front: string; position: Vector3; quaternion: Quaternion; on: string | null; place: string }
 
 export const FRAMES = data.places as PropFrame[];
 const UP = new Vector3(0, 1, 0);
@@ -127,7 +127,7 @@ export function placesFor(fronts: Set<string>, frames: PropFrame[] = FRAMES): Pl
         const id = `${slug(f.source)}/${s.kind}/${n}`;
         ids.push(id);
         out.push({
-          id, kind: s.kind, variant: s.variant ?? 0, node: f.node, on, place: f.source,
+          id, kind: s.kind, variant: s.variant ?? 0, node: f.node, front: f.front, on, place: f.source,
           position: fr.corner.clone().addScaledVector(fr.across, s.a).addScaledVector(fr.inward, s.b).addScaledVector(UP, s.c ?? 0),
           quaternion: facing.clone().multiply(turn.setFromAxisAngle(UP, s.yaw ?? 0)),
         });

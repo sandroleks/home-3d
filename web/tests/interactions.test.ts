@@ -146,7 +146,7 @@ describe('interactions', () => {
 
   it('prompts a loose thing to be picked up, and leaves the picking up to the caller', () => {
     const lights = new LightGroups([]);
-    const prop = new Prop({ id: 'a/wineglass/0', kind: 'wineglass', variant: 0, node: null, position: new Vector3(), quaternion: new Quaternion(), on: null, place: 'A' }, { matte: null, gloss: null });
+    const prop = new Prop({ id: 'a/wineglass/0', kind: 'wineglass', variant: 0, node: null, front: 'Move_a', position: new Vector3(), quaternion: new Quaternion(), on: null, place: 'A' }, { matte: null, gloss: null });
     const t: Target = { kind: 'prop', prop, node: prop.root };
     expect(promptFor(t, lights)).toBe('Click: pick up wine glass');
     expect(promptFor(t, lights, 'Tap')).toBe('Tap: pick up wine glass');

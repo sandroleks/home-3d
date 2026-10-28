@@ -286,6 +286,16 @@ export class Props {
     }
   }
 
+  /** Every frame, after the drawers and doors move: hides what rests in a shut drawer, or at home behind a shut front
+   * (a cupboard's things are in the room), and shows the rest. Held and flying things are left as they are. */
+  hideShut(shut: (node: string) => boolean): void {
+    for (const p of this.list) {
+      if (p.state !== 'rest') continue;
+      const parent = p.root.parent;
+      p.root.visible = !(parent && parent !== this.world.root ? shut(parent.name) : p.atHome && shut(p.place.front));
+    }
+  }
+
   /** This visitor's id changed (joining gave it one): what it holds or did is theirs under the new id. */
   rename(from: string, to: string): void {
     for (const p of this.list) {

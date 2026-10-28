@@ -7,7 +7,7 @@ import { floor, planesRaycast } from './planes';
 
 const matcaps = { matte: null, gloss: null };
 const placed = (id: string, extra: Partial<PlacedProp> = {}): PlacedProp => ({
-  id, kind: 'tumbler', variant: 0, node: null, position: new Vector3(0, 0.9, 0), quaternion: new Quaternion(), on: null, place: 'Test', ...extra,
+  id, kind: 'tumbler', variant: 0, node: null, front: 'Move_cupboard', position: new Vector3(0, 0.9, 0), quaternion: new Quaternion(), on: null, place: 'Test', ...extra,
 });
 
 function setup(places: PlacedProp[] = [placed('a/tumbler/0'), placed('a/tumbler/1', { position: new Vector3(0.2, 0.9, 0) })]) {
@@ -315,6 +315,31 @@ describe('Props', () => {
     expect(tall.p.root.parent).toBe(tall.drawer);
     const tipped = fall('mug', 0.092, 3); // lands on its side: 0.09 high, not 0.095
     expect(tipped.sent[0]).toMatchObject({ s: 'rest', parent: 'Move_drawer' });
+  });
+
+  it('hides what rests behind a shut front, and never what is held or flying', () => {
+    const { props } = setup([
+      placed('d/fork/0', { kind: 'fork', node: 'Move_drawer', front: 'Move_drawer', position: new Vector3(1.1, 0.8, 0) }),
+      placed('c/tumbler/0'), // at home in a cupboard: in the room, behind its door
+      placed('c/tumbler/1', { position: new Vector3(0.2, 0.9, 0) }),
+      placed('c/tumbler/2', { position: new Vector3(0.4, 0.9, 0) }),
+    ]);
+    const [inDrawer, inCupboard, out, held] = props.list;
+    props.receive({ id: out.id, n: 1, by: 'ana', s: 'rest', parent: null, p: [0.5, 0, 0], q: [0, 0, 0, 1] }); // out in the room
+    props.pickUp(held);
+    props.update(1 / 60);
+    const asked: string[] = [];
+    props.hideShut((node) => { asked.push(node); return true; });
+    expect([inDrawer, inCupboard, out, held].map((p) => p.root.visible)).toEqual([false, false, true, true]);
+    expect(asked.sort()).toEqual(['Move_cupboard', 'Move_drawer']);
+    props.hideShut((node) => node !== 'Move_drawer'); // the drawer opens a little
+    expect([inDrawer, inCupboard, out, held].map((p) => p.root.visible)).toEqual([true, false, true, true]);
+    props.hideShut(() => false);
+    expect(inCupboard.root.visible).toBe(true);
+    props.throw(new Vector3(0, 1.2, 0), new Vector3(1, 0, 0));
+    props.hideShut(() => true);
+    expect(held.state).toBe('fly');
+    expect(held.root.visible).toBe(true);
   });
 
   it('unlinks a stack when its top leaves and its bottom is taken', () => {

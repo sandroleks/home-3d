@@ -37,6 +37,7 @@ describe('prop places', () => {
     expect(placed.length).toBeGreaterThanOrEqual(12);
     expect(placed[0].id).toBe('test-drawer/fork/0');
     expect(placed[0].node).toBe('Move_test-drawer');
+    expect(placed[0].front).toBe('Move_test-drawer');
     const stacked = placed.filter((p) => p.on);
     expect(stacked.length).toBeGreaterThan(0);
     for (const p of stacked) {
