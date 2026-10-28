@@ -23,7 +23,7 @@ import { ChessBoard } from './chess-board';
 import { endOf, gameChairs, type GameKind, Games, otherSide, seatedAt, type Side, slotOf, SLOTS } from './games';
 import { GoBoard } from './go-board';
 import { TableGames } from './table-pieces';
-import { blurFilter, Drunk, wobbleAt } from './drunk';
+import { Drunk, viewFilter, wobbleAt } from './drunk';
 import { WineBottle } from './wine';
 import { fetchIceServers } from './turn';
 import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
@@ -217,11 +217,15 @@ async function run(): Promise<void> {
     if (player.seat) player.stand();
     else player.sit({ posture: 'sit', x: player.x, y: 0, z: player.z, yaw: player.yaw }, false);
   };
-  /** A click or tap on the wine is a sip: the bottle tips toward you, and you get a little drunker. */
+  /** A click or tap on the wine is a sip: the bottle tips toward you, and you get a little drunker. One too many too
+   * fast blacks you out: frozen until you come to, sitting on the floor (the frame loop). */
+  let blackedOut = false;
   const drinkFrom = (t: Target | null) => {
     if (t?.kind !== 'wine' || player.frozen) return;
     wine.sip(player.x, player.z);
-    drunk.sip();
+    if (!drunk.sip()) return;
+    blackedOut = true;
+    player.frozen = true;
   };
   const turntable = world.movables.find((m) => m.state.info.kind === 'spin')?.state;
   /** Sounds for what a click or tap just used; doors and drawers sound from the frame loop as they move. */
@@ -679,7 +683,12 @@ async function run(): Promise<void> {
       before.progress = m.state.progress;
     });
     drunk.update(dt);
-    const filter = blurFilter(now / 1000, drunk.strength);
+    if (blackedOut && drunk.darkness === 1 && !player.seat) player.sit({ posture: 'sit', x: player.x, y: 0, z: player.z, yaw: player.yaw }, false);
+    if (blackedOut && !drunk.passedOut) {
+      blackedOut = false;
+      player.frozen = false;
+    }
+    const filter = viewFilter(now / 1000, drunk.strength, drunk.darkness);
     if (canvas.style.filter !== filter) canvas.style.filter = filter;
     if (started && !paused) {
       player.wobble = wobbleAt(now / 1000, drunk.strength);
