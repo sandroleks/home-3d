@@ -26,6 +26,14 @@ describe('the TV panel', () => {
     expect(tvPanelView(input({ joined: [ANA, RUI], youJoined: true, game: { ...game(), players: [] } }))).toMatchObject({ start: false, lobbyNote: 'A game is on' });
     expect(tvPanelView(input({ joined: [ANA, RUI], youJoined: true, game: finish(game()), me: 'mia' })).start).toBe(true);
   });
+  it('lets players at the final scores start the next game, as the lobby does', () => {
+    const over = finish(game());
+    const at = (over_: Partial<TvPanelInput>) => tvPanelView(input({ game: over, ...over_ })).game?.start;
+    expect(at({ joined: [ANA, RUI], youJoined: true })).toBe(true);
+    expect(at({ joined: [RUI], youJoined: true })).toBe(false);
+    expect(at({ joined: [ANA, { ...RUI, you: false }], youJoined: false })).toBe(false);
+    expect(tvPanelView(input({ game: game(), joined: [ANA, RUI], youJoined: true })).game?.start).toBe(false);
+  });
   it('shows onlookers the lobby, and players the game', () => {
     expect(tvPanelView(input({ me: 'mia', game: game() }))).toMatchObject({ title: 'TV', game: null, lobbyNote: DRAW_COPY.gameOnJoin });
     expect(tvPanelView(input({ game: game() }))).toMatchObject({ title: 'Draw and guess' });

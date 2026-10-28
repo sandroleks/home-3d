@@ -179,6 +179,29 @@ describe('the drawing', () => {
     expect(p.game('ze').sketch.strokes).toEqual([]);
     expect(p.game('rui').undo()).toEqual([]);
   });
+  it("adds points only to the stroke the pen started, not to the last one after an Undo, a Clear or a refused start", () => {
+    const p = started();
+    const ana = p.game('ana');
+    p.send('ana', ana.choose('horse', p.now));
+    ana.penDown(0, 0, 100, 100);
+    ana.penDown(1, 0, 500, 500);
+    ana.undo(); // mid-stroke
+    ana.penMove(900, 500);
+    expect(ana.sketch.strokes).toEqual([{ c: 0, w: 0, p: [100, 100] }]);
+    ana.clear();
+    ana.penMove(900, 900);
+    expect(ana.sketch.strokes).toEqual([]);
+    ana.penDown(9, 0, 10, 10); // refused: no such colour
+    ana.penMove(900, 900);
+    expect(ana.sketch.strokes).toEqual([]);
+    ana.penDown(2, 0, 100, 100);
+    ana.penDown(9, 0, 10, 10); // refused while another is drawn
+    ana.penMove(900, 900);
+    expect(ana.sketch.strokes).toEqual([{ c: 2, w: 0, p: [100, 100] }]);
+    ana.penDown(2, 0, 300, 300);
+    ana.penMove(900, 900);
+    expect(ana.sketch.strokes.at(-1)?.p).toEqual([300, 300, 900, 900]);
+  });
   it('starts afresh each turn', () => {
     const p = started();
     p.send('ana', p.game('ana').choose('horse', p.now));
@@ -221,7 +244,7 @@ describe('joining and leaving', () => {
     p.tick();
     p.tick(ISOLATION_GRACE);
     expect(p.game('ana').state).toMatchObject({ phase: 'end' }); // Ana's own final scores, shown to her alone
-    expect(p.game('rui').state).toBeNull(); // an onlooker sees one player: no game to show
+    expect(p.game('rui').state).toMatchObject({ phase: 'end' }); // an onlooker sees one player: the scores so far, as a local overlay
     expect(p.log.filter((l) => l.msg.k === 'state' && l.msg.s.phase === 'end')).toEqual([]);
   });
   it("ends the drawer's turn early when they press Leave, keeping the points won, and the next drawer goes on", () => {
@@ -250,7 +273,7 @@ describe('joining and leaving', () => {
     p.tick(ISOLATION_GRACE);
     expect(p.game('ze').state).toMatchObject({ phase: 'end' }); // Zé alone: his own final scores
   });
-  it("drops a game nobody playing it is left to run, on an onlooker's TV", () => {
+  it("shows an onlooker the scores so far when nobody playing is left to run the game, then drops it", () => {
     const p = party('Ana', 'Rui', 'Ze');
     p.join('ana', 'rui');
     p.send('ana', p.game('ana').start(p.visitors(), p.now));
@@ -259,6 +282,9 @@ describe('joining and leaving', () => {
     p.leave('rui');
     p.tick();
     p.tick(ISOLATION_GRACE);
+    expect(p.game('ze').state).toMatchObject({ phase: 'end' }); // the scores so far, for their time
+    expect(p.log.filter((l) => l.from === 'ze')).toEqual([]);
+    p.tick(15000);
     expect(p.game('ze').state).toBeNull();
   });
 });
@@ -406,7 +432,7 @@ describe('browsers that disagree about who is here', () => {
     r.cut('ze');
     r.tick();
     r.tick(ISOLATION_GRACE);
-    expect(r.g.ze.state).toBeNull();
+    expect(r.g.ze.state).toMatchObject({ phase: 'end' }); // an onlooker's scores so far
     r.heal();
     expect(r.g.ze.state).toMatchObject({ id: 'g1', owner: 'ana' }); // the greeting is taken
     r.send('ze', r.g.ze.setJoined(true));
@@ -455,11 +481,22 @@ describe('browsers that disagree about who is here', () => {
     expect(r.g.ana.state).toMatchObject({ phase: 'drawing', owner: 'ana', turn: 1 });
     expect(r.g.ana.secret).toBe('cat');
     expect(r.g.ana.canDraw).toBe(true);
-    r.tick(76000);
+    r.tick(70000); // the time spent cut off was not given back: the turn ends on the deadline all share
     for (const id of ['ana', 'rui', 'ze']) expect(r.g[id].state?.phase, id).toBe('drawing');
+    r.tick(10000);
     r.tick(5000);
     r.tick(5000);
     for (const id of ['ana', 'rui', 'ze']) expect(r.g[id].state, id).toMatchObject({ phase: 'choosing', drawer: 'rui', turn: 2 });
+  });
+  it('keeps the shared deadline for an owner cut off briefly: a phase that ran out meanwhile ends on its return', () => {
+    const r = trio(true);
+    r.tick(72000);
+    r.blind('ana');
+    for (let t = 0; t < 10; t++) r.tick(500);
+    r.tick(4000); // the drawing time is up while she is cut off (the others still see her, so nobody takes over)
+    r.recover('ana');
+    r.tick(); // restored on its old deadline, which has passed, so the turn ends at once
+    expect(r.g.ana.state).toMatchObject({ phase: 'reveal', turn: 1 });
   });
   it('never forgets who said they play because they were out of sight', () => {
     const r = trio(true);

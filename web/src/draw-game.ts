@@ -121,9 +121,11 @@ export class DrawGame {
   private flushed = -Infinity;
   /** Since when no other player of the game has been in sight, if so. */
   private aloneSince: number | null = null;
-  /** While cut off, the last shared state and the time it had left: the state shown is then this browser's own final
+  /** While cut off, the last shared state and its deadline: the state shown is then this browser's own final
    * scores, an overlay never sent, which the real state replaces when the others are back. */
-  private kept: { s: DrawState; left: number } | null = null;
+  private kept: { s: DrawState; deadline: number } | null = null;
+  /** The drawer's pen is down on a stroke it started. */
+  private stroking = false;
 
   constructor(private selfId: () => string, private newId: () => string, private rand: () => number = Math.random) {}
 
@@ -205,15 +207,17 @@ export class DrawGame {
 
   /** The drawer's pen, in grid units: down starts a stroke, move adds to it. Sent in batches by `update`. */
   penDown(c: number, w: number, x: number, y: number): void {
-    if (this.canDraw) this.sketch.begin(c, w, x, y);
+    this.stroking = this.canDraw && this.sketch.begin(c, w, x, y);
   }
 
+  /** Adds to the stroke the pen started; after an Undo, a Clear or a refused start it adds to nothing. */
   penMove(x: number, y: number): void {
-    if (this.canDraw) this.sketch.extend(x, y);
+    if (this.stroking && this.canDraw) this.sketch.extend(x, y);
   }
 
   undo(): DrawOut[] {
     const s = this.state;
+    this.stroking = false;
     if (!s || !this.canDraw || !this.sketch.undo()) return [];
     const n = this.sketch.strokes.length;
     if (this.cursor.n >= n) this.cursor = { n, at: 0 };
@@ -222,6 +226,7 @@ export class DrawGame {
 
   clear(): DrawOut[] {
     const s = this.state;
+    this.stroking = false;
     if (!s || !this.canDraw || !this.sketch.strokes.length) return [];
     this.sketch.clear();
     this.cursor = { n: 0, at: 0 };
@@ -287,7 +292,7 @@ export class DrawGame {
     const sight = s.players.filter((p) => p.here && (p.id === me || present.has(p.id))).length;
     if (sight >= 2) {
       this.aloneSince = null;
-      if (this.kept) s = this.restore(now);
+      if (this.kept) s = this.restore();
     } else if (this.aloneSince === null) this.aloneSince = now;
     if (s.phase === 'end') {
       if (now >= this.deadline) this.drop(!this.kept);
@@ -295,8 +300,7 @@ export class DrawGame {
     }
     if (sight < 2) {
       if (now - this.aloneSince! < ISOLATION_GRACE) return [];
-      if (s.players.some((p) => p.id === me && p.here)) this.goLocal(now);
-      else this.drop(false); // an onlooker: no game to show
+      this.goLocal(now); // players and onlookers alike: the scores so far, for their time, never sent
       return [];
     }
     if (s.owner === me) return this.own(now, visitors);
@@ -305,12 +309,12 @@ export class DrawGame {
     return [];
   }
 
-  /** The others are back in sight: the real state is shown again, its deadline from the time it had left. */
-  private restore(now: number): DrawState {
-    const { s, left } = this.kept!;
+  /** The others are back in sight: the real state is shown again, on the deadline it had, so every browser keeps one clock. */
+  private restore(): DrawState {
+    const { s, deadline } = this.kept!;
     this.kept = null;
     this.state = s;
-    this.deadline = now + left;
+    this.deadline = deadline;
     this.aloneSince = null;
     this.version++;
     return s;
@@ -319,9 +323,9 @@ export class DrawGame {
   /** Cut off from the others: this browser's own final scores, shown for their time and never sent. */
   private goLocal(now: number): void {
     const real = this.state!;
-    const left = this.timeLeft();
+    const deadline = this.deadline;
     this.set(finish(real), now);
-    this.kept = { s: real, left };
+    this.kept = { s: real, deadline };
   }
 
   /** The owner's step: players in and out, the clock, the hints, the end of the turn, and the drawer's points. */
@@ -434,6 +438,7 @@ export class DrawGame {
   private resetTurn(): void {
     this.sketch.clear();
     this.cursor = { n: 0, at: 0 };
+    this.stroking = false;
     this.secret = '';
     this.choices = [];
     this.close = null;

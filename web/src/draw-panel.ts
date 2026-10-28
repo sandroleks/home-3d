@@ -56,6 +56,8 @@ export interface TvPanelGame {
   tools: boolean;
   /** The guess box shows. */
   guess: boolean;
+  /** Start shows, at the final scores, for a player who may start the next game. */
+  start: boolean;
   rows: { name: string; score: number; drawer: boolean; here: boolean }[];
   feed: string[];
   close: string;
@@ -123,6 +125,7 @@ function gamePanel(i: TvPanelInput, s: DrawState): TvPanelGame {
     choices: drawer && s.phase === 'choosing' ? i.choices : [],
     tools: drawer && s.phase === 'drawing',
     guess: !drawer && s.phase === 'drawing' && !has,
+    start: s.phase === 'end' && i.youJoined && i.joined.length >= 2,
     rows: standings(s.players).map((p) => ({
       name: `${s.phase === 'end' ? `${p.place}. ` : p.id === s.drawer ? PENCIL : s.guessed.includes(p.id) ? TICK : ''}${p.name}`,
       score: p.score, drawer: p.id === s.drawer && s.phase !== 'end', here: p.here,
@@ -163,6 +166,9 @@ export class TvPanel {
   colour = 0;
   width = 0;
   private last = '';
+  /** The clock's text, and what the lists last showed, so the buttons and lists are rebuilt only when they change. */
+  private time = '';
+  private sections = { choices: '', rows: '', feed: '' };
   private painted = { version: -1, w: 0, h: 0 };
   private pen = false;
   private tools = false;
@@ -173,6 +179,7 @@ export class TvPanel {
     this.el('tv-join').addEventListener('click', () => h.join());
     this.el('tv-leave').addEventListener('click', () => h.join());
     this.el('tv-start').addEventListener('click', () => h.start());
+    this.el('draw-start').addEventListener('click', () => h.start());
     this.el('tv-close').addEventListener('click', () => h.close());
     this.el('draw-undo').addEventListener('click', () => h.undo());
     this.el('draw-clear').addEventListener('click', () => h.clear());
@@ -202,7 +209,6 @@ export class TvPanel {
       e.stopPropagation(); // typing never walks, toggles lights or closes the panel by its letter
       if (e.key === 'Escape') (h.escape ?? h.close)();
     });
-    input.addEventListener('keyup', (e) => e.stopPropagation());
     const canvas = this.el<HTMLCanvasElement>('draw-canvas');
     const at = (e: PointerEvent) => gridPoint(e.clientX, e.clientY, canvas.getBoundingClientRect());
     canvas.addEventListener('pointerdown', (e) => {
@@ -234,6 +240,7 @@ export class TvPanel {
 
   open(): void {
     this.last = '';
+    this.sections = { choices: '', rows: '', feed: '' };
     this.painted.version = -1;
     this.el('tv-panel').hidden = false;
     this.doc.body.classList.add('tv-open');
@@ -248,10 +255,14 @@ export class TvPanel {
 
   /** Puts the view on screen when it changed, and the drawing when it or the canvas's size changed. */
   render(view: TvPanelView, strokes: readonly Stroke[], version: number): void {
-    const key = JSON.stringify(view);
+    const key = JSON.stringify(view.game ? { ...view, game: { ...view.game, time: '' } } : view); // the clock ticks on its own
     if (key !== this.last) {
       this.last = key;
       this.fill(view);
+    }
+    if (view.game && view.game.time !== this.time) {
+      this.time = view.game.time;
+      this.el('draw-time').textContent = this.time;
     }
     if (view.game) this.paint(strokes, version);
   }
@@ -296,17 +307,19 @@ export class TvPanel {
     if (!this.tools) this.pen = false;
     if (!g) return;
     this.el('draw-word').textContent = g.word;
+    this.time = g.time;
     this.el('draw-time').textContent = g.time;
     this.el('draw-status').textContent = g.status;
     const choices = this.el('draw-choices');
     choices.hidden = !g.choices.length;
-    choices.replaceChildren(...g.choices.map((word) => {
+    if (this.sections.choices !== g.choices.join('|')) choices.replaceChildren(...g.choices.map((word) => {
       const b = this.doc.createElement('button');
       b.type = 'button';
       b.dataset.word = word;
       b.textContent = word;
       return b;
     }));
+    this.sections.choices = g.choices.join('|');
     this.el('draw-tools').hidden = !g.tools;
     this.el('draw-canvas').classList.toggle('drawing', g.tools);
     const form = this.el('draw-guess');
@@ -314,7 +327,8 @@ export class TvPanel {
     form.hidden = !g.guess;
     const touch = this.doc.body.classList.contains('touch'); // on a phone, focusing would pop the keyboard up
     if (wasHidden && g.guess && !touch && this.doc.activeElement === this.doc.body) this.el<HTMLInputElement>('draw-guess-text').focus();
-    this.el('draw-scores').replaceChildren(...g.rows.map((r) => {
+    const rows = JSON.stringify(g.rows);
+    if (this.sections.rows !== rows) this.el('draw-scores').replaceChildren(...g.rows.map((r) => {
       const li = this.doc.createElement('li');
       const name = this.doc.createElement('span');
       name.textContent = r.name;
@@ -325,11 +339,15 @@ export class TvPanel {
       li.classList.toggle('gone', !r.here);
       return li;
     }));
-    this.el('draw-feed').replaceChildren(...g.feed.map((line) => {
+    this.sections.rows = rows;
+    const feed = g.feed.join('\n');
+    if (this.sections.feed !== feed) this.el('draw-feed').replaceChildren(...g.feed.map((line) => {
       const li = this.doc.createElement('li');
       li.textContent = line;
       return li;
     }));
+    this.sections.feed = feed;
+    this.el<HTMLButtonElement>('draw-start').hidden = !g.start;
     this.el('draw-close').textContent = g.close;
     this.el('draw-close').hidden = !g.close;
   }

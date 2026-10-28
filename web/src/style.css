@@ -202,7 +202,7 @@ body.touch #board-panel { width: calc(100vw - 16px); padding: 10px 10px 12px; }
 .tv-head h2 { flex: 1; }
 #tv-lobby { display: flex; flex-direction: column; gap: 8px; }
 .tv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-#tv-panel #tv-start:not(:disabled) { background: var(--accent); color: #121110; }
+#tv-panel #tv-start:not(:disabled), #tv-panel #draw-start { background: var(--accent); color: #121110; }
 #tv-remote-note, #tv-lobby-note { color: var(--muted); font-size: 13px; }
 #tv-lobby-note { margin: 0; min-height: 1.2em; }
 #tv-players { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
