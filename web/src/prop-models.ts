@@ -1,4 +1,4 @@
-import { BoxGeometry, type BufferGeometry, CylinderGeometry, ExtrudeGeometry, LatheGeometry, Shape, type Texture, TorusGeometry, Vector2 } from 'three';
+import { BoxGeometry, type BufferGeometry, CylinderGeometry, ExtrudeGeometry, LatheGeometry, Shape, type Side, type Texture, TorusGeometry, Vector2 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /** The things in the drawers and cupboards that visitors can pick up (props.ts). */
@@ -6,7 +6,7 @@ export type PropKind = 'fork' | 'knife' | 'spoon' | 'teaspoon' | 'plate' | 'bowl
   | 'spicejar' | 'container' | 'oilbottle' | 'winebottle' | 'book' | 'case' | 'screwdriver' | 'spool';
 
 /** What a part is made of: its colour (and texture, for the model's own things), and whether it shines or is see-through. */
-export interface Look { colour: string; gloss?: boolean; opacity?: number; map?: Texture | null }
+export interface Look { colour: string; gloss?: boolean; opacity?: number; map?: Texture | null; side?: Side }
 export interface Part { geometry: BufferGeometry; look: Look }
 export interface KindInfo {
   /** What the prompt calls it. */

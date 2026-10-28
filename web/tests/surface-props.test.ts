@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { Box3, BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Object3D, Texture, Vector3 } from 'three';
+import { describe, expect, it, vi } from 'vitest';
+import { Box3, BoxGeometry, CylinderGeometry, DoubleSide, Group, Matrix4, Mesh, MeshStandardMaterial, Object3D, Texture, Vector3 } from 'three';
 import type { PropInfo } from '../src/manifest';
 import { modelKind, supportsOf, surfacePlaces } from '../src/surface-props';
 
@@ -46,6 +46,32 @@ describe('modelKind', () => {
     expect(b.min.y).toBeCloseTo(0);
     expect((b.min.x + b.max.x) / 2).toBeCloseTo(0);
     expect((b.min.z + b.max.z) / 2).toBeCloseTo(0);
+  });
+});
+
+describe('modelKind, what lies and what stands', () => {
+  const made = (size: [number, number, number]) => {
+    const node = new Mesh(new BoxGeometry(...size).translate(0, size[1] / 2, 0), new MeshStandardMaterial());
+    return modelKind(node, info('Prop_x', size));
+  };
+  it('stands a round bottle, with the tips from the manifest', () => {
+    const { kind, rest } = made([0.07, 0.3, 0.07]);
+    expect(rest.equals(new Group().matrix)).toBe(true);
+    expect(kind.size).toEqual([0.07, 0.3, 0.07]);
+    expect(kind.tips).toBe(true);
+  });
+  it('lays a flat pegboard tool', () => {
+    const { kind } = made([0.02, 0.159, 0.045]);
+    expect(kind.size[1]).toBeCloseTo(0.02);
+    expect(kind.tips).toBe(false);
+  });
+  it('lays a knife and a book', () => {
+    expect(made([0.004, 0.26, 0.025]).kind.size[1]).toBeCloseTo(0.004);
+    expect(made([0.2, 0.24, 0.03]).kind.size[1]).toBeCloseTo(0.03);
+  });
+  it('carries a double-sided material', () => {
+    const node = new Mesh(new BoxGeometry(0.1, 0.1, 0.1), new MeshStandardMaterial({ side: DoubleSide }));
+    expect(modelKind(node, info('Prop_x', [0.1, 0.1, 0.1])).kind.parts(0)[0].look.side).toBe(DoubleSide);
   });
 });
 
@@ -106,6 +132,29 @@ describe('surfacePlaces', () => {
     expect(p.place).toBe('Prop_test_mug');
     expect(p.info?.name).toBe('test_mug');
     expect(p.position.distanceTo(new Vector3(1, 0.9, -2))).toBeLessThan(1e-6);
+  });
+  it('warns about a manifest prop whose node is missing', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(surfacePlaces([info('Prop_gone', [0.1, 0.1, 0.1])], new Object3D())).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Prop_gone'));
+    warn.mockRestore();
+  });
+  it('puts a lying thing at home where it was: same world box', () => {
+    const root = new Object3D();
+    const node = new Mesh(new BoxGeometry(0.004, 0.26, 0.025).translate(0, 0.13, 0), new MeshStandardMaterial());
+    node.name = 'Prop_knife';
+    node.position.set(1, 0.9, -2);
+    root.add(node);
+    root.updateMatrixWorld(true);
+    const before = new Box3().setFromObject(node);
+    const [p] = surfacePlaces([info('Prop_knife', [0.004, 0.26, 0.025])], root);
+    const m = new Matrix4().compose(p.position, p.quaternion, new Vector3(1, 1, 1));
+    const after = new Box3();
+    for (const part of p.info!.parts(0)) after.union(part.geometry.boundingBox!.clone().applyMatrix4(m));
+    for (const k of ['x', 'y', 'z'] as const) {
+      expect(after.min[k]).toBeCloseTo(before.min[k], 4);
+      expect(after.max[k]).toBeCloseTo(before.max[k], 4);
+    }
   });
   it('finds what a thing lies on', () => {
     const root = new Object3D();

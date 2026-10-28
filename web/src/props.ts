@@ -1,4 +1,4 @@
-import { Box3, Color, Group, Matrix4, Mesh, MeshMatcapMaterial, type Object3D, Quaternion, Vector3 } from 'three';
+import { Box3, Color, FrontSide, Group, Matrix4, Mesh, MeshMatcapMaterial, type Object3D, Quaternion, Vector3 } from 'three';
 import { CONFIG } from './config';
 import type { Matcaps } from './creatures';
 import { KINDS, type KindInfo } from './prop-models';
@@ -104,7 +104,7 @@ export class Prop {
       const see = part.look.opacity !== undefined;
       const material = new MeshMatcapMaterial({
         color: base.clone(), matcap: (part.look.gloss ? matcaps.gloss : matcaps.matte) ?? null,
-        map: part.look.map ?? null, transparent: see, opacity: part.look.opacity ?? 1, depthWrite: !see,
+        map: part.look.map ?? null, side: part.look.side ?? FrontSide, transparent: see, opacity: part.look.opacity ?? 1, depthWrite: !see,
       });
       this.materials.push({ material, base });
       const mesh = new Mesh(part.geometry, material);
@@ -232,7 +232,7 @@ export class Props {
         }
       }
       p.root.getWorldPosition(pos);
-      p.setLevel(this.world.light(pos.x, pos.z) * (p.state === 'rest' && (p.atHome || p.root.parent !== this.world.root) ? CONFIG.props.insideLight : 1) * (p === this.lit ? CONFIG.props.highlight : 1));
+      p.setLevel(this.world.light(pos.x, pos.z) * (p.state === 'rest' && ((p.atHome && p.place.front !== '') || p.root.parent !== this.world.root) ? CONFIG.props.insideLight : 1) * (p === this.lit ? CONFIG.props.highlight : 1));
     }
     return out;
   }

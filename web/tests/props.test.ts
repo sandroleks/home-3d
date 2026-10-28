@@ -1,4 +1,4 @@
-import { Box3, BoxGeometry, type Mesh, type MeshMatcapMaterial, Object3D, Quaternion, Texture, Vector3 } from 'three';
+import { Box3, BoxGeometry, DoubleSide, FrontSide, type Mesh, type MeshMatcapMaterial, Object3D, Quaternion, Texture, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import type { PlacedProp } from '../src/prop-places';
@@ -113,6 +113,23 @@ describe('Props', () => {
     expect(((mug.root.children[0] as Mesh).material as MeshMatcapMaterial).map).toBe(map);
     expect(props.pickUp(mug)?.id).toBe(mug.id);
     expect(props.place({ point: new Vector3(0.5, 0.9, 0), yaw: 0, node: null })).toMatchObject({ s: 'rest' });
+  });
+
+  it('gives a prop the side of its look, front by default', () => {
+    const thing = (side?: typeof DoubleSide) => ({ name: 'x', size: [0.1, 0.1, 0.1] as [number, number, number], tips: false, parts: () => [{ geometry: new BoxGeometry(0.1, 0.1, 0.1), look: { colour: '#ffffff', side } }] });
+    const { props } = setup([placed('m/model/0', { kind: 'model', info: thing(DoubleSide) }), placed('m/model/1', { kind: 'model', info: thing() })]);
+    const sideOf = (i: number) => ((props.list[i].root.children[0] as Mesh).material as MeshMatcapMaterial).side;
+    expect(sideOf(0)).toBe(DoubleSide);
+    expect(sideOf(1)).toBe(FrontSide);
+  });
+
+  it('lights a model thing at home fully, but a drawer thing at home dimmed', () => {
+    const white = { name: 'mug', size: [0.08, 0.1, 0.08] as [number, number, number], tips: false, parts: () => [{ geometry: new BoxGeometry(0.08, 0.1, 0.08), look: { colour: '#ffffff' } }] };
+    const { props } = setup([placed('m/model/0', { kind: 'model', info: white, front: '' }), placed('d/model/0', { kind: 'model', info: white })]);
+    props.update(1 / 60);
+    const red = (i: number) => ((props.list[i].root.children[0] as Mesh).material as MeshMatcapMaterial).color.r;
+    expect(red(0)).toBeCloseTo(1);
+    expect(red(1)).toBeCloseTo(CONFIG.props.insideLight);
   });
 
   it('says which thing has no model info when a model place lacks it', () => {

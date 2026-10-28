@@ -3,8 +3,10 @@ import type { PropInfo } from './manifest';
 import type { KindInfo, Look, Part } from './prop-models';
 import { type PlacedProp, slug } from './prop-places';
 
-/** A thing more than this many times taller than it is wide lies along its length when set down. */
-export const LIE_RATIO = 4;
+/** A thing lies along its length when set down if its height is more than this many times its thinnest side... */
+export const LIE_LENGTH = 5;
+/** ...and its widest side is more than this many times its thinnest (long and flat, not round: bottles stand). */
+export const LIE_FLATNESS = 1.5;
 /** How far above another's base (or top) a thing's base may be and still rest on it (m). */
 export const SUPPORT_SLACK = 0.01;
 
@@ -17,12 +19,13 @@ function lookOf(material: unknown): Look {
     gloss: m.roughness < 0.5,
     opacity: m.transparent ? m.opacity : undefined,
     map: m.map,
+    side: m.side,
   };
 }
 
 /** A kind built from a model node: the prompt name, size and tips from the manifest, its meshes' geometry (in the
- * node's space, origin at the middle of its base) with each material's colour, texture and opacity. Something more
- * than LIE_RATIO times taller than it is wide lies along its length when set down: `rest` is the turn from how it's
+ * node's space, origin at the middle of its base) with each material's colour, texture and opacity. Something long and
+ * flat (LIE_LENGTH, LIE_FLATNESS) lies along its length when set down: `rest` is the turn from how it's
  * modelled to how it lies (identity otherwise), and `size` is lying. */
 export function modelKind(node: Object3D, info: PropInfo): { kind: KindInfo; rest: Matrix4 } {
   node.updateWorldMatrix(true, true);
@@ -39,7 +42,8 @@ export function modelKind(node: Object3D, info: PropInfo): { kind: KindInfo; res
   let size = info.size;
   let tips = info.tips;
   const [w, h, l] = info.size;
-  if (h > LIE_RATIO * Math.max(w, l)) {
+  const thin = Math.min(w, l);
+  if (h > LIE_LENGTH * thin && Math.max(w, l) > LIE_FLATNESS * thin) {
     rest.makeRotationX(-Math.PI / 2);
     for (const p of parts) p.geometry.applyMatrix4(rest).computeBoundingBox();
     const flat = boxOf().getSize(new Vector3());
@@ -85,7 +89,10 @@ export function surfacePlaces(props: PropInfo[], root: Object3D): PlacedProp[] {
   root.updateMatrixWorld(true);
   const found = props.flatMap((info) => {
     const node = root.getObjectByName(info.node);
-    if (!node) return [];
+    if (!node) {
+      console.warn(`Surface prop ${info.node} is in the manifest but not in the model; skipped`);
+      return [];
+    }
     const { kind, rest } = modelKind(node, info);
     const home = node.matrixWorld.clone().multiply(rest.clone().invert());
     const box = new Box3();
