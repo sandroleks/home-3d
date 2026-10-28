@@ -1,4 +1,5 @@
 import { blackBody, type HueScene, levelFor } from './hue';
+import type { GuestRow } from './guests';
 import type { MicState } from './voice';
 
 export const COPY = {
@@ -53,6 +54,7 @@ export class UI {
   private lastSitting = false;
   private lastRoomLight: boolean | null | undefined;
   private touch = false;
+  private lastGuests = '';
 
   constructor(private doc: Document) {}
 
@@ -122,6 +124,44 @@ export class UI {
     p.hidden = people.length === 0;
     const text = people.length ? `With ${people.map((x) => (x.talking ? `${x.name} 🔊` : x.name)).join(', ')}` : '';
     if (p.textContent !== text) p.textContent = text;
+  }
+
+  /** The guest list's rows, redrawn only when something in them changed. Names come from other visitors: text only. */
+  setGuests(rows: GuestRow[]): void {
+    const key = JSON.stringify(rows);
+    if (key === this.lastGuests) return;
+    this.lastGuests = key;
+    this.el('guest-rows').replaceChildren(...rows.map((r) => {
+      const li = this.doc.createElement('li');
+      const dot = this.doc.createElement('i');
+      dot.style.background = r.colour;
+      const name = this.doc.createElement('span');
+      name.textContent = `${r.name}${r.you ? ' (you)' : ''}${r.host ? ' 👑' : ''}${r.talking ? ' 🔊' : ''}`;
+      const room = this.doc.createElement('span');
+      room.className = 'room';
+      room.textContent = r.room ?? '';
+      li.append(dot, name, room);
+      return li;
+    }));
+    this.el('guests-alone').hidden = rows.length > 1;
+  }
+
+  get guestsOpen(): boolean {
+    return !this.el('guests').hidden;
+  }
+
+  /** Shows or hides the guest list; returns whether it is open now. */
+  toggleGuests(): boolean {
+    const panel = this.el('guests');
+    panel.hidden = !panel.hidden;
+    this.el('touch-guests').setAttribute('aria-expanded', String(!panel.hidden));
+    return !panel.hidden;
+  }
+
+  /** A click on the "With …" line (with the mouse free) or the touch bar's people button. */
+  onGuests(cb: () => void): void {
+    this.el('people').addEventListener('click', cb);
+    this.el('touch-guests').addEventListener('click', cb);
   }
 
   hideStart(): void {

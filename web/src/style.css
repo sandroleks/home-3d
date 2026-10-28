@@ -73,6 +73,23 @@ kbd {
 }
 #mic:not(.off) .mic-off, #touch-mic[aria-pressed='true'] .mic-off { display: none; }
 
+/* Who's here (G, a click on the "With …" line with the mouse free, or the touch bar's people button): top left, under
+   the room name. It only shows, so clicks and touches go through to the view; it sits above the pause veil like the
+   sun panel. */
+#guests {
+  position: fixed; left: calc(16px + env(safe-area-inset-left)); top: calc(64px + env(safe-area-inset-top)); z-index: 10;
+  width: min(260px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px 14px; border-radius: 10px;
+  background: rgba(30, 28, 25, 0.78); font-size: 13px; pointer-events: none;
+}
+#guests h2 { margin: 0 0 6px; font-size: 14px; font-weight: 500; letter-spacing: 0.03em; }
+#guest-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+#guest-rows li { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; }
+#guest-rows i { width: 10px; height: 10px; border-radius: 50%; }
+#guest-rows span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#guest-rows .room { color: var(--muted); }
+#guests-alone { margin: 6px 0 0; color: var(--muted); line-height: 1.4; }
+body.cursor #people { pointer-events: auto; cursor: pointer; }
+
 /* The sun panel stays on screen, bottom left. While walking the mouse is captured, so it only shows.
    Tab frees the mouse without pausing, so the panel takes clicks while the keys keep walking; with
    the walkthrough paused (Esc) it sits above the pause veil and takes clicks too. */
