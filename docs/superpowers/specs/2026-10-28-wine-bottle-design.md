@@ -1,7 +1,7 @@
 # Wine Bottle — Design
 
 **Date:** 2026-10-28
-**Status:** Approved
+**Status:** Implemented
 
 ## Goal
 
