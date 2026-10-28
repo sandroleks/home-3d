@@ -168,7 +168,7 @@ body.guests-open #people { display: none; } /* the open panel lists the same peo
 .board-player span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-side { color: var(--muted); font-size: 12px; }
 #board-area { position: relative; }
-.chess-board svg { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.chess-board svg, .backgammon-board svg { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; cursor: pointer; }
 .chess-board text { font-family: 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', 'Noto Sans Symbols 2', sans-serif; }
 .promotion {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: 6px; padding: 8px;
