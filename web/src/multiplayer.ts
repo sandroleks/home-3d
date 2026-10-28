@@ -2,13 +2,14 @@ import type { Room as TrysteroRoom } from 'trystero';
 import type { Avatars } from './avatars';
 import { CONFIG } from './config';
 import { type GameMessage, isGameMessage } from './games';
+import { isPropMessage, type PropMessage } from './props';
 import {
   applyState, cleanName, collectState, colourFor, encodePose, isPose, isStateMap, Peers, type PoseMessage, poseMoved,
   type Seating, shouldSend, type StateMap, type StateWorld, hostOf,
 } from './presence';
 
-export type MessageKind = 'hello' | 'pose' | 'state' | 'game';
-const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game'];
+export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'prop';
+const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'prop'];
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 /** What the walkthrough needs from a network: Trystero today, a WebSocket server another day. */
@@ -65,6 +66,12 @@ export interface MultiplayerHooks {
   onGame?: (game: GameMessage) => void;
   /** The table's games, sent to a newcomer with the flat's state. */
   games?: () => GameMessage[];
+  /** A loose thing another visitor moved (well-formed; whether to take it is the props' call). */
+  onProp?: (m: PropMessage) => void;
+  /** Everything away from home, sent to a newcomer with the flat's state. */
+  props?: () => PropMessage[];
+  /** A visitor left or timed out (before their animal goes). */
+  onLeave?: (id: string) => void;
 }
 
 /**
@@ -121,6 +128,7 @@ export class Multiplayer {
       if ('want' in data) {
         room.send('state', { ...collectState(world), full: 1 }, id);
         for (const game of hooks.games?.() ?? []) room.send('game', game, id);
+        for (const m of hooks.props?.() ?? []) room.send('prop', m as unknown as Json, id);
         return;
       }
       if ('full' in data) this.settled = true;
@@ -131,6 +139,11 @@ export class Multiplayer {
       if (!isGameMessage(data)) return;
       if (this.arrive(id)) this.greet(id, true);
       hooks.onGame?.(data);
+    });
+    room.onMessage('prop', (data, id) => {
+      if (!isPropMessage(data)) return;
+      if (this.arrive(id)) this.greet(id, true);
+      hooks.onProp?.(data);
     });
   }
 
@@ -192,6 +205,7 @@ export class Multiplayer {
   private depart(id: string): void {
     this.streams.delete(id);
     if (!this.peers.remove(id)) return;
+    this.hooks.onLeave?.(id);
     this.avatars.remove(id);
     this.voice?.remove(id);
     this.hooks.onPeers(this.peers.names());
@@ -220,10 +234,16 @@ export class Multiplayer {
     this.room.send('game', game);
   }
 
+  /** Tells the others what happened to a loose thing. */
+  sendProp(m: PropMessage): void {
+    this.room.send('prop', m as unknown as Json);
+  }
+
   /** Every frame: drop the silent. */
   tick(): void {
     const gone = this.peers.prune(this.hooks.now());
     for (const id of gone) {
+      this.hooks.onLeave?.(id);
       this.avatars.remove(id);
       this.voice?.remove(id);
     }

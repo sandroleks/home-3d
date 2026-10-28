@@ -5,6 +5,7 @@ import { DoorState } from '../src/doors';
 import { LightGroups } from '../src/lightmaps';
 import type { GameMessage } from '../src/games';
 import type { DoorInfo } from '../src/manifest';
+import type { PropMessage } from '../src/props';
 import { type MessageKind, Multiplayer, type Room } from '../src/multiplayer';
 
 const door: DoorInfo = { node: 'Door_1', hinge: [0, 0], dir: [0, 1], width: 0.8, openAngle: -1.5, opening: 1, lightmap: { file: 'd', range: 1 }, packs: [] };
@@ -49,12 +50,17 @@ function setup(joinedAt = 1000, arrived = joinedAt) {
   const hosts: string[] = [];
   const games: GameMessage[] = [];
   let running: GameMessage[] = [];
+  const propsIn: PropMessage[] = [];
+  const leftIds: string[] = [];
+  let away: PropMessage[] = [];
   const mp = new Multiplayer(fake.room, world, avatars, 'Ana', {
     now: () => now, onChanged: (k) => void changed.push(k), onPeers: (n) => void peers.push(n), onHost: (h) => void hosts.push(h),
     onGame: (g) => void games.push(g), games: () => running,
+    onProp: (m) => void propsIn.push(m), props: () => away, onLeave: (id) => void leftIds.push(id),
   }, joinedAt, arrived);
   return {
-    fake, world, avatars, mp, changed, peers, hosts, games, setNow: (t: number) => { now = t; }, setGames: (g: GameMessage[]) => { running = g; },
+    fake, world, avatars, mp, changed, peers, hosts, games, propsIn, leftIds,
+    setNow: (t: number) => { now = t; }, setGames: (g: GameMessage[]) => { running = g; }, setAway: (m: PropMessage[]) => { away = m; },
     node: new Object3D(),
   };
 }
@@ -314,5 +320,36 @@ describe('Multiplayer', () => {
     expect(peers.at(-1)).toEqual([]);
     mp.leave();
     expect(fake.left).toBe(true);
+  });
+  it('passes on loose things that others move, and only well-formed ones', () => {
+    const { fake, propsIn } = setup();
+    fake.receive('prop', { id: 'a/tumbler/0', n: 1, by: 'p1', s: 'held' }, 'p1');
+    fake.receive('prop', { id: 'a/tumbler/0', n: 'x', by: 'p1', s: 'held' }, 'p1');
+    expect(propsIn).toEqual([{ id: 'a/tumbler/0', n: 1, by: 'p1', s: 'held' }]);
+  });
+
+  it('sends a newcomer the loose things away from home, with the flat', () => {
+    const { fake, setAway } = setup();
+    const away: PropMessage = { id: 'a/tumbler/0', n: 2, by: 'me', s: 'rest', parent: null, p: [1, 0, 1], q: [0, 0, 0, 1] };
+    setAway([away]);
+    fake.receive('state', { want: 1 }, 'p1');
+    expect(fake.sent.filter((s) => s.kind === 'prop')).toEqual([{ kind: 'prop', data: away, to: 'p1' }]);
+  });
+
+  it('sends a loose thing to everyone', () => {
+    const { fake, mp } = setup();
+    mp.sendProp({ id: 'a/tumbler/0', n: 1, by: 'me', s: 'held' });
+    expect(fake.sent.at(-1)).toEqual({ kind: 'prop', data: { id: 'a/tumbler/0', n: 1, by: 'me', s: 'held' } });
+  });
+
+  it('says who left, while their animal is still there', () => {
+    const { fake, leftIds, avatars } = setup();
+    fake.receive('hello', { name: 'Bo', since: 500 }, 'p1');
+    let seen = false;
+    const before = avatars.remove.bind(avatars);
+    avatars.remove = (id: string) => { seen = leftIds.includes(id); before(id); };
+    fake.leave('p1');
+    expect(leftIds).toEqual(['p1']);
+    expect(seen).toBe(true);
   });
 });
