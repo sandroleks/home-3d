@@ -365,6 +365,18 @@ function room(...ids: string[]) {
       sees[id] = [id];
       for (const o of ids) if (o !== id) { reach[o] = reach[o].filter((v) => v !== id); sees[o] = sees[o].filter((v) => v !== id); }
     },
+    /** `id` alone loses sight and sound of the others (they still show it as here, not yet having timed it out). */
+    blind(id: string) {
+      reach[id] = [];
+      sees[id] = [id];
+      for (const o of ids) if (o !== id) reach[o] = reach[o].filter((v) => v !== id);
+    },
+    /** The link is back, and only `id`, who had lost the others, sees them arrive and greets them. */
+    recover(id: string) {
+      sees[id] = [...ids];
+      for (const o of ids) reach[o] = ids.filter((v) => v !== o);
+      for (const o of ids) if (o !== id) send(id, g[id].greet(o));
+    },
     /** Everyone sees and hears everyone again, and each greets the others. */
     heal() {
       for (const id of ids) { sees[id] = [...ids]; reach[id] = ids.filter((o) => o !== id); }
@@ -420,25 +432,53 @@ describe('browsers that disagree about who is here', () => {
     r.tick();
     for (const id of ['ana', 'rui', 'ze']) expect(r.g[id].state).toMatchObject({ id: 'g1', phase: 'drawing', owner: 'ana' });
   });
-  it('keeps the game running when its cut-off owner comes back before the others noticed', () => {
+  it('keeps the game running when an owner who lost sight of the others for a moment sees them again', () => {
     const r = trio(true);
     r.tick(1000);
-    // Ana's view lost Rui and Zé (and nothing she says arrives), theirs still shows her.
-    r.sees.ana = ['ana'];
-    r.reach.ana = [];
-    r.reach.rui = ['ze'];
-    r.reach.ze = ['rui'];
+    r.blind('ana');
+    r.tick(1000);
+    r.tick(1000); // Ana has pruned them; they have not pruned her; the grace is not up
+    r.recover('ana');
     r.tick();
-    r.tick(ISOLATION_GRACE);
-    expect(r.g.ana.state).toMatchObject({ phase: 'end' });
-    expect(r.g.rui.state?.phase).toBe('drawing');
-    r.sent.length = 0;
-    r.heal();
     expect(r.sent.filter((m) => m.from === 'ana' && m.msg.k === 'state' && m.msg.s.phase === 'end')).toEqual([]);
-    expect(r.g.rui.state?.phase).toBe('drawing');
-    expect(r.g.ze.state?.phase).toBe('drawing');
-    expect(r.g.ana.state).toMatchObject({ phase: 'drawing', owner: 'ana' }); // the running state is hers again
+    for (let t = 0; t < 5; t++) r.tick(1000);
+    for (const id of ['ana', 'rui', 'ze']) expect(r.g[id].state, id).toMatchObject({ id: 'g1', phase: 'drawing', owner: 'ana' });
     expect(r.g.ana.canDraw).toBe(true);
+  });
+  it('picks the game up again when an owner cut off for longer than the grace sees the others return', () => {
+    const r = trio(true);
+    r.blind('ana');
+    for (let t = 0; t < 10; t++) r.tick(500);
+    expect(r.g.ana.state).toMatchObject({ phase: 'end' }); // her own scores
+    r.recover('ana');
+    r.tick();
+    expect(r.g.ana.state).toMatchObject({ phase: 'drawing', owner: 'ana', turn: 1 });
+    expect(r.g.ana.secret).toBe('cat');
+    expect(r.g.ana.canDraw).toBe(true);
+    r.tick(76000);
+    for (const id of ['ana', 'rui', 'ze']) expect(r.g[id].state?.phase, id).toBe('drawing');
+    r.tick(5000);
+    r.tick(5000);
+    for (const id of ['ana', 'rui', 'ze']) expect(r.g[id].state, id).toMatchObject({ phase: 'choosing', drawer: 'rui', turn: 2 });
+  });
+  it('never forgets who said they play because they were out of sight', () => {
+    const r = trio(true);
+    r.blind('ana');
+    r.tick(1000);
+    expect(r.g.ana.playing(r.vis('ana')).map((v) => v.id)).toEqual(['ana']);
+    r.recover('ana');
+    expect(r.g.ana.playing(r.vis('ana')).map((v) => v.id)).toEqual(['ana', 'rui', 'ze']);
+  });
+  it('takes no late state of a replaced owner while showing its own scores', () => {
+    const r = trio(true);
+    const late = r.g.ana.state!;
+    r.blind('ana');
+    for (let t = 0; t < 10; t++) r.tick(500);
+    expect(r.g.ana.state?.phase).toBe('end');
+    r.g.ana.receive({ k: 'state', s: { ...late, seq: late.seq - 1 } }, 'rui', r.now);
+    expect(r.g.ana.state?.phase).toBe('end');
+    r.g.ana.receive({ k: 'state', s: { ...late, seq: late.seq } }, 'rui', r.now);
+    expect(r.g.ana.state?.phase).toBe('drawing');
   });
   it('keeps the game and its drawing for a newcomer whose visitors have not shown up yet', () => {
     const r = trio(true);

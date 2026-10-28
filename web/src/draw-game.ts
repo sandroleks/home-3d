@@ -121,8 +121,9 @@ export class DrawGame {
   private flushed = -Infinity;
   /** Since when no other player of the game has been in sight, if so. */
   private aloneSince: number | null = null;
-  /** The state is this browser's own final scores, made while cut off: never sent, and any real state replaces it. */
-  private local = false;
+  /** While cut off, the last shared state and the time it had left: the state shown is then this browser's own final
+   * scores, an overlay never sent, which the real state replaces when the others are back. */
+  private kept: { s: DrawState; left: number } | null = null;
 
   constructor(private selfId: () => string, private newId: () => string, private rand: () => number = Math.random) {}
 
@@ -232,8 +233,8 @@ export class DrawGame {
   greet(id: string): DrawOut[] {
     const out: DrawOut[] = this.mine ? [{ msg: { k: 'join', on: true }, to: id }] : [];
     const s = this.state;
-    if (s && s.owner === id && s.owner !== this.selfId() && !this.local) out.push({ ...this.stateOut(), to: id }); // an owner back from a cut: the game as the others kept it
-    if (!s || s.owner !== this.selfId() || this.local) return out;
+    if (s && s.owner === id && s.owner !== this.selfId() && !this.kept) out.push({ ...this.stateOut(), to: id }); // an owner back from a cut: the game as the others kept it
+    if (!s || s.owner !== this.selfId() || this.kept) return out;
     out.push({ ...this.stateOut(), to: id });
     const strokes = this.sketch.strokes.map((st) => ({ c: st.c, w: st.w, p: [...st.p] }));
     if (strokes.length) out.push({ msg: { k: 'sketch', g: s.id, t: s.turn, strokes }, to: id });
@@ -276,12 +277,7 @@ export class DrawGame {
   update(now: number, visitors: Visitor[]): DrawOut[] {
     this.now = now;
     const present = new Set(visitors.map((v) => v.id));
-    for (const id of this.others) {
-      if (present.has(id)) continue;
-      this.others.delete(id);
-      this.version++;
-    }
-    const s = this.state;
+    let s = this.state;
     if (!s) {
       this.aloneSince = null;
       return [];
@@ -289,10 +285,12 @@ export class DrawGame {
     const me = this.selfId();
     // The game's players in sight (this visitor included, when it plays): fewer than two and nobody can run it here.
     const sight = s.players.filter((p) => p.here && (p.id === me || present.has(p.id))).length;
-    if (sight >= 2) this.aloneSince = null;
-    else if (this.aloneSince === null) this.aloneSince = now;
+    if (sight >= 2) {
+      this.aloneSince = null;
+      if (this.kept) s = this.restore(now);
+    } else if (this.aloneSince === null) this.aloneSince = now;
     if (s.phase === 'end') {
-      if (now >= this.deadline) this.drop(!this.local);
+      if (now >= this.deadline) this.drop(!this.kept);
       return [];
     }
     if (sight < 2) {
@@ -307,10 +305,23 @@ export class DrawGame {
     return [];
   }
 
+  /** The others are back in sight: the real state is shown again, its deadline from the time it had left. */
+  private restore(now: number): DrawState {
+    const { s, left } = this.kept!;
+    this.kept = null;
+    this.state = s;
+    this.deadline = now + left;
+    this.aloneSince = null;
+    this.version++;
+    return s;
+  }
+
   /** Cut off from the others: this browser's own final scores, shown for their time and never sent. */
   private goLocal(now: number): void {
-    this.set(finish(this.state!), now);
-    this.local = true;
+    const real = this.state!;
+    const left = this.timeLeft();
+    this.set(finish(real), now);
+    this.kept = { s: real, left };
   }
 
   /** The owner's step: players in and out, the clock, the hints, the end of the turn, and the drawer's points. */
@@ -398,7 +409,7 @@ export class DrawGame {
   private accept(next: DrawState, now: number): void {
     const cur = this.state;
     if (this.finished.has(next.id)) return;
-    const ok = !cur || (cur.id === next.id ? this.local || next.seq > cur.seq : cur.phase === 'end' || (cur.turn === 1 && next.turn === 1 && next.id < cur.id));
+    const ok = !cur || (cur.id === next.id ? this.kept ? next.seq >= this.kept.s.seq : next.seq > cur.seq : cur.phase === 'end' || (cur.turn === 1 && next.turn === 1 && next.id < cur.id));
     if (!ok) return;
     this.set(next, now, true);
   }
@@ -407,8 +418,8 @@ export class DrawGame {
    * came from elsewhere, or when the phase changed. */
   private set(next: DrawState, now: number, sent = false): void {
     const cur = this.state;
-    this.local = false;
-    if (!cur || cur.id !== next.id) this.aloneSince = null;
+    this.kept = null;
+    this.aloneSince = null;
     const newTurn = !cur || cur.id !== next.id || cur.turn !== next.turn;
     if (newTurn) {
       if (cur && cur.id !== next.id) this.finished.add(cur.id);
@@ -433,6 +444,7 @@ export class DrawGame {
   private drop(over: boolean): void {
     if (over) this.finished.add(this.state!.id);
     this.state = null;
+    this.kept = null;
     this.resetTurn();
     this.version++;
   }
