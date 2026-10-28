@@ -78,6 +78,9 @@ export interface SiteInfo { lat: number; lon: number; timeZone: string; yBearing
 export interface SkyInfo { irradiance: number; wattsToScene: number }
 /** An exterior glass pane in three.js space; the normal points outdoors. */
 export interface WindowInfo { room: string; center: [number, number, number]; normal: [number, number, number]; width: number; height: number }
+/** A loose thing from the model: its node (origin at the middle of its base), what the prompt calls it, its room, its
+ * box (m: width, height, length) and whether it falls over when it lands hard. */
+export interface PropInfo { node: string; name: string; room: string | null; size: [number, number, number]; tips: boolean }
 export interface Manifest {
   version: 3;
   eyeHeight: number;
@@ -93,6 +96,7 @@ export interface Manifest {
   site: SiteInfo;
   sky: SkyInfo;
   windows: WindowInfo[];
+  props: PropInfo[];
 }
 export interface CollisionData {
   x0: number;
@@ -122,6 +126,10 @@ function num(v: unknown, path: string): number {
 }
 function str(v: unknown, path: string): string {
   if (typeof v !== 'string') throw new ManifestError(`${path}: expected a string`);
+  return v;
+}
+function bool(v: unknown, path: string): boolean {
+  if (typeof v !== 'boolean') throw new ManifestError(`${path}: expected true or false`);
   return v;
 }
 function strOrNull(v: unknown, path: string): string | null {
@@ -277,6 +285,17 @@ export function parseManifest(json: unknown): Manifest {
         normal: vec(w.normal, 3, `windows[${i}].normal`) as [number, number, number],
         width: num(w.width, `windows[${i}].width`),
         height: num(w.height, `windows[${i}].height`),
+      };
+    }),
+    props: arr(m.props ?? [], 'props').map((v, i) => {
+      const p = `props[${i}]`;
+      const x = obj(v, p);
+      return {
+        node: str(x.node, `${p}.node`),
+        name: str(x.name, `${p}.name`),
+        room: strOrNull(x.room, `${p}.room`),
+        size: vec(x.size, 3, `${p}.size`) as [number, number, number],
+        tips: bool(x.tips, `${p}.tips`),
       };
     }),
   };

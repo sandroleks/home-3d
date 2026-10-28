@@ -70,6 +70,27 @@ describe('parseManifest', () => {
     bad.windows[0].normal = [0, 1];
     expect(() => parseManifest(bad)).toThrow('windows[0].normal');
   });
+
+  it('reads the loose things on surfaces', () => {
+    const m = parseManifest(sampleManifest());
+    expect(m.props).toEqual([{ node: 'Prop_test-mug', name: 'mug', room: 'alpha', size: [0.08, 0.09, 0.08], tips: false }]);
+  });
+
+  it('reads no props from a manifest without them', () => {
+    const raw = sampleManifest() as Record<string, unknown>;
+    delete raw.props;
+    expect(parseManifest(raw).props).toEqual([]);
+  });
+
+  it('names a broken prop field', () => {
+    const badSize = sampleManifest() as { props: { size: unknown }[] };
+    badSize.props[0].size = [0.08, 0.09];
+    expect(() => parseManifest(badSize)).toThrow(ManifestError);
+    expect(() => parseManifest(badSize)).toThrow('props[0].size');
+    const badName = sampleManifest() as { props: { name: unknown }[] };
+    badName.props[0].name = 5;
+    expect(() => parseManifest(badName)).toThrow('props[0].name');
+  });
 });
 
 describe('parseCollision', () => {
