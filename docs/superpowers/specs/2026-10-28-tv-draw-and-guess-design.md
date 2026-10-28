@@ -1,7 +1,7 @@
 # TV Draw and Guess — Design
 
 **Date:** 2026-10-28
-**Status:** Approved
+**Status:** Implemented
 
 ## Goal
 
