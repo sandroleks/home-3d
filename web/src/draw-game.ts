@@ -49,7 +49,7 @@ const isLine = (v: unknown) => {
   const l = v as FeedLine;
   return isObject(v) && isText(l.id) && FEED_KINDS.includes(l.kind) && typeof l.text === 'string' && l.text.length <= MAX_GUESS;
 };
-const isPoints = (v: unknown) => isObject(v) && isText((v as TurnPoints).id) && isCount((v as TurnPoints).points, 1e6);
+const isTurnPoints = (v: unknown) => isObject(v) && isText((v as TurnPoints).id) && isCount((v as TurnPoints).points, 1e6);
 const isWord = (v: unknown) => typeof v === 'string' && /^[a-z ]{1,32}$/.test(v);
 const longest = Math.round(1000 * Math.max(CONFIG.draw.choose, CONFIG.draw.drawing, CONFIG.draw.reveal, CONFIG.draw.end));
 
@@ -62,7 +62,7 @@ export function isDrawState(v: unknown): v is DrawState {
     && isCount(s.turn, MAX_TURNS) && s.turn >= 1 && PHASES.includes(s.phase)
     && typeof s.left === 'number' && Number.isFinite(s.left) && s.left >= 0 && s.left <= longest
     && typeof s.mask === 'string' && /^[a-z _]{0,32}$/.test(s.mask) && typeof s.word === 'string' && /^[a-z ]{0,32}$/.test(s.word)
-    && isList(s.guessed, MAX_PLAYERS, (x) => isText(x)) && isList(s.points, MAX_PLAYERS, isPoints)
+    && isList(s.guessed, MAX_PLAYERS, (x) => isText(x)) && isList(s.points, MAX_PLAYERS, isTurnPoints)
     && isList(s.used, MAX_TURNS, isWord) && isList(s.feed, CONFIG.draw.feed, isLine);
 }
 
@@ -274,15 +274,21 @@ export class DrawGame {
     const s = this.state;
     if (!s) return [];
     if (s.phase === 'end') {
-      if (now >= this.deadline) this.drop();
+      if (now >= this.deadline) this.drop(true);
       return [];
     }
     const me = this.selfId();
     if (s.owner === me) return this.own(now, visitors);
     if (present.has(s.owner)) return [];
-    const leader = this.leader(visitors);
-    if (leader === me) return this.takeOver(now);
-    if (leader === null) this.drop(); // no player of the game is left here
+    // With no other player of the game in sight, this browser is the one cut off (or the last one): it can't run the
+    // game, and must send nothing of it. The game goes from here without being marked over: if the others come back,
+    // their greeting brings the real state.
+    const others = s.players.filter((p) => p.here && p.id !== s.owner && p.id !== me && present.has(p.id));
+    if (!others.length) {
+      this.drop(false);
+      return [];
+    }
+    if (this.leader(visitors) === me) return this.takeOver(now);
     return [];
   }
 
@@ -345,7 +351,7 @@ export class DrawGame {
   /** The owner judges a guess: "guessed it!" or the feed for everyone, and "close!" to the guesser alone. */
   private judge(from: string, g: string, t: number, text: string, now: number): DrawOut[] {
     const s = this.state;
-    if (!s || s.owner !== this.selfId() || s.phase !== 'drawing' || g !== s.id || t !== s.turn || !this.secret) return [];
+    if (!s || s.owner !== this.selfId() || s.phase !== 'drawing' || now >= this.deadline || g !== s.id || t !== s.turn || !this.secret) return [];
     if (from === s.drawer || s.guessed.includes(from) || !s.players.some((p) => p.id === from && p.here)) return [];
     const clean = cleanGuess(text);
     if (!clean) return [];
@@ -383,25 +389,28 @@ export class DrawGame {
     const newTurn = !cur || cur.id !== next.id || cur.turn !== next.turn;
     if (newTurn) {
       if (cur && cur.id !== next.id) this.finished.add(cur.id);
-      this.sketch.clear();
-      this.cursor = { n: 0, at: 0 };
-      this.secret = '';
-      this.choices = [];
-      this.close = null;
+      this.resetTurn();
     }
     if (sent || newTurn || cur!.phase !== next.phase) this.deadline = now + next.left;
     this.state = next;
     this.version++;
   }
 
-  /** The game is over here. */
-  private drop(): void {
-    this.finished.add(this.state!.id);
-    this.state = null;
+  /** A new turn: a blank drawing, no word, no "close!". */
+  private resetTurn(): void {
     this.sketch.clear();
+    this.cursor = { n: 0, at: 0 };
     this.secret = '';
     this.choices = [];
     this.close = null;
+  }
+
+  /** The game goes from here. Only a game that ended (`over`) is remembered as finished, so a late copy never comes
+   * back; one nobody here can run may well be shown again when its players are back in sight. */
+  private drop(over: boolean): void {
+    if (over) this.finished.add(this.state!.id);
+    this.state = null;
+    this.resetTurn();
     this.version++;
   }
 

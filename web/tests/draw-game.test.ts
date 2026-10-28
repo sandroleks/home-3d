@@ -245,7 +245,7 @@ describe('joining and leaving', () => {
     expect(s.feed.at(-1)).toEqual({ id: 'ana', kind: 'left', text: '' });
     p.leave('rui');
     p.tick();
-    expect(p.game('ze').state).toMatchObject({ phase: 'end' }); // Zé alone: the game is over
+    expect(p.game('ze').state).toBeNull(); // Zé alone: nobody to play with, no game shown
   });
   it("drops a game nobody playing it is left to run, on an onlooker's TV", () => {
     const p = party('Ana', 'Rui', 'Ze');
@@ -327,5 +327,124 @@ describe('draw messages', () => {
     expect(isDrawState({ ...s, players: [{ id: 'a', name: 'x'.repeat(25), score: 0, here: true, drew: false }] })).toBe(false);
     expect(isDrawState({ ...s, feed: Array.from({ length: 9 }, () => ({ id: 'a', kind: 'hit', text: '' })) })).toBe(false);
     expect(isDrawState({ ...s, queue: Array.from({ length: 33 }, (_, i) => `p${i}`) })).toBe(false);
+  });
+});
+
+/** Browsers that can disagree about who is here: `sees[id]` is what each one's presence shows; a browser nobody sees
+ * (`offline`) neither hears nor is heard. */
+function room(...ids: string[]) {
+  let now = 1000;
+  let n = 0;
+  const g: Record<string, DrawGame> = Object.fromEntries(ids.map((id) => [id, new DrawGame(() => id, () => `g${++n}`, () => 0)]));
+  const offline = new Set<string>();
+  const sees: Record<string, string[]> = Object.fromEntries(ids.map((id) => [id, [...ids]]));
+  const vis = (id: string): Visitor[] => sees[id].map((v) => ({ id: v, name: v, arrived: ids.indexOf(v) + 1, since: ids.indexOf(v) + 1 }));
+  const send = (from: string, outs: DrawOut[]) => {
+    for (const o of outs) {
+      const msg = JSON.parse(JSON.stringify(o.msg)) as DrawMessage;
+      expect(isDrawMessage(msg)).toBe(true);
+      for (const id of ids) {
+        if (id === from || offline.has(id) || offline.has(from) || (o.to && o.to !== id)) continue;
+        send(id, g[id].receive(msg, from, now));
+      }
+    }
+  };
+  return {
+    g, offline, sees, send, vis,
+    get now() { return now; },
+    tick(ms = 0) {
+      now += ms;
+      for (const id of ids) send(id, g[id].update(now, vis(id)));
+    },
+    /** `id` loses its connection: it sees only itself, the others no longer see it. */
+    cut(id: string) {
+      offline.add(id);
+      sees[id] = [id];
+      for (const o of ids) if (o !== id) sees[o] = sees[o].filter((v) => v !== id);
+    },
+    /** `id` is back: everyone sees everyone, and the others greet it. */
+    heal(id: string) {
+      offline.delete(id);
+      for (const o of ids) sees[o] = [...ids].filter((v) => !offline.has(v) || v === o);
+      for (const o of ids) if (o !== id) { send(o, g[o].greet(id)); send(id, g[id].greet(o)); }
+    },
+  };
+}
+
+describe('browsers that disagree about who is here', () => {
+  it('lets a visitor who was cut off for a while come back and take its turn', () => {
+    const r = room('ana', 'rui', 'ze');
+    r.send('ana', r.g.ana.setJoined(true));
+    r.send('rui', r.g.rui.setJoined(true));
+    r.send('ana', r.g.ana.start(r.vis('ana'), r.now));
+    r.tick();
+    expect(r.g.ze.state?.id).toBe('g1');
+    r.cut('ze');
+    r.tick();
+    expect(r.g.ze.state).toBeNull();
+    r.heal('ze');
+    expect(r.g.ze.state).toMatchObject({ id: 'g1', owner: 'ana' }); // the greeting is taken
+    r.send('ze', r.g.ze.setJoined(true));
+    r.tick();
+    expect(r.g.ana.state?.queue).toEqual(['rui', 'ze']);
+    for (let t = 0; t < 2; t++) { r.tick(15000); r.tick(80000); r.tick(5000); }
+    expect(r.g.ana.state).toMatchObject({ phase: 'choosing', owner: 'ze', drawer: 'ze' });
+    expect(r.g.ze.state).toMatchObject({ phase: 'choosing', owner: 'ze' });
+    r.tick();
+    expect(r.g.ze.choices).toHaveLength(3);
+    r.tick(15000);
+    expect(r.g.ana.state).toMatchObject({ phase: 'drawing', owner: 'ze' });
+  });
+  it('does not let a cut-off player end the game for the others when it comes back', () => {
+    const r = room('ana', 'rui', 'ze');
+    for (const id of ['ana', 'rui', 'ze']) r.send(id, r.g[id].setJoined(true));
+    r.send('ana', r.g.ana.start(r.vis('ana'), r.now));
+    r.tick();
+    r.send('ana', r.g.ana.choose('cat', r.now));
+    r.tick(1000);
+    r.cut('ze');
+    r.tick(1000);
+    r.tick(1000);
+    expect(r.g.ze.state).toBeNull(); // nothing of the game to send
+    expect(r.g.ana.state?.phase).toBe('drawing');
+    r.heal('ze');
+    r.tick();
+    for (const id of ['ana', 'rui', 'ze']) expect(r.g[id].state).toMatchObject({ id: 'g1', phase: 'drawing', owner: 'ana' });
+  });
+  it('refuses a late state from the owner a takeover replaced', () => {
+    const r = room('ana', 'rui', 'ze');
+    for (const id of ['ana', 'rui', 'ze']) r.send(id, r.g[id].setJoined(true));
+    r.send('ana', r.g.ana.start(r.vis('ana'), r.now));
+    r.tick();
+    const late = r.g.ana.state!;
+    r.cut('ana');
+    r.tick();
+    expect(r.g.rui.state).toMatchObject({ owner: 'rui', drawer: 'rui', turn: 2 });
+    r.g.ze.receive({ k: 'state', s: late }, 'ana', r.now);
+    r.g.rui.receive({ k: 'state', s: { ...late, seq: late.seq + 1 } }, 'ana', r.now);
+    expect(r.g.ze.state).toMatchObject({ owner: 'rui', turn: 2 });
+    expect(r.g.rui.state).toMatchObject({ owner: 'rui', turn: 2 });
+  });
+  it('shows the one left when the other player closes their tab no game, and lets them start again', () => {
+    const r = room('ana', 'rui');
+    for (const id of ['ana', 'rui']) r.send(id, r.g[id].setJoined(true));
+    r.send('ana', r.g.ana.start(r.vis('ana'), r.now));
+    r.tick();
+    r.cut('rui');
+    r.tick();
+    expect(r.g.ana.state).toMatchObject({ phase: 'end' }); // the owner finishes: nobody to play with
+    r.tick(15000);
+    expect(r.g.ana.state).toBeNull();
+    r.heal('rui');
+    r.send('rui', r.g.rui.setJoined(true));
+    r.send('ana', r.g.ana.start(r.vis('ana'), r.now));
+    expect(r.g.rui.state).toMatchObject({ phase: 'choosing' });
+  });
+  it('ignores a guess that arrives after the drawing time', () => {
+    const p = started();
+    p.send('ana', p.game('ana').choose('horse', p.now));
+    const out = p.game('rui').guess('horse');
+    expect(p.game('ana').receive(out[0].msg, 'rui', p.now + 80000)).toEqual([]); // Ana's clock is past the deadline
+    expect(scores(p.game('ana').state).rui).toBe(0);
   });
 });
