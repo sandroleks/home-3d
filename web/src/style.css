@@ -206,20 +206,33 @@ body.walking .sun-hint-cursor, body.cursor .sun-hint-walking { display: none; }
 .sun-real input { accent-color: var(--accent); margin: 0; }
 #sun-controls { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 #sun-controls:disabled { opacity: 0.35; }
-.sun-row { display: grid; grid-template-columns: 36px 1fr; align-items: center; gap: 8px; }
+.sun-row { display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 8px; }
 .sun-row input { width: 100%; margin: 0; accent-color: var(--accent); }
-.sun-months { display: flex; justify-content: space-between; margin: -4px 0 0 44px; font-size: 10px; color: var(--muted); }
-.sun-track { position: relative; height: 6px; margin: -6px 0 0 44px; }
+.sun-months { display: flex; justify-content: space-between; margin: -4px 0 0 48px; font-size: 10px; color: var(--muted); }
+.sun-track { position: relative; height: 6px; margin: -6px 0 0 48px; }
 .sun-track i { position: absolute; top: 0; width: 2px; height: 6px; background: var(--accent); transform: translateX(-1px); }
 .sun-buttons { display: flex; flex-wrap: wrap; gap: 5px; }
 .sun-buttons button { padding: 4px 10px; font-size: 12px; background: rgba(255, 255, 255, 0.12); color: var(--ink); }
+#sun-controls .sun-buttons { margin-left: 48px; } /* under the sliders */
+#sun-controls .sun-seasons button { flex: 1; padding-left: 0; padding-right: 0; }
 #sun-readout { margin: 0; line-height: 1.4; color: var(--muted); }
-#scenes { display: flex; flex-direction: column; gap: 6px; }
-.scenes-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); }
-#scene-scope { font: inherit; font-size: 12px; color: var(--ink); background: rgba(255, 255, 255, 0.12); border: 0; border-radius: 6px; padding: 2px 4px; }
-#scene-buttons button { display: inline-flex; align-items: center; gap: 5px; }
-#scene-buttons button i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-#scene-buttons button[aria-pressed='true'] { background: var(--accent); color: #121110; }
+#scenes { margin-bottom: 2px; }
+#scenes > span { color: var(--muted); }
+.scene-pick { display: flex; gap: 5px; min-width: 0; }
+.scene-menu { position: relative; flex: 1; min-width: 0; display: flex; }
+#scene-swatch {
+  position: absolute; left: 8px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); pointer-events: none;
+}
+.scene-pick select {
+  font: inherit; font-size: 12px; color: var(--ink); border: 0; border-radius: 999px; min-width: 0;
+  padding: 4px 22px 4px 10px; cursor: pointer; appearance: none; -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.12) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23b9b4aa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center / 9px 6px;
+}
+.scene-pick select:focus-visible { outline: 1px solid var(--accent); }
+.scene-pick option, .scene-pick optgroup { color: #121110; }
+#scene { flex: 1; padding-left: 24px; text-overflow: ellipsis; }
+#scene-scope { flex: none; }
 .sun-hint { margin: 0; font-size: 12px; color: var(--muted); }
 
 /* Phones and tablets (body.touch): a stick under the left thumb, a button bar top right for what the keys do,
@@ -266,5 +279,4 @@ body.touch #sun-panel {
 body.touch .sun-buttons { flex-wrap: nowrap; gap: 6px; }
 body.touch .sun-buttons button { flex: 1; padding: 7px 0; font-size: 13px; } /* bigger targets, one row */
 body.touch .sun-row input { height: 28px; }
-body.touch #scene-buttons { flex-wrap: wrap; }
-body.touch #scene-buttons button { flex: 1 0 22%; justify-content: center; }
+body.touch .scene-pick select { padding-top: 7px; padding-bottom: 7px; font-size: 13px; }

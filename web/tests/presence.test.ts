@@ -228,6 +228,23 @@ describe('Peers', () => {
     expect(applyState(other, { 'light:sala': 0 }, 3)).toEqual(['light:sala']);
     expect(other.lights.isOn('sala')).toBe(false);
   });
+
+  it('shares a Hue colour in place of a colour temperature', () => {
+    const w = world();
+    w.lights.setScene('sala', 0.63, 447);
+    w.lights.setColour('sala', [48500, 254]);
+    const state = collectState(w);
+    expect(state['ct:sala']).toBeUndefined();
+    expect(state['hs:sala']).toBe(48500 * 256 + 254);
+    const other = world();
+    other.lights.setTone('sala', 447);
+    expect(applyState(other, { 'light:sala': 0.63, 'hs:sala': state['hs:sala'] }, 1)).toEqual(['light:sala', 'hs:sala']);
+    expect(other.lights.colour('sala')).toEqual([48500, 254]);
+    expect(other.lights.mireds('sala')).toBe(0);
+    expect(applyState(other, { 'hs:sala': state['hs:sala'] }, 2)).toEqual([]);
+    expect(applyState(other, { 'ct:sala': 366 }, 3)).toEqual(['ct:sala']);
+    expect(other.lights.colour('sala')).toBeNull();
+  });
 });
 
 describe('the host', () => {

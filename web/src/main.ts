@@ -28,7 +28,7 @@ import { WineBottle } from './wine';
 import { fetchIceServers } from './turn';
 import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
 import { applyState, cleanName, collectState, colourFor, lightValue, loadArrived, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
-import { activeScene, groupsIn, HUE_SCENES, levelFor, nextScene, NO_HUE_LINK, sceneById } from './hue';
+import { activeScene, colourAt, groupsIn, HUE_SCENES, levelFor, nextScene, NO_HUE_LINK, packColour, sceneById } from './hue';
 import { Player, screenFov, vfovFromHfov } from './player';
 import { freeSpot, seatAt, seatedOn, seatingCode } from './seats';
 import { shrinkLightmap } from './shrink';
@@ -532,7 +532,8 @@ async function run(): Promise<void> {
     sound?.click(world.switches.get(currentRoom));
     others?.broadcast({ [`light:${currentRoom}`]: lightValue(world.lights, currentRoom) });
   };
-  /** Hue scenes: every light in the room (or the flat) to the scene's brightness and colour temperature. */
+  /** Hue scenes: every light in the room (or the flat) to the scene's brightness and colour temperature, or for a
+   * colour scene to its colours, each light the next one in turn. */
   const biasLights = new Set(world.screens.flatMap((s) => (s.info.group ? [s.info.group] : [])));
   const litRooms = [...new Set(assets.manifest.groups.map((g) => g.room))];
   const hue = NO_HUE_LINK; // the real bridge, once linked (CONFIG.hue)
@@ -542,10 +543,17 @@ async function run(): Promise<void> {
     const rooms = scope === 'home' ? litRooms : currentRoom ? [currentRoom] : [];
     if (!scene || rooms.length === 0) return;
     const delta: StateMap = {};
-    for (const g of rooms.flatMap(sceneGroups)) {
-      world.lights.setScene(g, levelFor(scene.bri), scene.ct);
-      delta[`light:${g}`] = lightValue(world.lights, g);
-      if (scene.ct > 0) delta[`ct:${g}`] = scene.ct;
+    for (const room of rooms) {
+      sceneGroups(room).forEach((g, i) => {
+        world.lights.setScene(g, levelFor(scene.bri), scene.ct);
+        delta[`light:${g}`] = lightValue(world.lights, g);
+        if (scene.ct > 0) delta[`ct:${g}`] = scene.ct;
+        const colour = colourAt(scene, i);
+        if (colour) {
+          world.lights.setColour(g, colour);
+          delta[`hs:${g}`] = packColour(colour);
+        }
+      });
     }
     if (currentRoom) sound?.click(world.switches.get(currentRoom));
     others?.broadcast(delta);
@@ -718,7 +726,7 @@ async function run(): Promise<void> {
     ui.setPrompt(boardPanel.isOpen ? null : target ? promptFor(target, world.lights, touch ? 'Tap' : 'Click') : player.seat && started ? COPY.stand : null);
     ui.setSitting(player.seat !== null);
     ui.setRoomLight(currentRoom && world.lights.has(currentRoom) ? world.lights.isOn(currentRoom) : null);
-    ui.setScenes(currentRoom ? names.get(currentRoom) ?? null : null, activeScene(world.lights, sceneGroups(currentRoom)));
+    ui.setScenes(activeScene(world.lights, sceneGroups(currentRoom)));
     clock.tick(dt);
     daylight.update(clock.utc, clock.version, doorsMoved);
     if (clock.version !== shownVersion) {

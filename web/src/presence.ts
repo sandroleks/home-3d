@@ -1,6 +1,7 @@
 import type { KeyValueStore } from './audio';
 import { CONFIG } from './config';
 import type { DoorState } from './doors';
+import { packColour, unpackColour } from './hue';
 import type { Target } from './interactions';
 import type { LightGroups } from './lightmaps';
 import type { MovableState } from './movables';
@@ -16,7 +17,8 @@ export type Seating = [number, number, number];
  * drunk form, so a drunk visitor's animal stands still for them until it sobers up. */
 export type PoseMessage = Pose | [number, number, number, number, number, number, number] | [number, number, number, number, number, number, number, number];
 /** The flat's shared state: "door:<node>", "movable:<node>" → 0 or 1; "light:<group>" → 0 off, else its brightness
- * (1: as baked); "ct:<group>" → its colour temperature in mireds (0: as baked); "screen:<node>" → -1 off, else the channel. */
+ * (1: as baked); "ct:<group>" → its colour temperature in mireds (0: as baked); "hs:<group>" → its Hue colour in place of
+ * that (packColour); "screen:<node>" → -1 off, else the channel. */
 export type StateMap = Record<string, number>;
 /** The parts of the world the shared state is read from and written to. */
 export interface StateWorld {
@@ -177,6 +179,8 @@ export function collectState(world: StateWorld): StateMap {
   for (const id of world.lights.ids()) {
     out[`light:${id}`] = lightValue(world.lights, id);
     if (world.lights.mireds(id) > 0) out[`ct:${id}`] = world.lights.mireds(id);
+    const colour = world.lights.colour(id);
+    if (colour) out[`hs:${id}`] = packColour(colour);
   }
   for (const s of world.screens) out[`screen:${s.info.node}`] = s.on ? s.channel : -1;
   return out;
@@ -202,6 +206,10 @@ export function applyState(world: StateWorld, delta: StateMap, now: number): str
     } else if (kind === 'ct') {
       if (!world.lights.has(id) || world.lights.mireds(id) === value) continue;
       world.lights.setTone(id, value);
+    } else if (kind === 'hs') {
+      const now = world.lights.colour(id);
+      if (!world.lights.has(id) || (now && packColour(now) === value)) continue;
+      world.lights.setColour(id, unpackColour(value));
     } else if (kind === 'screen') {
       const s = world.screens.find((sc) => sc.info.node === id);
       if (!s) continue;
