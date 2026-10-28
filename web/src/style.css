@@ -117,6 +117,28 @@ kbd {
   position: fixed; left: 50%; top: calc(50% + 22px); transform: translateX(-50%); font-size: 14px;
   background: rgba(18, 17, 15, 0.6); padding: 4px 10px; border-radius: 6px;
 }
+/* The shooting range's strip (range-game.ts): the countdown or the time left, and the scores, top middle; bigger,
+   and a list, for the final scores. */
+#range {
+  position: fixed; left: 50%; top: calc(14px + env(safe-area-inset-top)); transform: translateX(-50%); pointer-events: none;
+  text-align: center; background: rgba(18, 17, 15, 0.6); padding: 6px 14px; border-radius: 8px; font-size: 14px;
+  max-width: calc(100vw - 32px); box-sizing: border-box;
+}
+#range-head { margin: 0 0 2px; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#range ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; }
+#range li { font-variant-numeric: tabular-nums; }
+#range li i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+#range li.you { font-weight: 600; }
+#range.final { top: 22%; padding: 14px 22px; font-size: 17px; }
+#range.final #range-head { font-size: 24px; margin-bottom: 6px; }
+#range.final ol { flex-direction: column; align-items: flex-start; }
+/* The touch Fire button, under the right thumb while a rifle is in hand. */
+#touch-fire {
+  position: fixed; right: calc(28px + env(safe-area-inset-right)); bottom: calc(40px + env(safe-area-inset-bottom));
+  width: 84px; height: 84px; border-radius: 50%; border: 2px solid rgba(244, 241, 234, 0.5);
+  background: rgba(200, 22, 29, 0.55); color: #fff; font: inherit; font-weight: 600; touch-action: none;
+}
+#touch-fire[hidden] { display: none; }
 
 #muted {
   position: fixed; right: 20px; bottom: 16px; width: 22px; height: 22px; opacity: 0.85;
@@ -300,6 +322,7 @@ body.touch #mic { display: none; } /* the bar's mic button shows it */
 body.touch #room-name { top: calc(66px + env(safe-area-inset-top)); }
 body.touch #people { top: calc(90px + env(safe-area-inset-top)); }
 body.touch #guests { top: calc(114px + env(safe-area-inset-top)); }
+body.touch #range { top: calc(140px + env(safe-area-inset-top)); }
 #touch-bar button[hidden] { display: none; }
 #stick {
   position: fixed; left: 0; top: 0; box-sizing: border-box; border-radius: 50%;

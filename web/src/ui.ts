@@ -1,6 +1,7 @@
 import { blackBody, type HueScene, hueColour, levelFor } from './hue';
 import type { GuestRow } from './guests';
 import type { MicState } from './voice';
+import type { RangeHud } from './range-game';
 
 export const COPY = {
   ready: 'Click to explore',
@@ -67,6 +68,7 @@ export class UI {
   private lastRoomLight: boolean | null | undefined;
   private touch = false;
   private lastGuests = '';
+  private lastRange = '';
   private sceneList: readonly HueScene[] = [];
   /** The scene the swatch shows ('' for none), null before the first. */
   private swatchFor: string | null = null;
@@ -213,6 +215,40 @@ export class UI {
     const p = this.el('prompt');
     p.hidden = !text;
     if (text && p.textContent !== text) p.textContent = text;
+  }
+
+  /** The shooting range's strip: the head and the board, each shooter in their colour; null hides it. Rebuilt only
+   * when it changes. */
+  setRange(hud: RangeHud | null, colourOf: (id: string) => string): void {
+    const key = hud ? JSON.stringify(hud) : '';
+    if (key === this.lastRange) return;
+    this.lastRange = key;
+    const box = this.el('range');
+    box.hidden = !hud;
+    if (!hud) return;
+    box.classList.toggle('final', hud.final);
+    this.el('range-head').textContent = hud.head;
+    this.el('range-scores').replaceChildren(...hud.rows.map((r) => {
+      const li = this.doc.createElement('li');
+      li.classList.toggle('you', r.you);
+      const dot = this.doc.createElement('i');
+      dot.style.background = colourOf(r.id);
+      li.append(dot, `${hud.final ? `${r.place}. ` : ''}${r.name} ${r.score}`);
+      return li;
+    }));
+  }
+
+  /** A rifle in hand: the touch Fire button shows. */
+  setArmed(on: boolean): void {
+    this.el('touch-fire').hidden = !on;
+  }
+
+  /** The touch Fire button fires on the press, not the release. */
+  onFire(fire: () => void): void {
+    this.el('touch-fire').addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      fire();
+    });
   }
 
   setPaused(paused: boolean): void {
