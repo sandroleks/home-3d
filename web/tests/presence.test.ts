@@ -176,7 +176,7 @@ describe('Peers', () => {
     const p = new Peers(15);
     p.seen('a', 0);
     p.hello('b', 'Rui', 100, 0);
-    expect(p.list()).toEqual([{ id: 'a', name: 'Guest', arrived: null }, { id: 'b', name: 'Rui', arrived: 100 }]);
+    expect(p.list()).toEqual([{ id: 'a', name: 'Guest', arrived: null, since: null }, { id: 'b', name: 'Rui', arrived: 100, since: 100 }]);
   });
   it('tracks arrivals, hellos, names and departures', () => {
     const peers = new Peers(15);
@@ -225,18 +225,32 @@ describe('the host', () => {
     expect(p.get('a')).toMatchObject({ since: 900, arrived: 300 });
     expect(p.get('b')).toMatchObject({ since: 800, arrived: 800 });
   });
-  it('orders by arrival, ties by id, those without a hello last', () => {
-    const list = [{ id: 'c', arrived: null }, { id: 'b', arrived: 200 }, { id: 'a', arrived: 200 }, { id: 'd', arrived: 100 }];
-    expect([...list].sort(byArrival).map((p) => p.id)).toEqual(['d', 'a', 'b', 'c']);
+  it('orders by arrival, ties to the later join, then the lower id, those without a hello last', () => {
+    const list = [
+      { id: 'c', arrived: null, since: null }, { id: 'b', arrived: 200, since: 200 }, { id: 'a', arrived: 200, since: 200 },
+      { id: 'd', arrived: 100, since: 100 }, { id: 'e', arrived: 200, since: 900 },
+    ];
+    expect([...list].sort(byArrival).map((p) => p.id)).toEqual(['d', 'e', 'a', 'b', 'c']);
   });
-  it('is whoever arrived first, ties to the lower id', () => {
-    expect(hostOf({ id: 'me', arrived: 1000 }, [])).toBe('me');
-    expect(hostOf({ id: 'me', arrived: 1000 }, [{ id: 'p1', arrived: 2000 }])).toBe('me');
-    expect(hostOf({ id: 'me', arrived: 1000 }, [{ id: 'p1', arrived: 2000 }, { id: 'p2', arrived: 500 }])).toBe('p2');
-    expect(hostOf({ id: 'me', arrived: 1000 }, [{ id: 'aa', arrived: 1000 }])).toBe('aa');
+  it('orders those without a hello by id, so every browser agrees', () => {
+    const list = [{ id: 'z', arrived: null, since: null }, { id: 'y', arrived: null, since: null }, { id: 'a', arrived: 5, since: 5 }];
+    expect([...list].sort(byArrival).map((p) => p.id)).toEqual(['a', 'y', 'z']);
+    expect([...list].reverse().sort(byArrival).map((p) => p.id)).toEqual(['a', 'y', 'z']);
+  });
+  it('is whoever arrived first, ties to the later join, then the lower id', () => {
+    const me = { id: 'me', arrived: 1000, since: 1000 };
+    expect(hostOf(me, [])).toBe('me');
+    expect(hostOf(me, [{ id: 'p1', arrived: 2000, since: 2000 }])).toBe('me');
+    expect(hostOf(me, [{ id: 'p1', arrived: 2000, since: 2000 }, { id: 'p2', arrived: 500, since: 500 }])).toBe('p2');
+    expect(hostOf(me, [{ id: 'aa', arrived: 1000, since: 1000 }])).toBe('aa');
+  });
+  it('lets a reloaded host win the tie with its old self', () => {
+    const me = { id: 'me', arrived: 1000, since: 5000 };
+    expect(hostOf(me, [{ id: 'aold', arrived: 100, since: 500 }, { id: 'znew', arrived: 100, since: 2000 }])).toBe('znew');
+    expect(hostOf(me, [{ id: 'znew', arrived: 100, since: 2000 }, { id: 'aold', arrived: 100, since: 500 }])).toBe('znew');
   });
   it("doesn't count a peer without a hello", () => {
-    expect(hostOf({ id: 'me', arrived: 1000 }, [{ id: 'p1', arrived: null }])).toBe('me');
+    expect(hostOf({ id: 'me', arrived: 1000, since: 1000 }, [{ id: 'p1', arrived: null, since: null }])).toBe('me');
   });
   it('remembers the arrival per room, and copes with broken storage', () => {
     const store = new Map<string, string>();

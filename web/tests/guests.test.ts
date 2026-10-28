@@ -3,11 +3,11 @@ import { guestList, type GuestListInput } from '../src/guests';
 import { colourFor } from '../src/presence';
 
 const input = (over: Partial<GuestListInput> = {}): GuestListInput => ({
-  self: { id: 'me', name: 'Ana', arrived: 1000 },
+  self: { id: 'me', name: 'Ana', arrived: 1000, since: 1000 },
   people: [
-    { id: 'late', name: 'Zé', arrived: 3000 },
-    { id: 'new', name: 'Guest', arrived: null },
-    { id: 'early', name: 'Rui', arrived: 500 },
+    { id: 'late', name: 'Zé', arrived: 3000, since: 3000 },
+    { id: 'new', name: 'Guest', arrived: null, since: null },
+    { id: 'early', name: 'Rui', arrived: 500, since: 500 },
   ],
   host: 'early',
   roomOf: (id) => ({ me: 'Sala', early: 'Cozinha' } as Record<string, string>)[id] ?? null,
@@ -32,6 +32,13 @@ describe('guestList', () => {
     });
     expect(rows.find((r) => r.id === 'early')?.room).toBe('Cozinha');
     expect(rows.find((r) => r.id === 'me')?.room).toBe('Sala');
+  });
+  it('puts a reloaded host before its old self', () => {
+    const rows = guestList(input({
+      people: [{ id: 'aold', name: 'Rui', arrived: 100, since: 500 }, { id: 'znew', name: 'Rui', arrived: 100, since: 2000 }],
+      host: 'znew',
+    }));
+    expect(rows.map((r) => r.id)).toEqual(['znew', 'aold', 'me']);
   });
   it('alone: only you, without a crown', () => {
     const rows = guestList(input({ people: [], host: 'me' }));

@@ -128,7 +128,7 @@ describe('Multiplayer', () => {
     const { fake, mp } = setup();
     fake.join('p1');
     fake.receive('hello', { name: 'Rui', since: 2000 }, 'p1');
-    expect(mp.people).toEqual([{ id: 'p1', name: 'Rui', arrived: 2000 }]);
+    expect(mp.people).toEqual([{ id: 'p1', name: 'Rui', arrived: 2000, since: 2000 }]);
   });
 
   it('is host until someone who arrived earlier says hello, and gets it back when they leave', () => {
@@ -146,6 +146,12 @@ describe('Multiplayer', () => {
     fake.leave('early');
     expect(mp.host).toBe('me');
     expect(hosts).toEqual(['early', 'me']);
+  });
+  it('hosts the reloaded page, not its old self, when both are still listed', () => {
+    const { fake, mp } = setup(5000);
+    fake.receive('hello', { name: 'Rui', since: 500, arrived: 100 }, 'aoldhost');
+    fake.receive('hello', { name: 'Rui', since: 2000, arrived: 100 }, 'znewhost');
+    expect(mp.host).toBe('znewhost');
   });
   it("takes an older visitor's join time as its arrival", () => {
     const { fake, mp } = setup(1000);

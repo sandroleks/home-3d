@@ -14,9 +14,9 @@ export interface GuestRow {
 }
 
 export interface GuestListInput {
-  self: { id: string; name: string; arrived: number };
+  self: { id: string; name: string; arrived: number; since: number };
   /** The others, as `Multiplayer.people` lists them. */
-  people: { id: string; name: string; arrived: number | null }[];
+  people: { id: string; name: string; arrived: number | null; since: number | null }[];
   /** The host's peer id (`Multiplayer.host`). */
   host: string;
   roomOf: (id: string) => string | null;

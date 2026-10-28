@@ -262,22 +262,27 @@ export class Peers {
     return [...this.table.values()].map((p) => p.name ?? fallback);
   }
 
-  /** Ids, names and arrival times, in join order, for showing who is talking and who is host. */
-  list(fallback = CONFIG.multiplayer.defaultName): { id: string; name: string; arrived: number | null }[] {
-    return [...this.table].map(([id, p]) => ({ id, name: p.name ?? fallback, arrived: p.arrived }));
+  /** Ids, names and arrival and join times, in join order, for showing who is talking and who is host. */
+  list(fallback = CONFIG.multiplayer.defaultName): { id: string; name: string; arrived: number | null; since: number | null }[] {
+    return [...this.table].map(([id, p]) => ({ id, name: p.name ?? fallback, arrived: p.arrived, since: p.since }));
   }
 }
 
-/** A visitor and when it arrived; null until its hello. */
-export interface Arrival { id: string; arrived: number | null }
+/** A visitor, when it first arrived and when this page joined; both null until its hello. */
+export interface Arrival { id: string; arrived: number | null; since: number | null }
 
-/** Earliest arrival first, ties to the lower id, those without a hello last: the same order in every browser. */
+const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Earliest arrival first. A reloaded host has a new id but keeps its arrival, so on a tie the later join comes first
+ * (the old id may linger), then the lower id; those without a hello come last, by id: the same order in every browser. */
 export function byArrival(a: Arrival, b: Arrival): number {
-  if (a.arrived === null || b.arrived === null) return (a.arrived === null ? 1 : 0) - (b.arrived === null ? 1 : 0);
-  return a.arrived - b.arrived || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  if (a.arrived === null || b.arrived === null) {
+    return (a.arrived === null ? 1 : 0) - (b.arrived === null ? 1 : 0) || byId(a.id, b.id);
+  }
+  return a.arrived - b.arrived || (b.since ?? 0) - (a.since ?? 0) || byId(a.id, b.id);
 }
 
 /** The host: whoever arrived first among this visitor and the peers it has a hello from. */
-export function hostOf(self: { id: string; arrived: number }, others: Arrival[]): string {
+export function hostOf(self: { id: string; arrived: number; since: number }, others: Arrival[]): string {
   return [self, ...others.filter((p) => p.arrived !== null)].sort(byArrival)[0].id;
 }

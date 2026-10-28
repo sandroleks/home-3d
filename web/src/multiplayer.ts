@@ -124,8 +124,8 @@ export class Multiplayer {
     return this.peers.names();
   }
 
-  /** Ids, names and arrival times of the others here. */
-  get people(): { id: string; name: string; arrived: number | null }[] {
+  /** Ids, names, arrival and join times of the others here. */
+  get people(): { id: string; name: string; arrived: number | null; since: number | null }[] {
     return this.peers.list();
   }
 
@@ -135,7 +135,7 @@ export class Multiplayer {
 
   /** Whoever arrived first: their peer id, or this visitor's own. */
   get host(): string {
-    return hostOf({ id: this.room.selfId, arrived: this.arrived }, this.peers.list());
+    return hostOf({ id: this.room.selfId, arrived: this.arrived, since: this.since }, this.peers.list());
   }
 
   /** The voices: incoming streams go to them, and their mic goes to everyone. */
