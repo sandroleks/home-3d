@@ -73,7 +73,7 @@ Each game is a pure TypeScript module with the same shape: it **replays a list o
 - A new message kind, **`game`**, carries one slot's whole game: `{ slot, id, white, black, moves, end? }` — the game's id (made by the white player's browser when it opens the game), the two players' peer ids, the move list, and how it ended, if it has. Games are small (chess rarely tops 300 short moves), so each change sends the whole list.
 - A browser **accepts** a `game` message only when it is the slot's current game (same id) and its move list extends the one it has and replays legally, or when it opens a new game for the two visitors it sees in that slot's chairs. Anything else is ignored. Only the seated side to move adds moves, so two changes can't collide.
 - Dice rolls (made in the roller's browser), resignations, and draw offers and acceptances are entries in the move list, like moves. Dice are only as honest as the roller's browser, which is fine among friends.
-- Ending because a player left is worked out locally from the empty chair, the same way everywhere; no message is needed.
+- Ending because a player left is worked out locally from the empty chair, the same way everywhere. A player's own browser also sends its game once with that end, so a player whose tab was hidden long enough for the others to drop it learns the game is over when it comes back; and a browser that notices it was away longer than the others wait (15 s) ends its own game the same way.
 - A newcomer gets the running games with the flat's state: the existing full-state answer sends a `game` message for each slot with a game.
 - Visitors on an older version ignore `game`: they see players sitting but no boards (the boards are not in the exported model).
 
