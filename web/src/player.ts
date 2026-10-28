@@ -1,6 +1,7 @@
 import type { PerspectiveCamera } from 'three';
 import type { Collision } from './collision';
 import { CONFIG } from './config';
+import { STEADY, type Wobble } from './drunk';
 import type { Spawn } from './manifest';
 import { eyeOf, type Seated, standPoint } from './seats';
 
@@ -71,6 +72,8 @@ export class Player {
   stick: Stick = STILL;
   /** Sitting or lying, and where; null standing. */
   seat: Seated | null = null;
+  /** Drunk, the view is thrown off this much on top of where you stand and look (drunk.ts); it never moves you. */
+  wobble: Wobble = STEADY;
   /** The camera easing from where it was when the visitor sat down or stood up: its start, and how far along (0..1). */
   private from: [number, number, number] | null = null;
   private eased = 1;
@@ -166,7 +169,13 @@ export class Player {
       this.camera.position.set(this.from[0] + (x - this.from[0]) * k, this.from[1] + (y - this.from[1]) * k, this.from[2] + (z - this.from[2]) * k);
       if (this.eased >= 1) this.from = null;
     } else this.camera.position.set(x, y, z);
-    this.camera.rotation.set(this.pitch, this.yaw, 0);
+    const w = this.wobble;
+    const pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.pitch + w.pitch));
+    this.camera.rotation.set(pitch, this.yaw + w.yaw, w.roll);
+    // Sideways along the view's right (cos yaw, -sin yaw), and up and down
+    this.camera.position.x += Math.cos(this.yaw) * w.side;
+    this.camera.position.z -= Math.sin(this.yaw) * w.side;
+    this.camera.position.y += w.bob;
   }
 
   resolve(): void {

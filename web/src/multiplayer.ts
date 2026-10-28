@@ -198,10 +198,10 @@ export class Multiplayer {
     this.checkHost();
   }
 
-  /** Call every frame with the local pose (and seating, sitting or lying); it sends at the pose rate while moving and as
-   * a heartbeat while still. */
-  sendPose(x: number, z: number, yaw: number, pitch: number, seating: Seating | null = null): void {
-    const pose = encodePose(x, z, yaw, pitch, seating);
+  /** Call every frame with the local pose (and seating, sitting or lying, and how drunk, 0..1); it sends at the pose
+   * rate while moving and as a heartbeat while still. */
+  sendPose(x: number, z: number, yaw: number, pitch: number, seating: Seating | null = null, drunk = 0): void {
+    const pose = encodePose(x, z, yaw, pitch, seating, drunk);
     const now = this.hooks.now();
     if (!shouldSend(this.lastSent, now, poseMoved(this.lastPose, pose))) return;
     this.lastSent = now;

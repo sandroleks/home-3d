@@ -23,6 +23,8 @@ import { ChessBoard } from './chess-board';
 import { endOf, gameChairs, type GameKind, Games, otherSide, seatedAt, type Side, slotOf, SLOTS } from './games';
 import { GoBoard } from './go-board';
 import { TableGames } from './table-pieces';
+import { blurFilter, Drunk, wobbleAt } from './drunk';
+import { WineBottle } from './wine';
 import { fetchIceServers } from './turn';
 import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
 import { applyState, cleanName, collectState, colourFor, lightValue, loadArrived, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
@@ -122,6 +124,13 @@ async function run(): Promise<void> {
   tables.root.visible = !params.has('autostart'); // ?autostart reference views match the Cycles renders, which have no games
   scene.add(tables.root);
   const [tableX, tableZ] = CONFIG.games.slots[1]; // the table's middle, for how lit the pieces are
+  const wine = new WineBottle(); // the bottle of red in the kitchen; not in reference views, as the games aren't
+  const drunk = new Drunk();
+  if (!params.has('autostart')) {
+    scene.add(wine.root);
+    world.pickables.push(wine.root);
+    world.targets.set(wine.root, wine.target);
+  }
   const ear = new Vector3();
   const wallsBetween = wallCounter(world.occluders); // walls and closed doors between a voice and the listener
   // How lit a visitor's figure is: its room's ceiling light and lamps, or the daylight
@@ -161,7 +170,7 @@ async function run(): Promise<void> {
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
-  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; } } }); // tuning from the console
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; }, drunk } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;
@@ -208,11 +217,17 @@ async function run(): Promise<void> {
     if (player.seat) player.stand();
     else player.sit({ posture: 'sit', x: player.x, y: 0, z: player.z, yaw: player.yaw }, false);
   };
+  /** A click or tap on the wine is a sip: the bottle tips toward you, and you get a little drunker. */
+  const drinkFrom = (t: Target | null) => {
+    if (t?.kind !== 'wine' || player.frozen) return;
+    wine.sip(player.x, player.z);
+    drunk.sip();
+  };
   const turntable = world.movables.find((m) => m.state.info.kind === 'spin')?.state;
   /** Sounds for what a click or tap just used; doors and drawers sound from the frame loop as they move. */
   const used = (t: Target | null) => {
     if (!t) return;
-    if (t.kind === 'switch' || t.kind === 'lamp' || t.kind === 'screen') sound?.click(t.node);
+    if (t.kind === 'switch' || t.kind === 'lamp' || t.kind === 'screen' || t.kind === 'wine') sound?.click(t.node);
     if (t.kind === 'movable' && t.movable === turntable) {
       sound?.click(t.node);
       sound?.setMusic(turntable.isOpen);
@@ -257,7 +272,7 @@ async function run(): Promise<void> {
   ui.onGuests(() => {
     if (started && !autostart) toggleGuests();
   });
-  const byKey = new Map([...world.targets.values()].flatMap((t) => (t.kind === 'seat' ? [] : [[stateKey(t), t] as const])));
+  const byKey = new Map([...world.targets.values()].flatMap((t) => (t.kind === 'seat' || t.kind === 'wine' ? [] : [[stateKey(t), t] as const])));
   const share = (t: Target | null) => {
     if (t) others?.broadcast(stateDelta(t, world.lights));
   };
@@ -555,6 +570,7 @@ async function run(): Promise<void> {
       const r = canvas.getBoundingClientRect();
       const t = interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2));
       sitOn(t);
+      drinkFrom(t);
       used(t);
       share(t);
     },
@@ -598,6 +614,7 @@ async function run(): Promise<void> {
     if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
     const t = interactions.click();
     sitOn(t);
+    drinkFrom(t);
     used(t);
     share(t);
   });
@@ -661,7 +678,11 @@ async function run(): Promise<void> {
       before.target = m.state.target;
       before.progress = m.state.progress;
     });
+    drunk.update(dt);
+    const filter = blurFilter(now / 1000, drunk.strength);
+    if (canvas.style.filter !== filter) canvas.style.filter = filter;
     if (started && !paused) {
+      player.wobble = wobbleAt(now / 1000, drunk.strength);
       const x = player.x;
       const z = player.z;
       player.update(dt);
@@ -669,11 +690,12 @@ async function run(): Promise<void> {
     }
     if (!player.frozen && !player.seat && world.collision.isBlocked(player.x, player.z)) player.resolve();
     if (others) {
-      others.sendPose(player.x, player.z, player.yaw, player.pitch, seatingCode(player.seat));
+      others.sendPose(player.x, player.z, player.yaw, player.pitch, seatingCode(player.seat), drunk.strength);
       others.tick();
     }
     avatars.update(dt, avatarLight);
     updateGames(dt, now / 1000);
+    wine.update(dt, avatarLight(CONFIG.wine.at[0], CONFIG.wine.at[1]), interactions.current?.kind === 'wine');
     if (voices) {
       voices.update(dt, camera.getWorldPosition(ear), (id, out) => avatars.mouth(id, out), wallsBetween);
       for (const id of voices.ids) avatars.setTalk(id, voices.talk(id));
