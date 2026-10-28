@@ -129,6 +129,21 @@ describe('Player sitting', () => {
     expect(p.seat).toBeNull();
   });
 
+  it("doesn't walk while held (the TV's panel is open), and walks again after", () => {
+    const { p } = make();
+    const [x, z] = [p.x, p.z];
+    p.held = true;
+    p.keys.forward = true;
+    p.update(0.1);
+    p.keys.forward = false;
+    p.stick = { forward: 1, right: 0, run: true };
+    p.update(0.1);
+    expect([p.x, p.z]).toEqual([x, z]);
+    p.held = false;
+    p.update(0.1);
+    expect([p.x, p.z]).not.toEqual([x, z]);
+  });
+
   it('stands up from the stick too, and teleporting gets up', () => {
     const { p } = make();
     p.sit(seatedOn(sofa.spots[0], 'sit'));

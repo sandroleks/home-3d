@@ -65,7 +65,8 @@ export class Player {
   yaw: number;
   pitch = 0;
   frozen = false;
-  /** At a game board: the movement keys and stick neither walk nor stand you up (standing is the board's button or C). */
+  /** At a game board or with the TV's panel open: the movement keys and stick neither walk nor stand you up
+   * (standing is the board's button or C). */
   held = false;
   keys: MoveKeys = { forward: false, back: false, left: false, right: false, run: false };
   stick: Stick = STILL;
@@ -155,7 +156,7 @@ export class Player {
       if (!this.moving) this.holdingMove = false;
       else if (!this.holdingMove && !this.frozen && !this.held) this.stand();
     }
-    if (!this.frozen && !this.seat) {
+    if (!this.frozen && !this.seat && !this.held) {
       const [dx, dz] = moveDelta(this.keys, this.yaw, dt, CONFIG.walkSpeed, CONFIG.runSpeed, this.stick);
       [this.x, this.z] = this.collision.move(this.x, this.z, dx, dz);
     }

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Avatars } from '../src/avatars';
 import { DoorState } from '../src/doors';
 import { LightGroups } from '../src/lightmaps';
+import type { DrawMessage } from '../src/draw-game';
 import type { GameMessage } from '../src/games';
 import type { DoorInfo } from '../src/manifest';
 import { type MessageKind, Multiplayer, type Room } from '../src/multiplayer';
@@ -49,12 +50,16 @@ function setup(joinedAt = 1000, arrived = joinedAt) {
   const hosts: string[] = [];
   const games: GameMessage[] = [];
   let running: GameMessage[] = [];
+  const draws: [DrawMessage, string][] = [];
+  const arrivals: string[] = [];
   const mp = new Multiplayer(fake.room, world, avatars, 'Ana', {
     now: () => now, onChanged: (k) => void changed.push(k), onPeers: (n) => void peers.push(n), onHost: (h) => void hosts.push(h),
     onGame: (g) => void games.push(g), games: () => running,
+    onDraw: (m, from) => void draws.push([m, from]), onArrive: (id) => void arrivals.push(id),
   }, joinedAt, arrived);
   return {
-    fake, world, avatars, mp, changed, peers, hosts, games, setNow: (t: number) => { now = t; }, setGames: (g: GameMessage[]) => { running = g; },
+    fake, world, avatars, mp, changed, peers, hosts, games, draws, arrivals,
+    setNow: (t: number) => { now = t; }, setGames: (g: GameMessage[]) => { running = g; },
     node: new Object3D(),
   };
 }
@@ -239,6 +244,31 @@ describe('Multiplayer', () => {
     expect(avatars.has('p1')).toBe(true); // a sign of life, like any message
     mp.sendGame({ ...chess, moves: ['e2e4'] });
     expect(fake.sent.at(-1)).toEqual({ kind: 'game', data: { ...chess, moves: ['e2e4'] } });
+  });
+  it('passes on well-formed draw messages with their sender, and sends its own to everyone or to one', () => {
+    const { fake, mp, draws, avatars } = setup();
+    fake.receive('draw', { k: 'join', on: true }, 'p1');
+    fake.receive('draw', { k: 'dance' }, 'p1');
+    fake.receive('draw', { k: 'guess', g: 'g1', t: 1, text: 'x'.repeat(41) }, 'p2');
+    expect(draws).toEqual([[{ k: 'join', on: true }, 'p1']]);
+    expect(avatars.has('p1')).toBe(true);
+    expect(avatars.has('p2')).toBe(false);
+    mp.sendDraw({ k: 'join', on: true });
+    expect(fake.sent.at(-1)).toEqual({ kind: 'draw', data: { k: 'join', on: true } });
+    mp.sendDraw({ k: 'guess', g: 'g1', t: 1, text: 'cat' }, 'p1');
+    expect(fake.sent.at(-1)).toEqual({ kind: 'draw', data: { k: 'guess', g: 'g1', t: 1, text: 'cat' }, to: 'p1' });
+  });
+  it('tells of each visitor who arrives, once, and again when one comes back after timing out', () => {
+    const { fake, mp, arrivals, setNow } = setup();
+    fake.join('p1');
+    fake.receive('pose', [0, 0, 0, 0], 'p1');
+    fake.receive('draw', { k: 'join', on: false }, 'p2');
+    expect(arrivals).toEqual(['p1', 'p2']);
+    setNow(20);
+    fake.receive('pose', [0, 0, 0, 0], 'p2');
+    mp.tick(); // p1 silent for 20 s
+    fake.receive('pose', [0, 0, 0, 0], 'p1');
+    expect(arrivals).toEqual(['p1', 'p2', 'p1']);
   });
   it('asks a peer that comes back after timing out who it is, and answers when asked', () => {
     const { fake, mp, setNow } = setup();
