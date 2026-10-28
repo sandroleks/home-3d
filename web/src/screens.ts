@@ -4,6 +4,7 @@ import {
 import { CONFIG } from './config';
 import { fadeToward } from './lightmaps';
 import type { ScreenInfo } from './manifest';
+import type { DrawTv } from './draw-tv';
 import { DesktopContent, type ScreenWorld, type Surface, TV_CHANNELS, TvContent } from './screen-content';
 
 export type CanvasFactory = (width: number, height: number) => Surface & { width: number; height: number };
@@ -35,6 +36,8 @@ export class Screen {
   private started = 0;
   private lastDraw = -Infinity;
   private average = new Color();
+  /** The TV shows a game of draw and guess, on or off (draw-tv.ts). */
+  private showing = false;
 
   constructor(readonly info: ScreenInfo, readonly node: Object3D, canvas: CanvasFactory = domCanvas) {
     const [w, h] = CONFIG.screens.sizes[info.kind] ?? [512, 288];
@@ -78,33 +81,59 @@ export class Screen {
     return this.isTv ? (this.content as TvContent).channel : 0;
   }
 
+  /** On, or showing a game: the picture and the light it casts are up. */
+  get lit(): boolean {
+    return this.on || this.showing;
+  }
+
   /** Puts the screen in a given state, as another visitor left it: on with a channel, or off. */
   set(on: boolean, channel: number, t: number): void {
-    if (on && !this.on) {
-      this.on = true;
-      this.started = t;
-      this.lastDraw = -Infinity;
-      if (this.isTv) (this.content as TvContent).reset();
-    }
+    if (on && !this.on) this.switchOn(t);
     if (on && this.isTv) (this.content as TvContent).setChannel(channel);
     if (!on) this.on = false;
   }
 
   /** The TV: on, then each channel in turn, then off. The monitor and laptop: on and off. */
   click(t: number): void {
-    if (!this.on) {
-      this.on = true;
-      this.started = t;
-      this.lastDraw = -Infinity;
-      if (this.isTv) (this.content as TvContent).reset();
-    } else if (!this.isTv || !(this.content as TvContent).next()) {
-      this.on = false;
+    if (!this.on) this.switchOn(t);
+    else if (!this.isTv || !(this.content as TvContent).next()) this.on = false;
+  }
+
+  /** The remote's On/Off. */
+  power(t: number): void {
+    if (this.on) this.on = false;
+    else this.switchOn(t);
+  }
+
+  /** The remote's Next channel: after the last, the first again. Nothing while off. */
+  nextChannel(): void {
+    if (!this.on || !this.isTv) return;
+    const tv = this.content as TvContent;
+    if (!tv.next()) tv.setChannel(0);
+  }
+
+  /** The TV shows a game instead of its channel, even while off (null: its channel again, or dark if off). */
+  setGame(view: DrawTv | null, t: number): void {
+    if (!this.isTv) return;
+    const showing = view !== null;
+    if (showing !== this.showing) {
+      if (showing && !this.on) this.started = t;
+      this.lastDraw = -Infinity; // redraw at once, near or far
+      this.showing = showing;
     }
+    (this.content as TvContent).setGame(view);
+  }
+
+  private switchOn(t: number): void {
+    this.on = true;
+    this.started = t;
+    this.lastDraw = -Infinity;
+    if (this.isTv) (this.content as TvContent).reset();
   }
 
   /** t: seconds (monotonic); near: whether the viewer is close enough to keep the picture moving. */
   update(t: number, dt: number, world: ScreenWorld, near: boolean): void {
-    this.level = fadeToward(this.level, this.on ? 1 : 0, dt, CONFIG.screens.fade);
+    this.level = fadeToward(this.level, this.lit ? 1 : 0, dt, CONFIG.screens.fade);
     const visible = this.level > 0;
     for (const m of this.meshes) m.material = visible ? this.onMaterial : this.offMaterial;
     if (visible && (near || this.lastDraw === -Infinity) && t - this.lastDraw >= 1 / CONFIG.screens.fps) {

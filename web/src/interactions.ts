@@ -38,21 +38,22 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
     case 'seat': return t.spot ? `${verb}: ${t.seat.pose === 'lie' ? 'lie down' : 'sit down'}` : 'Someone is here';
     case 'screen': {
       const s = t.screen;
-      if (!s.isTv) return `${verb}: turn screen ${s.on ? 'off' : 'on'}`;
-      return !s.on ? `${verb}: turn TV on` : s.lastChannel ? `${verb}: turn TV off` : `${verb}: next channel`;
+      return s.isTv ? `${verb}: TV` : `${verb}: turn screen ${s.on ? 'off' : 'on'}`;
     }
     default: return lights.isOn(t.room) ? `${verb}: turn light off` : `${verb}: turn light on`;
   }
 }
 
-/** `now`: seconds, for the screens' pictures. Sitting down is the player's (main.ts). */
+/** `now`: seconds, for the screens' pictures. Sitting down, and the TV's panel, are the player's (main.ts). */
 export function activate(t: Target, lights: LightGroups, now = 0): void {
   switch (t.kind) {
     case 'seat': return;
     case 'door': return t.door.toggle();
     case 'movable': return t.movable.toggle();
     case 'lamp': return lights.toggle(t.group);
-    case 'screen': return t.screen.click(now);
+    case 'screen':
+      if (!t.screen.isTv) t.screen.click(now); // a click on the TV opens its panel instead (main.ts)
+      return;
     default: return lights.toggle(t.room);
   }
 }
