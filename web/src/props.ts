@@ -1,7 +1,7 @@
 import { Box3, Color, Group, Matrix4, Mesh, MeshMatcapMaterial, type Object3D, Quaternion, Vector3 } from 'three';
 import { CONFIG } from './config';
 import type { Matcaps } from './creatures';
-import { KINDS, type KindInfo } from './prop-models';
+import { KINDS, type KindInfo, type PropKind } from './prop-models';
 import type { PlacedProp } from './prop-places';
 import type { Placement } from './prop-placement';
 import { type Flight, fly, type Landing, launch, type Raycast, type Shape } from './prop-physics';
@@ -93,7 +93,7 @@ export class Prop {
   private level = -1;
 
   constructor(readonly place: PlacedProp, matcaps: Matcaps) {
-    this.info = KINDS[place.kind];
+    this.info = place.info ?? KINDS[place.kind as PropKind];
     this.root.name = `Prop_${place.id}`;
     // Loose things are never solid to flights and placement rays; placement keeps them apart with `overlaps`.
     this.root.userData.loose = true;

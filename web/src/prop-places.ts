@@ -1,6 +1,6 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import data from './prop-frames.json';
-import { KINDS, type PropKind } from './prop-models';
+import { KINDS, type KindInfo, type PropKind } from './prop-models';
 
 /** What a place holds: the model's own fills (blender/tools/model_details.py). */
 export type Fill = 'cutlery' | 'plates' | 'spices' | 'containers' | 'oils' | 'nightstand' | 'tools' | 'spools' | 'glasses' | 'coffee-low' | 'bar';
@@ -13,8 +13,9 @@ export interface PropFrame { source: string; fill: Fill; node: string | null; fr
  * `yaw` about up (0: its length runs inward); `on`: the slot it lies on, by its index in the level's list. */
 export interface Slot { kind: PropKind; variant?: number; a: number; b: number; c?: number; yaw?: number; on?: number }
 /** An object at home: its world pose with the drawers shut, the drawer node it rides with (null: the room), the movable
- * that opens its place, and what it lies on (picking up takes the top of a stack). */
-export interface PlacedProp { id: string; kind: PropKind; variant: number; node: string | null; front: string; position: Vector3; quaternion: Quaternion; on: string | null; place: string }
+ * that opens its place, and what it lies on (picking up takes the top of a stack). A `'model'` thing is one of the model's
+ * own, with its kind in `info`. */
+export interface PlacedProp { id: string; kind: PropKind | 'model'; variant: number; node: string | null; front: string; position: Vector3; quaternion: Quaternion; on: string | null; place: string; info?: KindInfo }
 
 export const FRAMES = data.places as PropFrame[];
 const UP = new Vector3(0, 1, 0);
