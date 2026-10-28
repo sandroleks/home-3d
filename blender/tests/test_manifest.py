@@ -28,6 +28,8 @@ STATE = {
     "screens": [{"node": "Screen_alpha-tv", "room": "alpha", "kind": "tv", "group": None, "center": [1, 1, -1],
                  "normal": [0, 0, 1], "width": 0.8, "height": 0.45}],
     "glows": [{"node": "Glow_bulb", "group": "alpha/desk-lamp"}],
+    "props": [{"source": "Mug", "node": "Prop_mug", "name": "mug", "room": "alpha", "size": [0.08, 0.09, 0.08],
+               "tips": False}],
     "spawn": {"x": 1.0, "z": -0.8, "yaw": -1.5708},
     "viewpoints": [],
     "windows": [{"room": "alpha", "center": [0.5, 1.5, 0.0], "normal": [0.0, 0.0, 1.0], "width": 1.0, "height": 1.2}],
@@ -78,6 +80,8 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(set(m["movables"][1]) - {"lightmap", "packs"}, {"node", "room", "kind", "pivot", "axis", "angle"})
         self.assertEqual(m["screens"], STATE["screens"])
         self.assertEqual(m["glows"], STATE["glows"])
+        self.assertEqual(m["props"], [{"node": "Prop_mug", "name": "mug", "room": "alpha", "size": [0.08, 0.09, 0.08],
+                                       "tips": False}])
         self.assertEqual(manifest.validate_manifest(m), [])
 
     def test_sliding_door_and_turntable(self):
@@ -124,6 +128,18 @@ class ManifestTests(unittest.TestCase):
         errors = manifest.validate_manifest(build(state))
         self.assertIn("glows[0] (Glow_x): unknown group nope", errors)
         self.assertIn("screens[0] (Screen_alpha-tv): unknown group alpha/tv", errors)
+
+    def test_props(self):
+        self.assertEqual(build(dict(STATE, props=[]))["props"], [])
+        outside = dict(STATE["props"][0], node="Prop_pot", room=None)  # on a sill, past every floor
+        self.assertEqual(manifest.validate_manifest(build(dict(STATE, props=STATE["props"] + [outside]))), [])
+        bad = [dict(STATE["props"][0], room="attic"), dict(STATE["props"][0], size=[0.1, 0.0, 0.1]),
+               dict(STATE["props"][0], size=[0.1, 0.1]), dict(STATE["props"][0], name="")]
+        errors = manifest.validate_manifest(build(dict(STATE, props=bad)))
+        self.assertIn("props[0] (Prop_mug): unknown room attic", errors)
+        self.assertIn("props[1] (Prop_mug): size must be three positive numbers", errors)
+        self.assertIn("props[2] (Prop_mug): size must be three positive numbers", errors)
+        self.assertIn("props[3] (Prop_mug): no name", errors)
 
     def test_validate_reports_lit_room_without_switch_and_room_without_chunk(self):
         state = dict(STATE, switches={})

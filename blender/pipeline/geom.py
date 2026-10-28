@@ -279,6 +279,24 @@ def door_pose(match, end_a, end_b, is_blocked, label="leaf", override=None):
             "angle": match["angle"], "to_closed": match["angle"], "closed": False}
 
 
+def base_centre(lo, hi):
+    """The middle of a box's bottom face (Blender space, Z up): where a thing standing on a surface rests."""
+    x, y = (float(lo[k] + hi[k]) / 2 for k in (0, 1))
+    return (round(x, 5) + 0.0, round(y, 5) + 0.0, round(float(lo[2]), 5) + 0.0)
+
+
+def box_size_three(lo, hi):
+    """A Blender box's size in three.js order: [width (x), height (Blender z), length (Blender y)]."""
+    return [round(float(hi[k] - lo[k]), 5) + 0.0 for k in (0, 2, 1)]
+
+
+def tips(size, min_height=0.12, ratio=1.8):
+    """Whether a thing of this three.js size [w, h, l] falls over when knocked: taller than min_height and more than
+    `ratio` times its narrower side (a bottle, not a plate or a squat jar)."""
+    w, h, l = size
+    return h > min_height and h > ratio * min(w, l)
+
+
 def yaw_pitch_from_forward(f):
     """three.js camera yaw/pitch (rotation order YXZ) for a forward vector."""
     fx, fy, fz = f

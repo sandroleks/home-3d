@@ -7,6 +7,8 @@ Alpha has an exterior window in its south wall (y -0.2..0), a desk lamp, a windo
 glowing wall lamp; Beta's 'Lamp' glows with the same material. The desk lamp is a lamp group of its own
 ('desk-lamp', with the wall lamp and a bulb that casts no shadow). Beta has a cabinet against its north wall
 with a drawer (slides -Y) above a cupboard door (hinged at its west edge), and a TV screen on its south wall.
+Alpha's floor has two loose things (web_prop): a mug, just tall enough (0.11 m at its top) to block the way if it were
+in the collision, and a bottle tagged not to tip over.
 """
 import math
 
@@ -160,6 +162,9 @@ def build():
     _props(door, web_move="hinge", web_pivot=[4.42, 2.55, 0.2], web_axis=[0.0, 0.0, 1.0], web_angle=-1.7)
     tv = box_object("TV screen", [(4.4, 0.0, 1.0, 5.2, 0.005, 1.45)], _mat_emissive("Screen"), furniture)
     tv["web_screen"] = "tv"
+    box_object("Test mug", [(0.66, 1.46, 0.02, 0.74, 1.54, 0.11)], plaster, furniture)["web_prop"] = "mug"
+    bottle = box_object("Test bottle", [(0.665, 1.965, 0.02, 0.735, 2.035, 0.32)], wood, furniture)
+    _props(bottle, web_prop="bottle", web_tips=False)
     box_object("Window 3 (Exterior / Alpha) glass", [(1.0, -0.11, 1.0, 2.0, -0.09, 2.0)], glass, structure)
     sofa = box_object("Hidden sofa", [(1.0, 2.0, 0, 2.5, 2.8, 0.8)], wood, variant)
     sofa.location = (0.5, 0, 0)

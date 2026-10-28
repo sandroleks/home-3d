@@ -6,8 +6,8 @@ import bpy
 from mathutils import Matrix, Vector
 
 from . import (bake, bpyutil, chunks, checks, collision, config, debug_map, doors, export, geom, lamps, layers,
-               manifest, movables, openings, packs, proc_materials, rooms, scene_select, screens, seats, state, surroundings,
-               switches, uvs, variants, windows)
+               manifest, movables, openings, packs, proc_materials, props, rooms, scene_select, screens, seats, state,
+               surroundings, switches, uvs, variants, windows)
 
 
 def join_leaf_parts(meshes):
@@ -80,8 +80,10 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs", variant=None):
     if stop_after == "albedo":
         return ctx
 
+    prop_objs = props.find(meshes)  # after the albedo bake: props need theirs like everything else
+    prop_set = set(prop_objs)
     ops, infilled = openings.parse_openings(meshes)
-    grid = collision.build_collision(meshes, floor_index, ops)
+    grid = collision.build_collision([o for o in meshes if o not in prop_set], floor_index, ops)  # props never block
     export.write_json(os.path.join(out_dir, "collision.json"), grid.to_json(config.PLAYER_RADIUS))
     ctx.update(openings=ops, infilled=infilled, grid=grid)
     if stop_after == "collision":
@@ -90,7 +92,7 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs", variant=None):
     leaves = [o for o in meshes if o.name.startswith("Door leaf")]
     movable_objs, screen_objs = movables.find(meshes), screens.find(meshes)
     glow_objs = [o for o in meshes if lamps.glow_only(o)]
-    special = set(leaves) | set(movable_objs) | set(screen_objs) | set(glow_objs)
+    special = set(leaves) | set(movable_objs) | set(screen_objs) | set(glow_objs) | prop_set
     static = [o for o in meshes if o not in special]
     door_specs = doors.prepare_doors(leaves, grid, config.DOOR_OVERRIDES, ops, infilled)  # may delete leaves
     for d in door_specs:  # whose lamps light each face of the leaf
@@ -118,6 +120,7 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs", variant=None):
     for g in groups:
         print(f"[lamps] {g['id']}: {', '.join(g['lights'])}", flush=True)
     movable_specs = movables.prepare_movables(movable_objs, floor_index)
+    prop_specs = props.prepare_props(prop_objs, floor_index)
     glows = glow_specs(glow_objs)
 
     chunk_list = chunks.build_chunks(static, floor_index)
@@ -150,7 +153,8 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs", variant=None):
         "door_lightmap_size": quality.door_lightmap,
         "spawn": export.spawn_from(scene, room_list), "viewpoints": export.viewpoints(scene), "day_lights": ctx["day_lights"],
         "groups": groups, "group_emitters": emitters, "fixtures": fixtures, "lost_lamps": lost,
-        "movables": movable_specs, "movable_atlas": atlas, "screens": screen_specs, "glows": glows, "layers": plan,
+        "movables": movable_specs, "movable_atlas": atlas, "screens": screen_specs, "glows": glows, "props": prop_specs,
+        "layers": plan,
         "windows": window_list, "sky_irradiance": bake.sky_irradiance(scene),
     }
     state.save(scene, st)
@@ -193,7 +197,7 @@ def export_stage(scene, out_dir, expected_doors, budget):
     proxies = make_proxies(st)
     names = ([c["node"] for c in st["chunks"]] + [d["node"] for d in st["doors"]] + list(st["switches"].values())
              + [m["node"] for m in st["movables"]] + [s["node"] for s in st["screens"]] + [g["node"] for g in st["glows"]]
-             + list(proxies.values()))
+             + [p["node"] for p in st.get("props", [])] + list(proxies.values()))
     export.export_glb([bpy.data.objects[n] for n in names], os.path.join(out_dir, "apartment.glb"))
     m = manifest.build_manifest(st, st["baked"], config.EYE_HEIGHT, proxies)
     export.write_json(os.path.join(out_dir, "manifest.json"), m)
