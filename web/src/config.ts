@@ -240,6 +240,8 @@ export const CONFIG = {
     chargeTime: 1,
     /** Spin (rad/s) a throw gives, about the axis across its flight. */
     throwSpin: 6,
+    /** A received throw faster than this many times full strength is slowed to it. */
+    maxSpeedFactor: 1.5,
     /** A drop lets go this far (m) in front of the eye and below it. */
     dropAhead: 0.3,
     dropBelow: 0.6,

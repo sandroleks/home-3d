@@ -30,7 +30,8 @@ export function isPropMessage(v: unknown): v is PropMessage {
   }
 }
 
-/** Held and flying things are drawn on this layer too, which the crosshair's rays leave out. */
+/** Held and flying things are drawn on this layer only (not layer 0), which the crosshair's rays leave out; the camera
+ * enables it. */
 export const CARRIED_LAYER = 1;
 
 /** What the loose things need from the flat and the visitors. */
@@ -109,11 +110,6 @@ export class Prop {
 
   get id(): string {
     return this.place.id;
-  }
-
-  /** At home, or back in the drawer it came from: a little darker. */
-  get inside(): boolean {
-    return this.state === 'rest' && (this.atHome || (this.place.node !== null && this.root.parent?.name === this.place.node));
   }
 
   /** Held or flying: drawn on the carried layer only, so the crosshair's rays (layer 0) pass it by. */
@@ -220,7 +216,7 @@ export class Props {
         }
       }
       p.root.getWorldPosition(pos);
-      p.setLevel(this.world.light(pos.x, pos.z) * (p.inside ? CONFIG.props.insideLight : 1) * (p === this.lit ? CONFIG.props.highlight : 1));
+      p.setLevel(this.world.light(pos.x, pos.z) * (p.state === 'rest' && (p.atHome || p.root.parent !== this.world.root) ? CONFIG.props.insideLight : 1) * (p === this.lit ? CONFIG.props.highlight : 1));
     }
     return out;
   }
@@ -234,9 +230,12 @@ export class Props {
     else if (m.s === 'home') this.goHome(p);
     else if (m.s === 'fly') {
       const v = new Vector3(...m.v);
-      const most = CONFIG.props.throwSpeed[1] * 1.5;
+      const most = CONFIG.props.throwSpeed[1] * CONFIG.props.maxSpeedFactor;
       if (v.length() > most) v.setLength(most);
-      this.startFlight(p, new Vector3(...m.p), v, new Vector3(...m.w), m.by);
+      const w = new Vector3(...m.w);
+      const fastest = CONFIG.props.throwSpin * CONFIG.props.maxSpeedFactor;
+      if (w.length() > fastest) w.setLength(fastest);
+      this.startFlight(p, new Vector3(...m.p), v, w, m.by);
     } else {
       const parent = m.parent === null ? this.world.root : this.world.node(m.parent);
       if (!parent) this.goHome(p); // a drawer of the other kitchen
@@ -245,6 +244,8 @@ export class Props {
         parent.add(p.root);
         p.root.position.set(...m.p);
         p.root.quaternion.set(...m.q);
+        if (p.root.quaternion.lengthSq() < 1e-9) p.root.quaternion.identity();
+        else p.root.quaternion.normalize();
         p.root.updateMatrixWorld(true);
         this.settle(p);
         if (m.parent === null && !this.supported(p)) this.goHome(p); // nothing under it in this layout
@@ -269,7 +270,7 @@ export class Props {
       if (p.state !== 'held' || p.holder !== id) continue;
       this.bump(p, id);
       const hit = at && this.world.raycast(a.copy(at), b.copy(at).addScaledVector(UP, -3));
-      if (hit) this.restAt(p, this.world.root, hit.point, upright(0));
+      if (hit) this.restAt(p, this.world.drawerOf(hit.object) ?? this.world.root, hit.point, upright(0));
       else this.goHome(p);
     }
   }
@@ -302,6 +303,7 @@ export class Props {
     p.state = 'fly';
     p.holder = thrower;
     p.atHome = false;
+    p.root.visible = true;
     p.flight = launch(from, velocity, spin, p.root.getWorldQuaternion(new Quaternion()));
     p.setCarried(true);
     this.poseFlight(p);
@@ -320,7 +322,7 @@ export class Props {
     const point = l.point.clone();
     if (l.tipped) { // on its side, along its heading
       q.multiply(new Quaternion().setFromAxisAngle(SIDE, Math.PI / 2));
-      point.addScaledVector(UP, p.info.size[0] / 2);
+      point.addScaledVector(UP, p.info.size[2] / 2);
     }
     this.restAt(p, parent, point, q);
   }
@@ -363,16 +365,21 @@ export class Props {
     }
   }
 
-  /** Out of its stack, as it leaves its place. */
+  /** Out of its stack, as it leaves its place: what lies on it is let go too. */
   private detach(p: Prop): void {
+    if (p.over) {
+      p.over.under = null;
+      p.over = null;
+    }
     if (p.under) p.under.over = null;
     p.under = null;
   }
 
   /** Whether there's a surface just under a resting thing. */
   private supported(p: Prop): boolean {
-    p.root.getWorldPosition(pos);
-    return !!this.world.raycast(a.copy(pos).addScaledVector(UP, 0.05), b.copy(pos).addScaledVector(UP, -0.05));
+    box.setFromObject(p.root);
+    box.getCenter(pos);
+    return !!this.world.raycast(a.set(pos.x, box.max.y + 0.02, pos.z), b.set(pos.x, box.min.y - 0.05, pos.z));
   }
 
   private restMessage(p: Prop): PropMessage {

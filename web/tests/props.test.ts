@@ -1,5 +1,6 @@
 import { Box3, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
+import { CONFIG } from '../src/config';
 import type { PlacedProp } from '../src/prop-places';
 import { CARRIED_LAYER, isPropMessage, type PropMessage, Props, type PropWorld } from '../src/props';
 import { floor, planesRaycast } from './planes';
@@ -57,6 +58,9 @@ describe('Props', () => {
     props.update(1 / 60);
     expect(world(a.root).y).toBeCloseTo(1.4);
     a.root.traverse((o) => expect(o.layers.isEnabled(CARRIED_LAYER)).toBe(true));
+    a.root.traverse((o) => expect(o.layers.isEnabled(0)).toBe(false));
+    props.place({ point: new Vector3(0.5, 0.9, 0), yaw: 0, node: null });
+    a.root.traverse((o) => expect(o.layers.isEnabled(0)).toBe(true));
   });
 
   it('takes the top of a stack', () => {
@@ -188,6 +192,55 @@ describe('Props', () => {
     const { props } = setup();
     expect(props.overlaps(new Box3(new Vector3(-0.05, 0.9, -0.05), new Vector3(0.05, 1, 0.05)))).toBe(true);
     expect(props.overlaps(new Box3(new Vector3(-0.05, 2, -0.05), new Vector3(0.05, 2.1, 0.05)))).toBe(false);
+  });
+
+  it('keeps a tipped thing lying on the floor where another visitor put it', () => {
+    const { props } = setup([placed('m/mug/0', { kind: 'mug' })]);
+    const [m] = props.list;
+    const s = Math.SQRT1_2;
+    props.receive({ id: m.id, n: 1, by: 'ana', s: 'rest', parent: null, p: [0.5, 0.045, 0], q: [s, 0, 0, s] });
+    expect(m.atHome).toBe(false);
+  });
+
+  it('lays a mug that lands hard on its side, on the floor', () => {
+    const { props } = setup([placed('m/mug/0', { kind: 'mug' })]);
+    const [m] = props.list;
+    props.pickUp(m);
+    props.drop(new Vector3(0, 3, 0));
+    for (let i = 0; i < 600; i++) props.update(1 / 60);
+    expect(m.state).toBe('rest');
+    expect(new Box3().setFromObject(m.root).min.y).toBeCloseTo(0, 2);
+    expect(Math.abs(new Box3().setFromObject(m.root).min.y)).toBeLessThan(0.005);
+  });
+
+  it('unlinks a stack when its top leaves and its bottom is taken', () => {
+    const { props } = setup([placed('p/plate/0', { kind: 'plate' }), placed('p/plate/1', { kind: 'plate', position: new Vector3(0, 0.92, 0), on: 'p/plate/0' })]);
+    const [bottom, top] = props.list;
+    props.receive({ id: top.id, n: 1, by: 'ana', s: 'rest', parent: 'Move_island', p: [0, 0, 0], q: [0, 0, 0, 1] });
+    expect(top.atHome).toBe(true);
+    props.receive({ id: bottom.id, n: 1, by: 'ana', s: 'held' });
+    props.receive({ id: bottom.id, n: 2, by: 'ana', s: 'rest', parent: null, p: [0.5, 0, 0], q: [0, 0, 0, 1] });
+    expect(props.top(bottom)).toBe(bottom);
+    expect(props.pickUp(bottom)?.id).toBe(bottom.id);
+  });
+
+  it('shows a thing thrown by someone whose hand was not known', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    props.receive({ id: a.id, n: 1, by: 'zed', s: 'held' });
+    props.update(1 / 60);
+    expect(a.root.visible).toBe(false);
+    props.receive({ id: a.id, n: 2, by: 'zed', s: 'fly', p: [0, 1.2, 0], v: [1, 0, 0], w: [0, 0, 0] });
+    props.update(1 / 60);
+    expect(a.root.visible).toBe(true);
+  });
+
+  it('slows a received throw that is faster than a real one can be', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    props.receive({ id: a.id, n: 1, by: 'ana', s: 'fly', p: [0, 1.2, 0], v: [100, 0, 0], w: [0, 1000, 0] });
+    expect(a.flight!.velocity.length()).toBeLessThanOrEqual(CONFIG.props.throwSpeed[1] * CONFIG.props.maxSpeedFactor + 1e-9);
+    expect(a.flight!.spin.length()).toBeLessThanOrEqual(CONFIG.props.throwSpin * CONFIG.props.maxSpeedFactor + 1e-9);
   });
 
   it('checks messages from the network', () => {
