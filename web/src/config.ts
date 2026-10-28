@@ -285,6 +285,11 @@ export const CONFIG = {
     countdown: 3,
     length: 60,
     end: 10,
+    /** How close two starts are (ms) to count as pressed at once: the lower round id then wins; further apart, the
+     * earlier start does. */
+    crossing: 2000,
+    /** Hits kept for a round not heard of yet, oldest dropped first. */
+    pending: 64,
     /** The bolt cycle between shots; the kick's ease back (s); where the rifle is held in view (camera space, m). */
     cycle: 0.6,
     kickTime: 0.18,

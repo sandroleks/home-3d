@@ -24,6 +24,7 @@ export type RangeEvent =
   | { kind: 'shot'; by: string; o: Vec3; d: Vec3 }
   | { kind: 'break'; target: number; by: string; points: number; at: Vec3 };
 
+/** Where a round is: counting down, running, or showing its final scores. */
 export type Phase = 'countdown' | 'running' | 'end';
 
 interface Round { id: string; seed: number; endsAt: number; flights: Flight[]; players: Map<string, string> }
@@ -76,6 +77,8 @@ export class RangeGame {
   /** Rounds over or given up here, so a late copy never comes back. */
   private finished = new Set<string>();
   private events: RangeEvent[] = [];
+  /** Hits on rounds this browser doesn't hold yet, kept (at most `pending`, oldest dropped) until the round arrives. */
+  private pending: { msg: Extract<RangeMessage, { k: 'shot' }>; from: string }[] = [];
 
   constructor(private selfId: () => string, private newId: () => string, private rand: () => number = Math.random, private config = CONFIG.range) {}
 
@@ -135,14 +138,20 @@ export class RangeGame {
       case 'shot': {
         this.events.push({ kind: 'shot', by: from, o: msg.o, d: msg.d });
         const r = this.round;
-        const f = r && msg.r === r.id && msg.hit >= 0 ? r.flights[msg.hit] : undefined;
-        if (r && f && flightAt(f, msg.t, this.config)) { // a claim on a target that was in the air then
-          if (!r.players.has(from)) r.players.set(from, this.others.get(from) ?? CONFIG.multiplayer.defaultName);
-          this.addClaim({ target: f.i, t: msg.t, by: from }, true);
+        if (r && msg.r === r.id) this.claimShot(msg, from, true);
+        else if (msg.r && msg.hit >= 0 && !this.finished.has(msg.r)) { // a round not heard of yet: keep the hit for it
+          this.pending.push({ msg, from });
+          if (this.pending.length > this.config.pending) this.pending.shift();
         }
         return [];
       }
     }
+  }
+
+  /** A visitor who left: no longer holding a rifle for later rounds. Their place and score in the round that's on
+   * stay, and their claims still count. */
+  leave(id: string): void {
+    this.others.delete(id);
   }
 
   /** A visitor new here: this visitor's rifle, and from the earliest-arrived visitor (the others needn't), the round
@@ -168,6 +177,7 @@ export class RangeGame {
     return this.round ? this.config.length - (this.round.endsAt - now) / 1000 : 0;
   }
 
+  /** Where the round is at `now`; null with none. */
   phase(now: number): Phase | null {
     if (!this.round) return null;
     const t = this.roundTime(now);
@@ -184,6 +194,7 @@ export class RangeGame {
     return new Set(this.claims.map((c) => c.target));
   }
 
+  /** The board: every shooter in the round and their points, best first; empty with no round. */
   standings(): Standing[] {
     return this.round ? standings(this.round.players, this.claims, this.round.flights, this.config) : [];
   }
@@ -206,8 +217,15 @@ export class RangeGame {
       for (const c of msg.claims) this.addClaim(c, false);
       return;
     }
-    if (r && this.phase(now) !== 'end' && r.id < msg.r) return;
+    if (r && this.phase(now) !== 'end') {
+      const span = 1000 * (this.config.countdown + this.config.length);
+      const theirs = now + msg.left - span;
+      const ours = r.endsAt - span;
+      const apart = Math.abs(theirs - ours) > this.config.crossing;
+      if (apart ? theirs > ours : r.id < msg.r) return; // the earlier start stands; pressed at once, the lower id
+    }
     if (r) this.finished.add(r.id);
+    for (const [id, name] of this.others) if (!players.has(id)) players.set(id, name);
     if (this.mine) players.set(this.selfId(), this.myName);
     this.begin(msg.r, msg.seed, now + msg.left, players, msg.claims);
   }
@@ -216,6 +234,18 @@ export class RangeGame {
     this.round = { id, seed, endsAt, flights: schedule(seed, this.config), players };
     this.claims = [];
     for (const c of claims) this.addClaim(c, false); // a newcomer's catch-up: those already broke, out of sight
+    const kept = this.pending.filter((p) => p.msg.r === id);
+    this.pending = this.pending.filter((p) => p.msg.r !== id);
+    for (const p of kept) this.claimShot(p.msg, p.from, false);
+  }
+
+  /** The claim in a shot's hit, if the target was in the air then; its shooter joins the board. */
+  private claimShot(msg: Extract<RangeMessage, { k: 'shot' }>, from: string, show: boolean): void {
+    const r = this.round;
+    const f = r && msg.hit >= 0 ? r.flights[msg.hit] : undefined;
+    if (!r || !f || !flightAt(f, msg.t, this.config)) return;
+    if (!r.players.has(from)) r.players.set(from, this.others.get(from) ?? CONFIG.multiplayer.defaultName);
+    this.addClaim({ target: f.i, t: msg.t, by: from }, show);
   }
 
   private startMessage(now: number): RangeMessage {
@@ -234,7 +264,7 @@ export class RangeGame {
   /** Keeps a claim (one per shooter and target); the first on a target breaks it, `show` for everyone to see. */
   private addClaim(c: Claim, show: boolean): void {
     const r = this.round;
-    if (!r || !r.flights[c.target] || this.claims.some((x) => x.target === c.target && x.by === c.by)) return;
+    if (!r || !c.by || !r.flights[c.target] || this.claims.some((x) => x.target === c.target && x.by === c.by)) return;
     const first = !this.claims.some((x) => x.target === c.target);
     this.claims.push(c);
     const f = r.flights[c.target];
@@ -246,6 +276,8 @@ export class RangeGame {
 /** The top strip: the countdown, the time left or "Final scores", and the board. */
 export interface RangeHud { head: string; final: boolean; rows: (Standing & { you: boolean })[] }
 
+/** What the top strip shows now: the countdown, the time left or "Final scores", and the board with `me` marked; null
+ * with no round. */
 export function rangeHud(game: RangeGame, now: number, me: string): RangeHud | null {
   const phase = game.phase(now);
   if (!phase) return null;

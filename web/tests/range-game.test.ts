@@ -215,3 +215,79 @@ describe('range messages', () => {
     for (const m of bad) expect(isRangeMessage(m), JSON.stringify(m)).toBe(false);
   });
 });
+
+describe('converging when messages cross', () => {
+  it('lists a rifle holder heard of before the round, in every browser', () => {
+    const p = party('ana', 'bo', 'cy');
+    p.deliver('ana', p.by('ana').setArmed(true, 'Ana', p.now));
+    const armCy = p.by('cy').setArmed(true, 'Cy', p.now);
+    p.by('bo').receive(armCy[0].msg, 'cy', p.now); // Bo hears Cy's arm; Ana doesn't, yet
+    p.deliver('ana', p.by('ana').start(p.now));
+    p.by('ana').receive(armCy[0].msg, 'cy', p.now);
+    for (const id of ['ana', 'bo', 'cy']) expect(p.by(id).standings().map((s) => s.id).sort()).toEqual(['ana', 'cy']);
+  });
+
+  it('keeps a leaver on this round\'s board but not the next one\'s', () => {
+    const p = party('ana', 'bo');
+    p.deliver('ana', p.by('ana').setArmed(true, 'Ana', p.now));
+    p.deliver('bo', p.by('bo').setArmed(true, 'Bo', p.now));
+    p.deliver('ana', p.by('ana').start(p.now));
+    p.by('ana').leave('bo');
+    expect(p.by('ana').standings().map((s) => s.id).sort()).toEqual(['ana', 'bo']);
+    p.advance((cfg.countdown + cfg.length + cfg.end) * 1000 + 1);
+    expect(p.by('ana').round).toBeNull();
+    p.by('ana').start(p.now);
+    expect(p.by('ana').standings().map((s) => s.id)).toEqual(['ana']);
+  });
+
+  it('replays a hit that came before the round it belongs to', () => {
+    const p = party('ana', 'cy');
+    p.here.delete('cy');
+    p.deliver('ana', p.by('ana').setArmed(true, 'Ana', p.now));
+    p.deliver('ana', p.by('ana').start(p.now));
+    toFirstTarget(p, 'ana');
+    const { o, d } = aimAt(p.by('ana'), 0, p.now);
+    const shot = p.by('ana').shoot(o, d, p.now);
+    const cy = p.by('cy');
+    cy.receive(shot[0].msg, 'ana', p.now); // the shot first, the catch-up after
+    const a = p.by('ana');
+    cy.receive({ k: 'start', r: 'ana-round', seed: a.round!.seed, left: a.timeLeft(p.now) * 1000, players: [{ id: 'ana', name: 'Ana' }], claims: [] }, 'ana', p.now);
+    expect(cy.standings()).toEqual(a.standings());
+    expect(cy.standings()[0].score).toBeGreaterThan(0);
+    expect(cy.takeEvents().map((e) => e.kind)).toEqual(['shot']);
+  });
+
+  it('keeps a round that started well before a lower-id one', () => {
+    const p = party('ana', 'bo');
+    p.deliver('ana', p.by('ana').setArmed(true, 'Ana', p.now));
+    p.deliver('bo', p.by('bo').setArmed(true, 'Bo', p.now));
+    p.deliver('bo', p.by('bo').start(p.now));
+    toFirstTarget(p, 'bo');
+    const { o, d } = aimAt(p.by('bo'), 0, p.now);
+    p.deliver('bo', p.by('bo').shoot(o, d, p.now));
+    p.advance(2000);
+    const late: RangeMessage = { k: 'start', r: 'aaa-round', seed: 7, left: 1000 * (cfg.countdown + cfg.length), players: [], claims: [] };
+    for (const id of ['ana', 'bo']) {
+      p.by(id).receive(late, 'zed', p.now);
+      expect(p.by(id).round?.id).toBe('bo-round');
+      expect(p.by(id).standings().find((s) => s.id === 'bo')!.score).toBeGreaterThan(0);
+    }
+  });
+
+  it('switches a newcomer who pressed Start to the earlier round it hears of', () => {
+    const p = party('ana', 'bo');
+    p.here.delete('ana');
+    p.deliver('bo', p.by('bo').setArmed(true, 'Bo', p.now));
+    p.deliver('bo', p.by('bo').start(p.now));
+    p.advance(5000);
+    p.here.add('ana');
+    p.by('ana').setArmed(true, 'Ana', p.now);
+    const own = p.by('ana').start(p.now);
+    expect(p.by('ana').round?.id).toBe('ana-round');
+    p.deliver('ana', own); // Bo ignores the later start, though its id is lower
+    expect(p.by('bo').round?.id).toBe('bo-round');
+    p.deliver('bo', p.by('bo').greet('ana', p.visitors(), p.now));
+    expect(p.by('ana').round?.id).toBe('bo-round');
+    expect(p.by('ana').standings().map((s) => s.id).sort()).toEqual(['ana', 'bo']);
+  });
+});
