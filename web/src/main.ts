@@ -17,9 +17,13 @@ import { applyMovable } from './movables';
 import { Avatars, figureLight } from './avatars';
 import { Multiplayer, trysteroRoom } from './multiplayer';
 import { guestList } from './guests';
+import { BoardPanel, GAME_COPY, type PanelBoard } from './board-panel';
+import { ChessBoard } from './chess-board';
+import { endOf, gameChairs, type GameKind, Games, otherSide, seatedAt, type Side, SLOTS } from './games';
+import { TableGames } from './table-pieces';
 import { fetchIceServers } from './turn';
 import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
-import { applyState, cleanName, collectState, lightValue, loadArrived, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
+import { applyState, cleanName, collectState, colourFor, lightValue, loadArrived, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
 import { activeScene, groupsIn, HUE_SCENES, levelFor, nextScene, NO_HUE_LINK, sceneById } from './hue';
 import { Player, screenFov, vfovFromHfov } from './player';
 import { freeSpot, seatAt, seatedOn, seatingCode } from './seats';
@@ -112,6 +116,9 @@ async function run(): Promise<void> {
   world.root.add(halos.root);
   const avatars = new Avatars(); // the other visitors; in the scene now so the warm-up compiles them
   scene.add(avatars.root);
+  const tables = new TableGames(); // the dining table's games, in the scene now so the warm-up compiles them too
+  scene.add(tables.root);
+  const [tableX, tableZ] = CONFIG.games.slots[1]; // the table's middle, for how lit the pieces are
   const ear = new Vector3();
   const wallsBetween = wallCounter(world.occluders); // walls and closed doors between a voice and the listener
   // How lit a visitor's figure is: its room's ceiling light and lamps, or the daylight
@@ -189,11 +196,12 @@ async function run(): Promise<void> {
   const interactions = new Interactions(camera, world.pickables, world.targets, world.lights, undefined, seatTarget);
   /** A click or tap on a free seat sits you down (or lies you down, on the bed). */
   const sitOn = (t: Target | null) => {
-    if (t?.kind === 'seat' && t.spot && !player.frozen) player.sit(seatedOn(t.spot, t.seat.pose));
+    if (t?.kind === 'seat' && t.spot && !player.frozen && !player.held) player.sit(seatedOn(t.spot, t.seat.pose));
   };
   /** C, or the touch bar's button: sit down on the floor where you are, or get up. */
   const toggleSit = () => {
     if (player.frozen) return;
+    if (player.held) return standFromBoard(); // at a game board: asks first while a game runs
     if (player.seat) player.stand();
     else player.sit({ posture: 'sit', x: player.x, y: 0, z: player.z, yaw: player.yaw }, false);
   };
@@ -250,6 +258,89 @@ async function run(): Promise<void> {
   const share = (t: Target | null) => {
     if (t) others?.broadcast(stateDelta(t, world.lights));
   };
+  /** The dining table's games (games.ts): who sits in the game chairs, the games, and the panel a player gets. */
+  const selfId = () => others?.selfId ?? 'self';
+  const chairs = gameChairs(assets.seats);
+  const games = new Games(selfId, () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`);
+  const boards: Partial<Record<GameKind, PanelBoard>> = { chess: new ChessBoard(document, (uci) => playEntry(uci)) };
+  /** Where this visitor plays while the panel is open: the slot and the side. */
+  let atBoard: { slot: number; side: Side } | null = null;
+  const playEntry = (entry: string) => {
+    const m = atBoard && games.play(atBoard.slot, entry);
+    if (m) others?.sendGame(m);
+  };
+  /** Resigns, if the game is still running and it is still this player's move (a confirm can outlive the game). */
+  const resignIfDue = (slot: number, side: Side) => {
+    const g = games.at(slot);
+    if (g && g[side] === selfId() && !endOf(g) && g.rules.turn() === side) playEntry('resign');
+  };
+  /** Gets up from the board; the frame loop closes the panel, and the view looks around again. */
+  const standUp = () => {
+    player.stand();
+    if (cursor && !touch) lockPointer();
+  };
+  /** The panel's Stand up, or C: while your game runs it asks first, and on your move standing resigns it. */
+  const standFromBoard = () => {
+    const g = atBoard && games.at(atBoard.slot);
+    if (!atBoard || !g || g[atBoard.side] !== selfId() || endOf(g)) return standUp();
+    const { slot, side } = atBoard;
+    boardPanel.confirm(GAME_COPY.standAndResign, GAME_COPY.standUp, () => {
+      resignIfDue(slot, side);
+      standUp();
+    });
+  };
+  const boardPanel = new BoardPanel(document, {
+    resign: () => {
+      if (!atBoard) return;
+      const { slot, side } = atBoard;
+      boardPanel.confirm(GAME_COPY.resignGame, GAME_COPY.resign, () => resignIfDue(slot, side));
+    },
+    draw: () => {
+      const g = atBoard && games.at(atBoard.slot);
+      playEntry(g?.rules.drawOffer?.() ? 'draw!' : 'draw?');
+    },
+    stand: () => standFromBoard(),
+  });
+  const nameOf = (id: string) =>
+    id === selfId() ? cleanName(ui.getName()) : others?.people.find((p) => p.id === id)?.name ?? CONFIG.multiplayer.defaultName;
+  /** Frees the mouse for the panel, as Tab does. */
+  const freeMouse = () => {
+    if (touch || autostart || document.pointerLockElement !== canvas) return;
+    freeing = true;
+    document.exitPointerLock();
+  };
+  /** From the frame loop (`now` in seconds): who sits at the table, the games, the boards on it, and the panel. */
+  const updateGames = (dt: number, now: number) => {
+    const sitters = avatars.seated();
+    if (player.seat) sitters.push({ id: selfId(), x: player.seat.x, z: player.seat.z });
+    for (const m of games.update(seatedAt(chairs, sitters), now)) others?.sendGame(m);
+    tables.update(dt, (slot) => games.at(slot), avatarLight(tableX, tableZ));
+    const seat = started && !autostart ? games.seatOf(selfId()) : null;
+    const board = seat && boards[SLOTS[seat.slot].kind];
+    if (!seat || !board) {
+      if (boardPanel.isOpen) boardPanel.close();
+      atBoard = null;
+      player.held = false;
+      return;
+    }
+    if (!boardPanel.isOpen || atBoard?.slot !== seat.slot) {
+      boardPanel.open(SLOTS[seat.slot].title, board);
+      freeMouse();
+    }
+    atBoard = seat;
+    player.held = true;
+    const g = games.at(seat.slot);
+    const mine = g && g[seat.side] === selfId() ? g : null;
+    const theirs = games.seatsAt(seat.slot)[otherSide(seat.side)];
+    boardPanel.render({
+      you: seat.side,
+      draws: SLOTS[seat.slot].draws,
+      me: { name: nameOf(selfId()), colour: colourFor(selfId()) },
+      them: theirs ? { name: nameOf(theirs), colour: colourFor(theirs) } : null,
+      game: mine?.rules ?? null,
+      end: mine ? endOf(mine) : null,
+    }, games.version);
+  };
   ui.setName(loadName(() => localStorage));
   ui.setVoice(loadVoice(() => localStorage));
   // TURN credentials, asked for while the visitor reads the start screen so joining doesn't wait on them
@@ -274,6 +365,8 @@ async function run(): Promise<void> {
         onChanged: (keys) => keys.forEach((k) => used(byKey.get(k) ?? null)), // the sounds a local click would make
         onPeers: () => showPeople(),
         onHost: () => { guestsDue = 0; },
+        onGame: (g) => { games.receive(g); },
+        games: () => games.messages(),
       }, joinedAt, arrived);
       if (voices) others.setVoice(voices);
       window.addEventListener('pagehide', () => others?.leave(), { once: true });
@@ -375,6 +468,10 @@ async function run(): Promise<void> {
     if (touch) {
       setPausedState(false); // no pointer lock to wait for
       fullscreen();
+    } else if (boardPanel.isOpen) { // at a game board the mouse stays free for the panel
+      cursor = true;
+      ui.setCursor(true);
+      setPausedState(false);
     } else lockPointer();
   });
   if (autostart) start();
@@ -475,7 +572,10 @@ async function run(): Promise<void> {
   });
   window.addEventListener('mousedown', (e) => {
     if (touch) return; // taps are handled by the touch controls
-    if (cursor && e.button === 0 && e.target === canvas) return lockPointer(); // a click on the view looks around again
+    if (cursor && e.button === 0 && e.target === canvas) { // a click on the view looks around again, but not at a board
+      if (!boardPanel.isOpen) lockPointer();
+      return;
+    }
     if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
     const t = interactions.click();
     sitOn(t);
@@ -485,7 +585,7 @@ async function run(): Promise<void> {
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') {
       e.preventDefault(); // Tab toggles the free mouse, never focus cycling
-      if (touch || !started || paused || autostart || e.repeat) return;
+      if (touch || !started || paused || autostart || e.repeat || boardPanel.isOpen) return;
       if (cursor) lockPointer();
       else {
         freeing = true;
@@ -554,6 +654,7 @@ async function run(): Promise<void> {
       others.tick();
     }
     avatars.update(dt, avatarLight);
+    updateGames(dt, now / 1000);
     if (voices) {
       voices.update(dt, camera.getWorldPosition(ear), (id, out) => avatars.mouth(id, out), wallsBetween);
       for (const id of voices.ids) avatars.setTalk(id, voices.talk(id));
@@ -564,7 +665,7 @@ async function run(): Promise<void> {
     sound?.setRoom(currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');
     const target = started ? interactions.update() : null;
-    ui.setPrompt(target ? promptFor(target, world.lights, touch ? 'Tap' : 'Click') : player.seat && started ? COPY.stand : null);
+    ui.setPrompt(boardPanel.isOpen ? null : target ? promptFor(target, world.lights, touch ? 'Tap' : 'Click') : player.seat && started ? COPY.stand : null);
     ui.setSitting(player.seat !== null);
     ui.setRoomLight(currentRoom && world.lights.has(currentRoom) ? world.lights.isOn(currentRoom) : null);
     ui.setScenes(currentRoom ? names.get(currentRoom) ?? null : null, activeScene(world.lights, sceneGroups(currentRoom)));
