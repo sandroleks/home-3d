@@ -20,7 +20,7 @@
 - Drawing: points are whole numbers in a 0..1000 grid on both axes (the canvas is 4:3); eight pen colours `PALETTE[0..7]` and the eraser `ERASER = 8` (white); widths `WIDTHS = [8, 24]` grid units; at most 300 strokes, 500 points a stroke, 20 000 points in all; a point is kept only 4 grid units or more from the stroke's last.
 - Network: a new Trystero message kind `draw` carrying `DrawMessage`, by its `k`: `join` (`{ on }`, a visitor's own flag, to everyone, and to each newcomer), `state` (`{ s: DrawState }`, from the owner), `guess` (to the owner only), `close` (to the guesser only), `stroke` (`{ g, t, n, at, c, w, p }`), `undo` (`{ n }`), `clear`, `sketch` (the whole drawing, to a newcomer). `g` and `t` name the game and its turn. The secret word appears in no message before the reveal. A newcomer (or a visitor back after a timeout) is greeted through a new `onArrive` hook of `Multiplayer`: every visitor sends its Join flag, and the owner the state and the drawing.
 - Accepting a state (`DrawGame.accept`): never a game that is over here; the running game's state only with a higher `seq`; another game only when none shows, when the one showing is at its final scores, or when both are in their first turn and the new id sorts lower (two Starts at once: the earlier wins). Times travel as `left` (ms left in the phase); each browser keeps its own deadline. Game ids: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}` (the same factory as the table games).
-- Ownership: the owner is the drawer's browser in `choosing`, `drawing` and `reveal`; at the turn's end it sends the state with the next drawer as owner. When the owner is no longer among the visitors here, the game's leader (the earliest arrival by `byArrival` from `presence.ts`, among the game's players still here other than the owner) ends that turn (its points taken back), drops the owner from the game, and passes the turn on; its state jumps the sequence by `TAKEOVER = 1000`, so a late state from the old owner (a hidden tab still answering) never wins. With no player of the game left here, every browser drops the game.
+- Ownership: the owner is the drawer's browser in `choosing`, `drawing` and `reveal`; at the turn's end it sends the state with the next drawer as owner. When the owner is no longer among the visitors here, the game's leader (the earliest arrival by `byArrival` from `presence.ts`, among the game's players still here other than the owner) ends that turn (points already won stay), drops the owner from the game, and passes the turn on; its state jumps the sequence by `TAKEOVER = 1000`, so a late state from the old owner (a hidden tab still answering) never wins. With no player of the game left here, every browser drops the game.
 - Copy, verbatim: prompts `Click: TV` / `Tap: TV`; panel `TV`, `Draw and guess`, `Turn on`, `Turn off`, `Next channel`, `A game is on`, `Join`, `Leave`, `Start`, `Close`, `Two or more players to start`, `Join to play`, `A game is on. Join to guess, and draw later.`, `Choose a word to draw`, `<name> is choosing a word`, `Your turn to draw`, `Guess the word`, `You guessed it!`, `Final scores`, `The word was <word>. <name> +<points>, <name> +<points>` (most first) or `The word was <word>. Nobody got it`, `"<guess>" is close!`, feed lines `<name>: <guess>`, `<name> guessed it!`, `<name> left`; tools `Eraser`, `Fine`, `Broad`, `Undo`, `Clear`; the guess box `Type your guess` and `Guess`; the lobby's ` (you)`. On the TV: `<name> is choosing a word`, `The word was` over the word and `<name> +<points>   <name> +<points>` (or `Nobody got it`), `Final scores`, the time as `m:ss`.
 - Names come from other visitors: render them with `textContent` (or `fillText` on a canvas) only, never `innerHTML`.
 - Commits end with the line `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
@@ -30,7 +30,7 @@
 The design is approved; where it leaves something open or meets the code differently, this plan decides as follows (each is built and tested in the task named):
 
 1. **Next channel at the last channel** goes round to the first (clicking used to switch the TV off there; On/Off does that now). Task 5.
-2. **"The drawer's turn ends with no points"** is taken literally: the points that turn gave (guessers' and drawer's) are taken back, the word is not revealed, and the next turn starts at once; the feed says "<name> left". The same when the drawer presses Leave. Task 3/4.
+2. **"The drawer's turn ends with no points"** means no more points: the points already won that turn stay, the word is not revealed, and the next turn starts at once; the feed says "<name> left". The same when the drawer presses Leave. Task 3/4.
 3. **A close guess** also shows in the feed for everyone, as the wrong guess it is; only the guesser sees "close!". A new guess clears the guesser's "close!". Task 4.
 4. **Two Starts at once** settle on the game with the lower id (the earlier) while both are in their first turn. Task 4.
 5. **The final scores count as the game showing:** the remote stays disabled for those 15 s, but Start works (a new game replaces the scores). Task 4/7.
@@ -808,10 +808,11 @@ describe('joining and leaving', () => {
     expect(s.drawer).toBe('rui');
     expect(nextTurn(removePlayer(s, 'ana')).phase).toBe('end');
   });
-  it("takes back a turn's points when its drawer leaves", () => {
+  it("keeps the points already won when a turn's drawer leaves", () => {
     let s = rightGuess(beginDrawing(newGame('g1', [ANA, RUI, ZE]), 'cat'), 'rui', 80000);
     s = nextTurn(removePlayer(voidTurn(s), 'ana'));
-    expect(scores(s)).toEqual({ ana: 0, rui: 0, ze: 0 });
+    expect(scores(s)).toEqual({ ana: 50, rui: 300, ze: 0 });
+    expect(s.points).toEqual([]);
     expect(s).toMatchObject({ drawer: 'rui', turn: 2, phase: 'choosing' });
   });
   it('takes no more than the most players a game holds', () => {
@@ -993,10 +994,9 @@ export function endTurn(s: DrawState, word: string): DrawState {
   return bump(s, { phase: 'reveal', left: ms(CONFIG.draw.reveal), word, mask: word, used: [...s.used, word] });
 }
 
-/** The turn counts for nothing (its drawer left): the points it gave are taken back. */
+/** The turn stops early (its drawer left): no more points, the ones already won stay, and nothing is revealed. */
 export function voidTurn(s: DrawState): DrawState {
-  const players = s.players.map((p) => ({ ...p, score: p.score - (s.points.find((q) => q.id === p.id)?.points ?? 0) }));
-  return bump(s, { players, points: [] });
+  return bump(s, { points: [] });
 }
 
 /** The final scores, for `CONFIG.draw.end` seconds. */
@@ -1306,14 +1306,14 @@ describe('joining and leaving', () => {
     expect(p.game('rui').state).toMatchObject({ phase: 'end' });
     expect(p.game('ana').state).toMatchObject({ phase: 'end' });
   });
-  it("ends the drawer's turn with no points when they press Leave, and the next drawer goes on", () => {
+  it("ends the drawer's turn early when they press Leave, keeping the points won, and the next drawer goes on", () => {
     const p = started();
     p.send('ana', p.game('ana').choose('horse', p.now));
     p.send('rui', p.game('rui').guess('horse'));
     p.send('ana', p.game('ana').setJoined(false));
     p.tick();
     expect(p.game('ze').state).toMatchObject({ phase: 'choosing', drawer: 'rui', owner: 'rui', turn: 2 });
-    expect(scores(p.game('ze').state)).toEqual({ ana: 0, rui: 0, ze: 0 });
+    expect(scores(p.game('ze').state)).toEqual({ ana: 50, rui: 300, ze: 0 });
   });
   it("lets the leader take over when the drawer's tab goes, and the next earliest when the leader goes too", () => {
     const p = started();
@@ -1325,7 +1325,7 @@ describe('joining and leaving', () => {
     const s = p.game('ze').state!;
     expect(s).toMatchObject({ drawer: 'rui', owner: 'rui', phase: 'choosing', turn: 2 });
     expect(s.seq).toBeGreaterThan(seq + TAKEOVER);
-    expect(scores(s)).toEqual({ ana: 0, rui: 0, ze: 0 });
+    expect(scores(s)).toEqual({ ana: 50, rui: 0, ze: 300 });
     expect(s.feed.at(-1)).toEqual({ id: 'ana', kind: 'left', text: '' });
     p.leave('rui');
     p.tick();
@@ -3606,7 +3606,7 @@ In `README.md`:
 - In "Visitors together", after the paragraph that starts `Go is played on a 9×9 board`, add:
 
 ```markdown
-Visitors can play draw and guess on the Sala's TV, best with three to six. A click on the TV (or T, from anywhere) opens its panel, with the mouse freed: the remote (On/Off and Next channel, shared with everyone as before) and the game's lobby. Press Join to play; with two or more joined, any player presses Start. Each player draws once, in the order they arrived: the drawer picks one of three words (one is picked for them after 15 s) and has 80 seconds to draw it on the panel's canvas, with eight colours, two pen sizes, an eraser, Undo and Clear (mouse, pen or touch). Everyone in the flat sees the drawing live on the TV, with the time, the blanks and the scores beside it; the players also see it in their panel, with the word as blanks (one letter shows at half time and another at three quarters, never more than half the word) and a box for guesses (Enter sends). Case, accents, spaces and hyphens don't matter. A right guess scores 300 points at the start of the drawing time down to 100 at its end, and the drawer 50; a guess one letter off tells only its guesser it's close; wrong guesses show in the feed. The turn ends when the time is up or everyone has the word, the word shows for 5 s with the turn's points, and the next player draws; after the last turn the final scores show for 15 s, ties sharing a place. You can join during a game (you guess straight away and draw at the end), and leave with Leave or by closing the tab: your score stays on the board, and with fewer than two players left the game ends. While a game runs the TV shows it whatever its channel, even switched off, and the remote waits ("A game is on"). The panel closes with Close, Esc or T and opens again any time; the game goes on. While it's open the movement keys don't move you, and typing a guess never triggers the walkthrough's keys. There is still no server: the drawer's browser holds the game (the word never leaves it before the reveal), judges the guesses sent to it alone, and hands the game to the next drawer; if the drawer's tab goes (or is hidden for 15 s), the player who arrived first ends that turn with no points and passes it on. It all travels in a `draw` message, and visitors on an older version see the TV's channel. The words are in `web/src/draw-words.ts`, the timing and points in `CONFIG.draw`; the design note is `docs/superpowers/specs/2026-10-28-tv-draw-and-guess-design.md`.
+Visitors can play draw and guess on the Sala's TV, best with three to six. A click on the TV (or T, from anywhere) opens its panel, with the mouse freed: the remote (On/Off and Next channel, shared with everyone as before) and the game's lobby. Press Join to play; with two or more joined, any player presses Start. Each player draws once, in the order they arrived: the drawer picks one of three words (one is picked for them after 15 s) and has 80 seconds to draw it on the panel's canvas, with eight colours, two pen sizes, an eraser, Undo and Clear (mouse, pen or touch). Everyone in the flat sees the drawing live on the TV, with the time, the blanks and the scores beside it; the players also see it in their panel, with the word as blanks (one letter shows at half time and another at three quarters, never more than half the word) and a box for guesses (Enter sends). Case, accents, spaces and hyphens don't matter. A right guess scores 300 points at the start of the drawing time down to 100 at its end, and the drawer 50; a guess one letter off tells only its guesser it's close; wrong guesses show in the feed. The turn ends when the time is up or everyone has the word, the word shows for 5 s with the turn's points, and the next player draws; after the last turn the final scores show for 15 s, ties sharing a place. You can join during a game (you guess straight away and draw at the end), and leave with Leave or by closing the tab: your score stays on the board, and with fewer than two players left the game ends. While a game runs the TV shows it whatever its channel, even switched off, and the remote waits ("A game is on"). The panel closes with Close, Esc or T and opens again any time; the game goes on. While it's open the movement keys don't move you, and typing a guess never triggers the walkthrough's keys. There is still no server: the drawer's browser holds the game (the word never leaves it before the reveal), judges the guesses sent to it alone, and hands the game to the next drawer; if the drawer's tab goes (or is hidden for 15 s), the player who arrived first ends that turn early (points already won stay) and passes it on. It all travels in a `draw` message, and visitors on an older version see the TV's channel. The words are in `web/src/draw-words.ts`, the timing and points in `CONFIG.draw`; the design note is `docs/superpowers/specs/2026-10-28-tv-draw-and-guess-design.md`.
 ```
 
 - [ ] **Step 11: Build and test**

@@ -35,7 +35,7 @@ Not in this piece: other TV games, video in sync, screen sharing, custom or non-
   3. **Reveal:** the turn ends when the time runs out or every guesser has it. The word shows to all for 5 s with the points of the turn, then the next drawer's turn starts.
 - **Guessing:** a guess is compared to the word ignoring case, accents, surrounding spaces and hyphens. A correct guess scores the guesser **100–300** (300 at the start of the drawing time, falling linearly to 100 at its end, rounded to 10) and the drawer **50**. A guess one edit away (Levenshtein 1, words of 4 letters or more) tells only the guesser "close!". Wrong guesses appear in a feed for all players; a correct one appears as "Ana guessed it!". A player who has it can't guess again that turn. Guesses are at most 40 characters.
 - **The end:** after the last turn, the final scores show on the TV and the panels for 15 s, highest first, ties sharing a place.
-- The drawer's turn ends with no points if the drawer leaves; the game moves to the next drawer.
+- If the drawer leaves, their turn ends at once: no more points (those already won stay), the word isn't revealed, and the game moves to the next drawer.
 
 ## The words
 
@@ -66,7 +66,7 @@ Not in this piece: other TV games, video in sync, screen sharing, custom or non-
 
 - A new message kind, **`draw`**. Older visitors ignore it: they see the TV's channel, not the game.
 - **One owner at a time.** The game's state — players, order, whose turn, phase, time left, scores, who has guessed, the blanks, the feed's last lines — is held and sent by its **owner**: the current drawer's browser. The **secret word never leaves the drawer's browser** until the reveal. When the turn ends, the owner sends the state with the next drawer as owner; that browser takes over.
-- **The game leader** is the player who arrived first (the same rule as the party host, among the players). When the owner leaves, the leader ends that turn with no points and passes the turn on as owner. If the leader is the one who left, the next earliest takes the role; every browser works it out alone from the same data.
+- **The game leader** is the player who arrived first (the same rule as the party host, among the players). When the owner leaves, the leader ends that turn early and passes the turn on as owner. If the leader is the one who left, the next earliest takes the role; every browser works it out alone from the same data.
 - Each state carries the game id and a sequence number; a browser accepts a state for the running game with a higher number, or a new game (a Start) when none runs. Times are sent as the time left, so no clocks need to agree.
 - **Guesses go only to the owner**, which judges them and sends the feed line (or "guessed it") to all, and "close!" to the guesser alone.
 - Strokes come only from the current drawer. A newcomer, or a player whose panel reopens, gets the state and the whole drawing from the owner.
