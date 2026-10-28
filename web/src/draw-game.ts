@@ -36,6 +36,11 @@ const MAX_TURNS = MAX_PLAYERS * 2;
  * answering) never wins. */
 export const TAKEOVER = 1000;
 
+/** A browser that sees no other player of its game for this long (ms) counts as cut off, not the others as gone: it
+ * shares nothing of the game and shows its own final scores. The wait spares a newcomer whose list of visitors
+ * hasn't filled yet. */
+export const ISOLATION_GRACE = 3000;
+
 const isText = (v: unknown, max = 64): v is string => typeof v === 'string' && v.length > 0 && v.length <= max;
 const isCount = (v: unknown, max: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max;
 const isList = (v: unknown, max: number, item: (x: unknown) => boolean): v is unknown[] => Array.isArray(v) && v.length <= max && v.every(item);
@@ -114,6 +119,10 @@ export class DrawGame {
   /** Where the drawer's next batch of points starts, and when the last went. */
   private cursor = { n: 0, at: 0 };
   private flushed = -Infinity;
+  /** Since when no other player of the game has been in sight, if so. */
+  private aloneSince: number | null = null;
+  /** The state is this browser's own final scores, made while cut off: never sent, and any real state replaces it. */
+  private local = false;
 
   constructor(private selfId: () => string, private newId: () => string, private rand: () => number = Math.random) {}
 
@@ -223,7 +232,8 @@ export class DrawGame {
   greet(id: string): DrawOut[] {
     const out: DrawOut[] = this.mine ? [{ msg: { k: 'join', on: true }, to: id }] : [];
     const s = this.state;
-    if (!s || s.owner !== this.selfId()) return out;
+    if (s && s.owner === id && s.owner !== this.selfId() && !this.local) out.push({ ...this.stateOut(), to: id }); // an owner back from a cut: the game as the others kept it
+    if (!s || s.owner !== this.selfId() || this.local) return out;
     out.push({ ...this.stateOut(), to: id });
     const strokes = this.sketch.strokes.map((st) => ({ c: st.c, w: st.w, p: [...st.p] }));
     if (strokes.length) out.push({ msg: { k: 'sketch', g: s.id, t: s.turn, strokes }, to: id });
@@ -272,24 +282,35 @@ export class DrawGame {
       this.version++;
     }
     const s = this.state;
-    if (!s) return [];
-    if (s.phase === 'end') {
-      if (now >= this.deadline) this.drop(true);
+    if (!s) {
+      this.aloneSince = null;
       return [];
     }
     const me = this.selfId();
-    if (s.owner === me) return this.own(now, visitors);
-    if (present.has(s.owner)) return [];
-    // With no other player of the game in sight, this browser is the one cut off (or the last one): it can't run the
-    // game, and must send nothing of it. The game goes from here without being marked over: if the others come back,
-    // their greeting brings the real state.
-    const others = s.players.filter((p) => p.here && p.id !== s.owner && p.id !== me && present.has(p.id));
-    if (!others.length) {
-      this.drop(false);
+    // The game's players in sight (this visitor included, when it plays): fewer than two and nobody can run it here.
+    const sight = s.players.filter((p) => p.here && (p.id === me || present.has(p.id))).length;
+    if (sight >= 2) this.aloneSince = null;
+    else if (this.aloneSince === null) this.aloneSince = now;
+    if (s.phase === 'end') {
+      if (now >= this.deadline) this.drop(!this.local);
       return [];
     }
+    if (sight < 2) {
+      if (now - this.aloneSince! < ISOLATION_GRACE) return [];
+      if (s.players.some((p) => p.id === me && p.here)) this.goLocal(now);
+      else this.drop(false); // an onlooker: no game to show
+      return [];
+    }
+    if (s.owner === me) return this.own(now, visitors);
+    if (present.has(s.owner)) return [];
     if (this.leader(visitors) === me) return this.takeOver(now);
     return [];
+  }
+
+  /** Cut off from the others: this browser's own final scores, shown for their time and never sent. */
+  private goLocal(now: number): void {
+    this.set(finish(this.state!), now);
+    this.local = true;
   }
 
   /** The owner's step: players in and out, the clock, the hints, the end of the turn, and the drawer's points. */
@@ -377,7 +398,7 @@ export class DrawGame {
   private accept(next: DrawState, now: number): void {
     const cur = this.state;
     if (this.finished.has(next.id)) return;
-    const ok = !cur || (cur.id === next.id ? next.seq > cur.seq : cur.phase === 'end' || (cur.turn === 1 && next.turn === 1 && next.id < cur.id));
+    const ok = !cur || (cur.id === next.id ? this.local || next.seq > cur.seq : cur.phase === 'end' || (cur.turn === 1 && next.turn === 1 && next.id < cur.id));
     if (!ok) return;
     this.set(next, now, true);
   }
@@ -386,6 +407,8 @@ export class DrawGame {
    * came from elsewhere, or when the phase changed. */
   private set(next: DrawState, now: number, sent = false): void {
     const cur = this.state;
+    this.local = false;
+    if (!cur || cur.id !== next.id) this.aloneSince = null;
     const newTurn = !cur || cur.id !== next.id || cur.turn !== next.turn;
     if (newTurn) {
       if (cur && cur.id !== next.id) this.finished.add(cur.id);

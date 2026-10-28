@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { shownCount } from '../src/draw-match';
-import { type DrawMessage, type DrawOut, DrawGame, isDrawMessage, isDrawState, TAKEOVER, type Visitor } from '../src/draw-game';
+import { type DrawMessage, type DrawOut, DrawGame, isDrawMessage, isDrawState, ISOLATION_GRACE, TAKEOVER, type Visitor } from '../src/draw-game';
 import { type DrawState, newGame } from '../src/draw-rules';
 
 /**
@@ -219,8 +219,10 @@ describe('joining and leaving', () => {
     expect(p.game('rui').role()).toBeNull();
     p.leave('ze'); // a tab closes
     p.tick();
-    expect(p.game('rui').state).toMatchObject({ phase: 'end' });
-    expect(p.game('ana').state).toMatchObject({ phase: 'end' });
+    p.tick(ISOLATION_GRACE);
+    expect(p.game('ana').state).toMatchObject({ phase: 'end' }); // Ana's own final scores, shown to her alone
+    expect(p.game('rui').state).toBeNull(); // an onlooker sees one player: no game to show
+    expect(p.log.filter((l) => l.msg.k === 'state' && l.msg.s.phase === 'end')).toEqual([]);
   });
   it("ends the drawer's turn early when they press Leave, keeping the points won, and the next drawer goes on", () => {
     const p = started();
@@ -245,7 +247,8 @@ describe('joining and leaving', () => {
     expect(s.feed.at(-1)).toEqual({ id: 'ana', kind: 'left', text: '' });
     p.leave('rui');
     p.tick();
-    expect(p.game('ze').state).toBeNull(); // Zé alone: nobody to play with, no game shown
+    p.tick(ISOLATION_GRACE);
+    expect(p.game('ze').state).toMatchObject({ phase: 'end' }); // Zé alone: his own final scores
   });
   it("drops a game nobody playing it is left to run, on an onlooker's TV", () => {
     const p = party('Ana', 'Rui', 'Ze');
@@ -255,6 +258,7 @@ describe('joining and leaving', () => {
     p.leave('ana');
     p.leave('rui');
     p.tick();
+    p.tick(ISOLATION_GRACE);
     expect(p.game('ze').state).toBeNull();
   });
 });
@@ -330,45 +334,53 @@ describe('draw messages', () => {
   });
 });
 
-/** Browsers that can disagree about who is here: `sees[id]` is what each one's presence shows; a browser nobody sees
- * (`offline`) neither hears nor is heard. */
+/** Browsers that can disagree about who is here: `sees[id]` is what each one's presence shows; messages reach only
+ * the browsers in `reach[from]` (everyone by default). */
 function room(...ids: string[]) {
   let now = 1000;
   let n = 0;
   const g: Record<string, DrawGame> = Object.fromEntries(ids.map((id) => [id, new DrawGame(() => id, () => `g${++n}`, () => 0)]));
-  const offline = new Set<string>();
   const sees: Record<string, string[]> = Object.fromEntries(ids.map((id) => [id, [...ids]]));
+  const reach: Record<string, string[]> = Object.fromEntries(ids.map((id) => [id, ids.filter((o) => o !== id)]));
+  const sent: { from: string; msg: DrawMessage }[] = [];
   const vis = (id: string): Visitor[] => sees[id].map((v) => ({ id: v, name: v, arrived: ids.indexOf(v) + 1, since: ids.indexOf(v) + 1 }));
   const send = (from: string, outs: DrawOut[]) => {
     for (const o of outs) {
       const msg = JSON.parse(JSON.stringify(o.msg)) as DrawMessage;
       expect(isDrawMessage(msg)).toBe(true);
-      for (const id of ids) {
-        if (id === from || offline.has(id) || offline.has(from) || (o.to && o.to !== id)) continue;
-        send(id, g[id].receive(msg, from, now));
-      }
+      sent.push({ from, msg });
+      for (const id of reach[from]) if (!o.to || o.to === id) send(id, g[id].receive(msg, from, now));
     }
   };
   return {
-    g, offline, sees, send, vis,
+    g, sees, reach, send, vis, sent,
     get now() { return now; },
     tick(ms = 0) {
       now += ms;
       for (const id of ids) send(id, g[id].update(now, vis(id)));
     },
-    /** `id` loses its connection: it sees only itself, the others no longer see it. */
+    /** `id` and the others lose sight and sound of each other, both ways. */
     cut(id: string) {
-      offline.add(id);
+      reach[id] = [];
       sees[id] = [id];
-      for (const o of ids) if (o !== id) sees[o] = sees[o].filter((v) => v !== id);
+      for (const o of ids) if (o !== id) { reach[o] = reach[o].filter((v) => v !== id); sees[o] = sees[o].filter((v) => v !== id); }
     },
-    /** `id` is back: everyone sees everyone, and the others greet it. */
-    heal(id: string) {
-      offline.delete(id);
-      for (const o of ids) sees[o] = [...ids].filter((v) => !offline.has(v) || v === o);
-      for (const o of ids) if (o !== id) { send(o, g[o].greet(id)); send(id, g[id].greet(o)); }
+    /** Everyone sees and hears everyone again, and each greets the others. */
+    heal() {
+      for (const id of ids) { sees[id] = [...ids]; reach[id] = ids.filter((o) => o !== id); }
+      for (const a of ids) for (const b of ids) if (a !== b) send(a, g[a].greet(b));
     },
   };
+}
+
+/** Ana, Rui and Zé all joined; Ana owns the game. */
+function trio(choose = false) {
+  const r = room('ana', 'rui', 'ze');
+  for (const id of ['ana', 'rui', 'ze']) r.send(id, r.g[id].setJoined(true));
+  r.send('ana', r.g.ana.start(r.vis('ana'), r.now));
+  r.tick();
+  if (choose) r.send('ana', r.g.ana.choose('cat', r.now));
+  return r;
 }
 
 describe('browsers that disagree about who is here', () => {
@@ -381,8 +393,9 @@ describe('browsers that disagree about who is here', () => {
     expect(r.g.ze.state?.id).toBe('g1');
     r.cut('ze');
     r.tick();
+    r.tick(ISOLATION_GRACE);
     expect(r.g.ze.state).toBeNull();
-    r.heal('ze');
+    r.heal();
     expect(r.g.ze.state).toMatchObject({ id: 'g1', owner: 'ana' }); // the greeting is taken
     r.send('ze', r.g.ze.setJoined(true));
     r.tick();
@@ -396,26 +409,84 @@ describe('browsers that disagree about who is here', () => {
     expect(r.g.ana.state).toMatchObject({ phase: 'drawing', owner: 'ze' });
   });
   it('does not let a cut-off player end the game for the others when it comes back', () => {
-    const r = room('ana', 'rui', 'ze');
-    for (const id of ['ana', 'rui', 'ze']) r.send(id, r.g[id].setJoined(true));
-    r.send('ana', r.g.ana.start(r.vis('ana'), r.now));
-    r.tick();
-    r.send('ana', r.g.ana.choose('cat', r.now));
+    const r = trio(true);
     r.tick(1000);
     r.cut('ze');
     r.tick(1000);
-    r.tick(1000);
-    expect(r.g.ze.state).toBeNull(); // nothing of the game to send
+    r.tick(ISOLATION_GRACE);
+    expect(r.g.ze.state).toMatchObject({ phase: 'end' }); // its own scores, local
     expect(r.g.ana.state?.phase).toBe('drawing');
-    r.heal('ze');
+    r.heal();
     r.tick();
     for (const id of ['ana', 'rui', 'ze']) expect(r.g[id].state).toMatchObject({ id: 'g1', phase: 'drawing', owner: 'ana' });
   });
-  it('refuses a late state from the owner a takeover replaced', () => {
-    const r = room('ana', 'rui', 'ze');
-    for (const id of ['ana', 'rui', 'ze']) r.send(id, r.g[id].setJoined(true));
-    r.send('ana', r.g.ana.start(r.vis('ana'), r.now));
+  it('keeps the game running when its cut-off owner comes back before the others noticed', () => {
+    const r = trio(true);
+    r.tick(1000);
+    // Ana's view lost Rui and Zé (and nothing she says arrives), theirs still shows her.
+    r.sees.ana = ['ana'];
+    r.reach.ana = [];
+    r.reach.rui = ['ze'];
+    r.reach.ze = ['rui'];
     r.tick();
+    r.tick(ISOLATION_GRACE);
+    expect(r.g.ana.state).toMatchObject({ phase: 'end' });
+    expect(r.g.rui.state?.phase).toBe('drawing');
+    r.sent.length = 0;
+    r.heal();
+    expect(r.sent.filter((m) => m.from === 'ana' && m.msg.k === 'state' && m.msg.s.phase === 'end')).toEqual([]);
+    expect(r.g.rui.state?.phase).toBe('drawing');
+    expect(r.g.ze.state?.phase).toBe('drawing');
+    expect(r.g.ana.state).toMatchObject({ phase: 'drawing', owner: 'ana' }); // the running state is hers again
+    expect(r.g.ana.canDraw).toBe(true);
+  });
+  it('keeps the game and its drawing for a newcomer whose visitors have not shown up yet', () => {
+    const r = trio(true);
+    r.g.ana.penDown(3, 0, 10, 10);
+    r.g.ana.penMove(90, 10);
+    const mia = new DrawGame(() => 'mia', () => 'm1', () => 0);
+    for (const o of r.g.ana.greet('mia')) mia.receive(JSON.parse(JSON.stringify(o.msg)), 'ana', r.now);
+    expect(mia.sketch.strokes).toHaveLength(1);
+    mia.update(r.now, []);
+    mia.update(r.now + 1000, []);
+    expect(mia.state).toMatchObject({ id: 'g1', phase: 'drawing' });
+    expect(mia.sketch.strokes).toHaveLength(1);
+    const all = [{ id: 'ana', name: 'ana', arrived: 1, since: 1 }, { id: 'rui', name: 'rui', arrived: 2, since: 2 }];
+    mia.update(r.now + 1500, all);
+    mia.update(r.now + 1500 + ISOLATION_GRACE, all);
+    expect(mia.state).toMatchObject({ id: 'g1', phase: 'drawing' });
+  });
+  it('gives a lone survivor, owner or not, its own final scores and sends nothing of them', () => {
+    for (const survivor of ['ana', 'rui']) {
+      const r = room('ana', 'rui');
+      for (const id of ['ana', 'rui']) r.send(id, r.g[id].setJoined(true));
+      r.send('ana', r.g.ana.start(r.vis('ana'), r.now));
+      r.tick();
+      r.cut(survivor === 'ana' ? 'rui' : 'ana');
+      r.tick();
+      r.sent.length = 0;
+      r.tick(ISOLATION_GRACE);
+      expect(r.g[survivor].state, survivor).toMatchObject({ phase: 'end' });
+      expect(r.g[survivor].running).toBe(false);
+      expect(r.g[survivor].greet('mia')).toEqual([{ msg: { k: 'join', on: true }, to: 'mia' }]); // no state
+      expect(r.sent.filter((m) => m.from === survivor && m.msg.k === 'state')).toEqual([]);
+      r.tick(15000);
+      expect(r.g[survivor].state).toBeNull();
+    }
+  });
+  it('replaces a local end with the real state when the others come back', () => {
+    const r = trio(true);
+    r.cut('ze');
+    r.tick();
+    r.tick(ISOLATION_GRACE);
+    expect(r.g.ze.state?.phase).toBe('end');
+    r.heal();
+    expect(r.g.ze.state).toMatchObject({ id: 'g1', phase: 'drawing', owner: 'ana' });
+    r.tick(); // Ana takes Zé back into the game
+    expect(r.g.ze.role()).toBe('guesser');
+  });
+  it('refuses a late state from the owner a takeover replaced', () => {
+    const r = trio();
     const late = r.g.ana.state!;
     r.cut('ana');
     r.tick();
@@ -424,21 +495,6 @@ describe('browsers that disagree about who is here', () => {
     r.g.rui.receive({ k: 'state', s: { ...late, seq: late.seq + 1 } }, 'ana', r.now);
     expect(r.g.ze.state).toMatchObject({ owner: 'rui', turn: 2 });
     expect(r.g.rui.state).toMatchObject({ owner: 'rui', turn: 2 });
-  });
-  it('shows the one left when the other player closes their tab no game, and lets them start again', () => {
-    const r = room('ana', 'rui');
-    for (const id of ['ana', 'rui']) r.send(id, r.g[id].setJoined(true));
-    r.send('ana', r.g.ana.start(r.vis('ana'), r.now));
-    r.tick();
-    r.cut('rui');
-    r.tick();
-    expect(r.g.ana.state).toMatchObject({ phase: 'end' }); // the owner finishes: nobody to play with
-    r.tick(15000);
-    expect(r.g.ana.state).toBeNull();
-    r.heal('rui');
-    r.send('rui', r.g.rui.setJoined(true));
-    r.send('ana', r.g.ana.start(r.vis('ana'), r.now));
-    expect(r.g.rui.state).toMatchObject({ phase: 'choosing' });
   });
   it('ignores a guess that arrives after the drawing time', () => {
     const p = started();
