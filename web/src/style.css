@@ -133,6 +133,10 @@ body:not(.touch) .touch-only, body.touch .keys-only { display: none; }
 body.touch { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 body.touch #muted { display: none; } /* the bar's sound button shows it */
 body.touch #mic { display: none; } /* the bar's mic button shows it */
+/* Seven buttons fill the bar's width on a phone: the room name, the "With …" line and the guest list sit below it. */
+body.touch #room-name { top: calc(66px + env(safe-area-inset-top)); }
+body.touch #people { top: calc(90px + env(safe-area-inset-top)); }
+body.touch #guests { top: calc(114px + env(safe-area-inset-top)); }
 #touch-bar button[hidden] { display: none; }
 #stick {
   position: fixed; left: 0; top: 0; box-sizing: border-box; border-radius: 50%;

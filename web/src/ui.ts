@@ -155,6 +155,10 @@ export class UI {
     const panel = this.el('guests');
     panel.hidden = !panel.hidden;
     this.el('touch-guests').setAttribute('aria-expanded', String(!panel.hidden));
+    if (!panel.hidden && this.touch) { // on a phone the sun panel and the guest list would overlap: one at a time
+      this.doc.body.classList.remove('sun-open');
+      this.el('touch-sun').setAttribute('aria-expanded', 'false');
+    }
     return !panel.hidden;
   }
 
@@ -227,6 +231,10 @@ export class UI {
     sun.addEventListener('click', () => {
       const open = this.doc.body.classList.toggle('sun-open');
       sun.setAttribute('aria-expanded', String(open));
+      if (open && this.touch) { // on a phone the sun panel and the guest list would overlap: one at a time
+        this.el('guests').hidden = true;
+        this.el('touch-guests').setAttribute('aria-expanded', 'false');
+      }
     });
   }
 
