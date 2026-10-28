@@ -1,4 +1,5 @@
-import { Color, Mesh, MeshStandardMaterial, Object3D, BoxGeometry, PerspectiveCamera, Vector2, type Vector3 } from 'three';
+import { Color, Mesh, MeshStandardMaterial, Object3D, BoxGeometry, PerspectiveCamera, Quaternion, Vector2, Vector3 } from 'three';
+import { Prop } from '../src/props';
 import type { Seat } from '../src/seats';
 import { describe, expect, it } from 'vitest';
 import { DoorState } from '../src/doors';
@@ -141,5 +142,15 @@ describe('interactions', () => {
     expect(promptFor({ kind: 'seat', seat: { ...seat, pose: 'lie' }, spot: seat.spots[0], node: marker }, lights, 'Tap')).toBe('Tap: lie down');
     expect(promptFor({ kind: 'seat', seat, spot: null, node: marker }, lights)).toBe('Someone is here');
     expect(interactions.click()).toBe(t); // sitting down is main.ts's
+  });
+
+  it('prompts a loose thing to be picked up, and leaves the picking up to the caller', () => {
+    const lights = new LightGroups([]);
+    const prop = new Prop({ id: 'a/wineglass/0', kind: 'wineglass', variant: 0, node: null, position: new Vector3(), quaternion: new Quaternion(), on: null, place: 'A' }, { matte: null, gloss: null });
+    const t: Target = { kind: 'prop', prop, node: prop.root };
+    expect(promptFor(t, lights)).toBe('Click: pick up wine glass');
+    expect(promptFor(t, lights, 'Tap')).toBe('Tap: pick up wine glass');
+    activate(t, lights);
+    expect(prop.state).toBe('rest');
   });
 });

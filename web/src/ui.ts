@@ -13,6 +13,10 @@ export const COPY = {
   noKitchenWall: "The kitchen-wall version hasn't been exported yet. Open the flat without it instead.",
   thisRoom: 'This room',
   stand: 'Move to stand up',
+  holdHint: 'Right-click or F to throw, Q to drop',
+  holdHintTouch: 'Throw or drop it with the buttons',
+  noRoom: 'No room here',
+  taken: 'Someone else took it',
 };
 
 /** Where a Hue scene goes: the room the visitor is in, or every room. */

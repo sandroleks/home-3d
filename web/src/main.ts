@@ -257,7 +257,7 @@ async function run(): Promise<void> {
   ui.onGuests(() => {
     if (started && !autostart) toggleGuests();
   });
-  const byKey = new Map([...world.targets.values()].flatMap((t) => (t.kind === 'seat' ? [] : [[stateKey(t), t] as const])));
+  const byKey = new Map([...world.targets.values()].flatMap((t) => (t.kind === 'seat' || t.kind === 'prop' ? [] : [[stateKey(t), t] as const])));
   const share = (t: Target | null) => {
     if (t) others?.broadcast(stateDelta(t, world.lights));
   };

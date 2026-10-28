@@ -128,7 +128,7 @@ export function smoothPose(current: Pose, target: Pose, dt: number, tau = CONFIG
 }
 
 /** What a click changes in the flat: everything but a seat (where a visitor sits travels with their pose). */
-export type SharedTarget = Exclude<Target, { kind: 'seat' }>;
+export type SharedTarget = Exclude<Target, { kind: 'seat' } | { kind: 'prop' }>;
 
 /** The shared-state key a click on a target changes. A room's switch is the light group with the room's id. */
 export function stateKey(t: SharedTarget): string {
@@ -158,7 +158,7 @@ export function lightValue(lights: LightGroups, id: string): number {
 }
 
 export function stateDelta(t: Target, lights: LightGroups): StateMap {
-  return t.kind === 'seat' ? {} : { [stateKey(t)]: stateValue(t, lights) };
+  return t.kind === 'seat' || t.kind === 'prop' ? {} : { [stateKey(t)]: stateValue(t, lights) };
 }
 
 /** Everything shared, for a newcomer. */

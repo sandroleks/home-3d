@@ -121,4 +121,10 @@ describe('buildWorld', () => {
     applyMovable(drawer);
     expect(drawer.node.position.z).toBeCloseTo(0.35);
   });
+
+  it('gives flights and placing the rooms, doors and movables to hit, not switches or lamp boxes', () => {
+    const { world, root } = build();
+    expect(world.solids.map((o) => o.name)).toEqual(['Room_alpha', 'Room_beta', 'Room_exterior', 'Door_1', 'Move_cabinet-drawer', 'Move_cabinet-door']);
+    expect(world.solids).not.toContain(root.getObjectByName('Switch_alpha'));
+  });
 });
