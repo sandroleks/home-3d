@@ -7,7 +7,7 @@
 
 A bottle of red wine in the kitchen that every visitor can drink from. Drinking makes you drunk: your view wobbles and blurs, more the more you drink, and wears off with time. The others see your animal sway. A first taste of piece D in the party plan (`2026-10-28-party-host-guest-list-design.md`), without glasses to carry.
 
-Not in this: a bottle that empties or is shared, glasses to pick up or clink, holding a drink on your animal, drunk walking (the keys still walk straight), sobering up on a reload being prevented.
+Not in this: a sound or a message for the blackout, a bottle that empties or is shared, glasses to pick up or clink, holding a drink on your animal, drunk walking (the keys still walk straight), sobering up on a reload being prevented.
 
 ## The bottle
 
@@ -21,6 +21,12 @@ Not in this: a bottle that empties or is shared, glasses to pick up or clink, ho
 
 - `Drunk` (`src/drunk.ts`) holds a level: each sip adds `CONFIG.wine.sip` (0.25), up to `CONFIG.wine.max` (1.5). It falls by `CONFIG.wine.soberRate` a second (1/180: three minutes from fully drunk to sober), never below 0. The effects follow `min(1, level)`: four sips is fully drunk, more keeps you there longer.
 - Pure and time-driven (`update(dt)`), so tests can drive it. It wears off while paused too.
+
+## Blacking out
+
+- Drinking too fast blacks you out: a sip that makes more than `CONFIG.wine.blackout.sips` (10) within `window` seconds (120). `Drunk.sip()` returns true for it; the level goes to the most (1.5), and the count of recent sips starts over.
+- The view fades to black over `fade` s (1.5), stays black `hold` s (4) and comes back over `wake` s (2.5): a CSS `brightness()` after the blur, on the canvas alone, so the HUD stays readable. `Drunk.darkness` is 0..1 along it.
+- From the sip until the view starts coming back (`Drunk.passedOut`), the player is frozen: no walking, sitting, standing or drinking. Once it is black, you sink to the floor where you stood (the floor sit C gives, so the others see your animal sitting there), and you come to sitting, fully drunk; moving gets you up. Already sitting, you stay where you are.
 
 ## Your screen
 
@@ -37,7 +43,8 @@ Not in this: a bottle that empties or is shared, glasses to pick up or clink, ho
 
 ## Testing
 
-- `drunk.test.ts`: sips add up and cap, the level wears off at the rate and stops at 0, the effect strength is `min(1, level)`, the wobble is zero when sober and bounded when drunk, the blur filter string is empty when sober.
+- `drunk.test.ts`: the eleventh sip within the window blacks out and older sips don't count; the darkness fades in, holds and fades out, and the count starts over; the filter darkens to black;
+  sips add up and cap, the level wears off at the rate and stops at 0, the effect strength is `min(1, level)`, the wobble is zero when sober and bounded when drunk, the blur filter string is empty when sober.
 - `presence.test.ts`: an 8-number pose encodes and parses, a standing drunk pose splits as standing with its drunkenness, a sober pose stays 4 or 7 numbers.
 - `interactions.test.ts`: the wine prompt.
 - In the browser: the bottle on the counter in both kitchens, the prompt, sipping, the wobble and blur, and wearing off.

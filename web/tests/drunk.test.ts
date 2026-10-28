@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blurFilter, Drunk, STEADY, wobbleAt } from '../src/drunk';
+import { Drunk, STEADY, viewFilter, wobbleAt } from '../src/drunk';
 import { sipPose, WineBottle } from '../src/wine';
 import { CONFIG } from '../src/config';
 
@@ -32,10 +32,48 @@ describe('getting drunk', () => {
   });
 });
 
+describe('blacking out', () => {
+  const blackout = { sips: 10, window: 120, fade: 1, hold: 4, wake: 2 };
+  it('blacks out on the eleventh sip within the window, fully drunk', () => {
+    const d = new Drunk({ sip: 0.25, max: 1.5, soberRate: 0.01, blackout });
+    for (let i = 0; i < 10; i++) {
+      expect(d.sip()).toBe(false);
+      d.update(5);
+    }
+    expect(d.darkness).toBe(0);
+    expect(d.sip()).toBe(true);
+    expect(d.level).toBe(1.5);
+    expect(d.passedOut).toBe(true);
+  });
+  it("doesn't count sips older than the window", () => {
+    const d = new Drunk({ sip: 0.25, max: 1.5, soberRate: 0.01, blackout });
+    for (let i = 0; i < 30; i++) {
+      expect(d.sip()).toBe(false);
+      d.update(13); // ten sips span 117 s: always at most ten in two minutes
+    }
+  });
+  it('fades to black, stays out, then comes to and can drink again', () => {
+    const d = new Drunk({ sip: 0.25, max: 1.5, soberRate: 0.01, blackout });
+    for (let i = 0; i < 10; i++) d.sip();
+    d.sip();
+    d.update(0.5);
+    expect(d.darkness).toBeCloseTo(0.5);
+    d.update(1);
+    expect(d.darkness).toBe(1);
+    expect(d.passedOut).toBe(true);
+    d.update(4); // 5.5 s in: coming to
+    expect(d.passedOut).toBe(false);
+    expect(d.darkness).toBeCloseTo(0.75);
+    d.update(2);
+    expect(d.darkness).toBe(0);
+    expect(d.sip()).toBe(false); // the count started over
+  });
+});
+
 describe('the drunk view', () => {
   it('stays steady and sharp sober', () => {
     expect(wobbleAt(12.3, 0)).toEqual(STEADY);
-    expect(blurFilter(12.3, 0)).toBe('');
+    expect(viewFilter(12.3, 0)).toBe('');
   });
   it('wobbles within its amplitudes, more the drunker', () => {
     const cfg = CONFIG.wine.wobble;
@@ -54,10 +92,15 @@ describe('the drunk view', () => {
   it('blurs up to the configured radius', () => {
     const px = (s: string) => Number(/blur\(([\d.]+)px\)/.exec(s)![1]);
     for (let t = 0; t < 5; t += 0.25) {
-      expect(px(blurFilter(t, 1, 3))).toBeLessThanOrEqual(3);
-      expect(px(blurFilter(t, 1, 3))).toBeGreaterThanOrEqual(2.1); // the pulse dips to 70%
+      expect(px(viewFilter(t, 1, 0, 3))).toBeLessThanOrEqual(3);
+      expect(px(viewFilter(t, 1, 0, 3))).toBeGreaterThanOrEqual(2.1); // the pulse dips to 70%
     }
-    expect(px(blurFilter(0, 0.5, 3))).toBeLessThan(1.5);
+    expect(px(viewFilter(0, 0.5, 0, 3))).toBeLessThan(1.5);
+  });
+  it('darkens to black as you black out, sober or not', () => {
+    expect(viewFilter(0, 0, 1)).toBe('brightness(0.000)');
+    expect(viewFilter(0, 0, 0.25)).toBe('brightness(0.750)');
+    expect(viewFilter(0, 1, 0.5)).toMatch(/^blur\([\d.]+px\) brightness\(0\.500\)$/);
   });
 });
 

@@ -243,6 +243,9 @@ export const CONFIG = {
      * wanders (one sway every 1/speed seconds or so), and the blur (CSS px). */
     wobble: { roll: 0.09, yaw: 0.05, pitch: 0.03, side: 0.05, bob: 0.02, speed: 0.35 },
     blur: 3,
+    /** Drinking too fast: more than `sips` sips within `window` seconds blacks you out. The view fades to black over
+     * `fade` s, stays black `hold` s (you sink to the floor meanwhile) and comes back over `wake` s, still fully drunk. */
+    blackout: { sips: 10, window: 120, fade: 1.5, hold: 4, wake: 2.5 },
     /** A drunk visitor's animal fully drunk: how far it tilts side to side and forward and back (radians). */
     sway: { roll: 0.22, pitch: 0.1 },
     colours: { glass: '#1f3a26', label: '#efe4cc', capsule: '#6e1424', wine: '#5a0d1c', stemware: '#dfe8ea' },
