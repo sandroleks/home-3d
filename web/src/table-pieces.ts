@@ -4,6 +4,7 @@ import { ChessSet } from './chess-set';
 import { CONFIG } from './config';
 import { makeMatcaps, type Matcaps } from './creatures';
 import { type GameKind, type GameRules, type SlotGame, SLOTS } from './games';
+import { GoSet } from './go-set';
 import { type CanvasFactory, domCanvas } from './screens';
 
 /** One slot's board and pieces on the table. Each game adds its own to `SETS`. */
@@ -45,6 +46,7 @@ export class TableMaterials {
 export const SETS: Partial<Record<GameKind, (materials: TableMaterials, canvas: CanvasFactory | null) => TableSet>> = {
   chess: (materials, canvas) => new ChessSet(materials, canvas),
   backgammon: (materials, canvas) => new BackgammonSet(materials, canvas),
+  go: (materials, canvas) => new GoSet(materials, canvas),
 };
 
 /** The games on the dining table, as everyone sees them: each slot's set at its place on the table. */

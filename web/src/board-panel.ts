@@ -59,7 +59,7 @@ export function panelState({ you, them, game, end }: PanelInput): PanelState {
   const offer = running ? game.drawOffer?.() ?? null : null;
   const name = them?.name ?? GAME_COPY.emptyChair;
   let status: string;
-  if (end) status = endText(end);
+  if (end) status = (game?.end() ? game.resultText?.() : null) ?? endText(end);
   else if (!game) status = them ? GAME_COPY.settingUp : GAME_COPY.waiting;
   else if (!live) status = theirMove(name);
   else if (offer === otherSide(you)) status = offersDraw(name);

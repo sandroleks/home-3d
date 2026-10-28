@@ -21,6 +21,7 @@ import { BackgammonBoard } from './backgammon-board';
 import { BoardPanel, GAME_COPY, type PanelBoard } from './board-panel';
 import { ChessBoard } from './chess-board';
 import { endOf, gameChairs, type GameKind, Games, otherSide, seatedAt, type Side, slotOf, SLOTS } from './games';
+import { GoBoard } from './go-board';
 import { TableGames } from './table-pieces';
 import { fetchIceServers } from './turn';
 import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
@@ -268,6 +269,7 @@ async function run(): Promise<void> {
   const boards: Partial<Record<GameKind, PanelBoard>> = {
     chess: new ChessBoard(document, (entry) => playEntry(slotOf('chess'), entry)),
     backgammon: new BackgammonBoard(document, (entry) => playEntry(slotOf('backgammon'), entry)),
+    go: new GoBoard(document, (entry) => playEntry(slotOf('go'), entry)),
   };
   /** Where this visitor plays while the panel is open: the slot and the side. */
   let atBoard: { slot: number; side: Side } | null = null;
