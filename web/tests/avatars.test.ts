@@ -153,6 +153,16 @@ describe('Avatars', () => {
     expect(calls).toContain('text:Rui');
     expect(f.label!.material.map!.version).toBe(version + 1); // re-uploaded
   });
+  it('lists the seated, at the spot their pose named, not those standing or without a pose', () => {
+    const a = new Avatars(null);
+    a.add('p1', '#ff0000', 'Ana');
+    a.add('p2', '#00ff00', 'Rui');
+    a.add('p3', '#0000ff', 'Zé');
+    a.setPose('p1', [1.248, 3.886, 0, 0, 1, 0.45, 0]);
+    a.setPose('p2', [5, 5, 0, 0]);
+    expect(a.seated()).toEqual([{ id: 'p1', x: 1.248, z: 3.886 }]);
+  });
+
   it('removes figures', () => {
     const a = new Avatars(null);
     a.add('p1', '#ff0000', 'Ana');

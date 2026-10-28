@@ -114,6 +114,21 @@ describe('Player sitting', () => {
     expect(p.x).toBeGreaterThan(1.4); // in front of the sofa, then a step of walking
   });
 
+  it('stays seated at a game board whatever the keys and the stick say', () => {
+    const { p } = make();
+    p.sit(seatedOn(sofa.spots[0], 'sit'));
+    p.held = true;
+    p.keys.forward = true;
+    p.update(0.05);
+    p.stick = { forward: 1, right: 0, run: true };
+    p.update(0.05);
+    expect(p.seat).not.toBeNull();
+    expect([p.x, p.z]).toEqual([0.9, 6.6]);
+    p.held = false;
+    p.update(0.05);
+    expect(p.seat).toBeNull();
+  });
+
   it('stands up from the stick too, and teleporting gets up', () => {
     const { p } = make();
     p.sit(seatedOn(sofa.spots[0], 'sit'));

@@ -1,13 +1,14 @@
 import type { Room as TrysteroRoom } from 'trystero';
 import type { Avatars } from './avatars';
 import { CONFIG } from './config';
+import { type GameMessage, isGameMessage } from './games';
 import {
   applyState, cleanName, collectState, colourFor, encodePose, isPose, isStateMap, Peers, type PoseMessage, poseMoved,
   type Seating, shouldSend, type StateMap, type StateWorld, hostOf,
 } from './presence';
 
-export type MessageKind = 'hello' | 'pose' | 'state';
-const KINDS: MessageKind[] = ['hello', 'pose', 'state'];
+export type MessageKind = 'hello' | 'pose' | 'state' | 'game';
+const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game'];
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 /** What the walkthrough needs from a network: Trystero today, a WebSocket server another day. */
@@ -60,6 +61,10 @@ export interface MultiplayerHooks {
   onPeers: (names: string[]) => void;
   /** The host's peer id (this visitor's own when it is host), whenever that changes. */
   onHost?: (hostId: string) => void;
+  /** A dining-table game another visitor sent (well-formed; whether to take it is the games' call). */
+  onGame?: (game: GameMessage) => void;
+  /** The table's games, sent to a newcomer with the flat's state. */
+  games?: () => GameMessage[];
 }
 
 /**
@@ -113,10 +118,19 @@ export class Multiplayer {
     room.onMessage('state', (data, id) => {
       if (!isStateMap(data)) return;
       if (this.arrive(id)) this.greet(id, true);
-      if ('want' in data) return room.send('state', { ...collectState(world), full: 1 }, id);
+      if ('want' in data) {
+        room.send('state', { ...collectState(world), full: 1 }, id);
+        for (const game of hooks.games?.() ?? []) room.send('game', game, id);
+        return;
+      }
       if ('full' in data) this.settled = true;
       const changed = applyState(world, data, hooks.now());
       if (changed.length) hooks.onChanged(changed);
+    });
+    room.onMessage('game', (data, id) => {
+      if (!isGameMessage(data)) return;
+      if (this.arrive(id)) this.greet(id, true);
+      hooks.onGame?.(data);
     });
   }
 
@@ -199,6 +213,11 @@ export class Multiplayer {
   broadcast(delta: StateMap): void {
     this.settled = true; // this flat's state is live now: don't take a snapshot from someone who was here first
     this.room.send('state', delta);
+  }
+
+  /** Tells the others about a game this visitor opened or moved in. */
+  sendGame(game: GameMessage): void {
+    this.room.send('game', game);
   }
 
   /** Every frame: drop the silent. */

@@ -51,6 +51,7 @@
             <ul class="controls">
               <li><span><kbd>Click</kbd></span> open doors, flip light switches, sit on sofas and chairs, lie on the bed</li>
               <li><span><kbd>L</kbd></span> toggle this room's light</li>
+              <li><span><kbd>Click</kbd></span> a chair at the chessboard on the dining table to play chess; <kbd>C</kbd> stands up</li>
             </ul>
             <h2>Time and light</h2>
             <ul class="controls">
@@ -73,6 +74,7 @@
               <li><span><kbd>Drag left</kbd></span> walk, push further to go faster</li>
               <li><span><kbd>Drag right</kbd></span> look around</li>
               <li><span><kbd>Tap</kbd></span> open doors, flip light switches, sit on sofas and chairs, lie on the bed</li>
+              <li><span><kbd>Tap</kbd></span> a chair at the chessboard on the dining table to play chess</li>
             </ul>
             <p class="controls-note">The buttons top right set the date and time (and the kitchen wall), show who's here, switch the room light, sound and mic, and pause.</p>
           </div>
@@ -89,6 +91,23 @@
         <p id="guests-alone" hidden>Just you so far. Share the link to invite people.</p>
       </section>
       <div id="prompt" hidden></div>
+      <section id="board-panel" aria-labelledby="board-title" hidden>
+        <h2 id="board-title"></h2>
+        <p class="board-player" id="board-them"><i></i><span></span><span class="board-side"></span></p>
+        <div id="board-area"></div>
+        <p class="board-player" id="board-me"><i></i><span></span><span class="board-side"></span></p>
+        <p id="board-status" aria-live="polite"></p>
+        <div id="board-buttons">
+          <button type="button" id="board-resign">Resign</button>
+          <button type="button" id="board-draw">Offer draw</button>
+          <button type="button" id="board-stand">Stand up</button>
+        </div>
+        <div id="board-confirm" hidden>
+          <p id="board-confirm-text"></p>
+          <button type="button" id="board-confirm-yes"></button>
+          <button type="button" id="board-confirm-no">Keep playing</button>
+        </div>
+      </section>
       <div id="stick" hidden><i id="stick-knob"></i></div>
       <div id="touch-bar">
         <button type="button" id="touch-sun" aria-label="Date and time" aria-expanded="false" aria-controls="sun-panel">

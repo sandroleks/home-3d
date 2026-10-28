@@ -293,6 +293,13 @@ export class Avatars {
     return false;
   }
 
+  /** The visitors sitting or lying, at the spot their last pose named (for the dining table's games). */
+  seated(): { id: string; x: number; z: number }[] {
+    const out: { id: string; x: number; z: number }[] = [];
+    for (const [id, f] of this.figures) if (f.root.visible && f.seating) out.push({ id, x: f.target[0], z: f.target[1] });
+    return out;
+  }
+
   remove(id: string): void {
     const f = this.figures.get(id);
     if (!f) return;

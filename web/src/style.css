@@ -154,6 +154,35 @@ kbd {
 body.cursor #people { pointer-events: auto; cursor: pointer; }
 body.guests-open #people { display: none; } /* the open panel lists the same people, and would cover a wrapped line */
 
+/* A game at the dining table (board-panel.ts): a panel in the middle while a player sits at the board, the mouse
+   free. Your opponent above the board, you below it. It sits under the pause veil. */
+#board-panel {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); box-sizing: border-box;
+  width: min(440px, calc(100vw - 32px)); max-height: calc(100% - 32px); overflow-y: auto; padding: 12px 16px 14px;
+  border-radius: 14px; background: rgba(30, 28, 25, 0.9); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  display: flex; flex-direction: column; gap: 8px; font-size: 14px; text-align: left;
+}
+#board-panel h2 { margin: 0; font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.board-player { margin: 0; display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; }
+.board-player i { width: 10px; height: 10px; border-radius: 50%; }
+.board-player span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-side { color: var(--muted); font-size: 12px; }
+#board-area { position: relative; }
+.chess-board svg { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.chess-board text { font-family: 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', 'Noto Sans Symbols 2', sans-serif; }
+.promotion {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: 6px; padding: 8px;
+  border-radius: 10px; background: rgba(30, 28, 25, 0.95); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.promotion button { width: 48px; height: 48px; padding: 0; font-size: 30px; line-height: 1; background: #f8f4ea; color: #2a2622; border-radius: 8px; }
+#board-status { margin: 0; min-height: 1.4em; }
+#board-buttons, #board-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#board-buttons button, #board-confirm button { padding: 6px 14px; font-size: 13px; background: rgba(255, 255, 255, 0.12); color: var(--ink); }
+#board-stand { margin-left: auto; }
+#board-confirm p { margin: 0; flex-basis: 100%; }
+#board-confirm #board-confirm-yes { margin-left: auto; background: var(--accent); color: #121110; }
+body.touch #board-panel { width: calc(100vw - 16px); padding: 10px 10px 12px; }
+
 /* The sun panel stays on screen, bottom left. While walking the mouse is captured, so it only shows.
    Tab frees the mouse without pausing, so the panel takes clicks while the keys keep walking; with
    the walkthrough paused (Esc) it sits above the pause veil and takes clicks too. */

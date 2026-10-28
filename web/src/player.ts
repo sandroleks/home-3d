@@ -65,6 +65,8 @@ export class Player {
   yaw: number;
   pitch = 0;
   frozen = false;
+  /** At a game board: the movement keys and stick neither walk nor stand you up (standing is the board's button or C). */
+  held = false;
   keys: MoveKeys = { forward: false, back: false, left: false, right: false, run: false };
   stick: Stick = STILL;
   /** Sitting or lying, and where; null standing. */
@@ -151,7 +153,7 @@ export class Player {
   update(dt: number): void {
     if (this.seat) {
       if (!this.moving) this.holdingMove = false;
-      else if (!this.holdingMove && !this.frozen) this.stand();
+      else if (!this.holdingMove && !this.frozen && !this.held) this.stand();
     }
     if (!this.frozen && !this.seat) {
       const [dx, dz] = moveDelta(this.keys, this.yaw, dt, CONFIG.walkSpeed, CONFIG.runSpeed, this.stick);
