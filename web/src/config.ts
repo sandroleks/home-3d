@@ -227,6 +227,8 @@ export const CONFIG = {
   },
   /** The things in the drawers and cupboards that visitors pick up, put down and throw (props.ts). */
   props: {
+    /** Height (m) a leaving visitor's held thing is dropped from, straight down onto whatever is under where they were. */
+    leaveHeight: 1,
     /** Light inside a drawer or cupboard, as a share of the room's. */
     insideLight: 0.6,
     /** The object under the crosshair, this much brighter. */

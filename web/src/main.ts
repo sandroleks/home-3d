@@ -451,7 +451,7 @@ async function run(): Promise<void> {
         props: () => props.messages(),
         onLeave: (id) => {
           const f = avatars.get(id);
-          props.leave(id, f ? new Vector3(f.pose[0], 1, f.pose[1]) : null);
+          props.leave(id, f?.root.visible ? new Vector3(f.target[0], CONFIG.props.leaveHeight, f.target[1]) : null);
         },
       }, joinedAt, arrived);
       if (voices) others.setVoice(voices);
@@ -573,6 +573,7 @@ async function run(): Promise<void> {
   let freeing = false; // the next unlock is Tab's, not Esc's
   const setPausedState = (on: boolean) => {
     paused = on;
+    if (on) holding.cancelThrow();
     ui.setPaused(on);
     sound?.setPaused(on);
     voices?.setPaused(on);
@@ -694,7 +695,7 @@ async function run(): Promise<void> {
   window.addEventListener('mouseup', (e) => {
     if (e.button === 2) holding.releaseThrow();
   });
-  window.addEventListener('contextmenu', (e) => e.preventDefault()); // the right button throws
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // the right button throws
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') {
       e.preventDefault(); // Tab toggles the free mouse, never focus cycling
@@ -731,6 +732,7 @@ async function run(): Promise<void> {
     if (e.code === 'KeyV' && !e.metaKey && !e.ctrlKey && !e.altKey) toggleMic();
     if (e.code === 'KeyC' && !e.metaKey && !e.ctrlKey && !e.altKey) toggleSit();
   });
+  window.addEventListener('blur', () => holding.cancelThrow());
   window.addEventListener('keyup', (e) => {
     if (e.code === 'KeyF') holding.releaseThrow();
   });

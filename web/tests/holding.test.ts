@@ -7,7 +7,7 @@ import { Props } from '../src/props';
 import { COPY } from '../src/ui';
 import { floor, planesRaycast, wallX } from './planes';
 
-function setup(planes = [floor(0.9)]) {
+function setup(planes = [floor(0.9)], crowded = false) {
   const root = new Object3D();
   const camera = new PerspectiveCamera(70, 1, 0.05, 60);
   camera.position.set(0, 1.6, 0);
@@ -21,7 +21,7 @@ function setup(planes = [floor(0.9)]) {
     hand: (id, p, q) => (id === 'me' ? (holding.hand(p, q), true) : false),
   }, { matte: null, gloss: null });
   let t = 0;
-  holding = new Holding(props, camera, { raycast, overlaps: (b) => props.overlaps(b), drawerOf: () => null }, (m) => void sent.push(m), () => t);
+  holding = new Holding(props, camera, { raycast, overlaps: (b) => crowded || props.overlaps(b), drawerOf: () => null }, (m) => void sent.push(m), () => t);
   return { props, holding, sent, camera, tick: (s: number) => { t += s; holding.update(s); } };
 }
 
@@ -53,6 +53,26 @@ describe('Holding', () => {
     expect(holding.prompt('Tap', true, false)).toBe(COPY.holdHintTouch);
     expect(holding.prompt('Click', false, true)).toBeNull(); // a door or drawer front: its own prompt
     expect(holding.place()).toBe(false);
+  });
+
+  it('says there is no room, unless something else is under the crosshair', () => {
+    const { props, holding } = setup([floor(0.9)], true);
+    props.pickUp(props.list[0]);
+    holding.update(0);
+    expect(holding.prompt('Click', false, false)).toBe(COPY.noRoom);
+    expect(holding.prompt('Click', false, true)).toBeNull();
+  });
+
+  it('forgets a charge when something is put down', () => {
+    const { props, holding, sent } = setup();
+    props.pickUp(props.list[0]);
+    holding.update(0);
+    holding.startThrow();
+    expect(holding.place()).toBe(true);
+    props.pickUp(props.list[0]);
+    const before = sent.length;
+    holding.releaseThrow();
+    expect(sent.length).toBe(before);
   });
 
   it('throws harder the longer it is held, up to full strength', () => {

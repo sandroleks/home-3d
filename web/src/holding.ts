@@ -59,13 +59,14 @@ export class Holding {
     const held = this.props.held;
     if (!held) return null;
     if (this.result?.ok) return `${verb}: put down ${held.info.name}`;
-    if (this.result?.reason === 'room') return COPY.noRoom;
+    if (this.result?.reason === 'room') return otherTarget ? null : COPY.noRoom;
     return otherTarget ? null : touch ? COPY.holdHintTouch : COPY.holdHint;
   }
 
   /** Puts the held thing where the ghost is; false when there's nowhere to. */
   place(): boolean {
     if (!this.result?.ok) return false;
+    this.charge = null; // a placement ends any charge
     const m = this.props.place(this.result.placement);
     if (m) this.send(m);
     this.ghost.visible = false;
@@ -76,6 +77,11 @@ export class Holding {
   placeAt(aim: Vector2): boolean {
     this.update(0, aim);
     return this.place();
+  }
+
+  /** Forgets a charge in progress, as when the game pauses or loses focus. */
+  cancelThrow(): void {
+    this.charge = null;
   }
 
   startThrow(): void {

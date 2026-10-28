@@ -108,6 +108,7 @@ export class Mirror extends Mesh {
       eye.fov = cam.fov;
       eye.aspect = cam.aspect;
       eye.far = cam.far;
+      eye.layers.mask = cam.layers.mask; // what the main camera sees, carried things too
       eye.updateMatrixWorld();
       eye.projectionMatrix.copy(cam.projectionMatrix);
 
