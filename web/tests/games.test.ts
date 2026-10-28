@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  endOf, endText, gameChairs, type GameMessage, Games, isGameMessage, leftEnd, replay, seatedAt, type SlotSeats, SLOTS,
+  endOf, endText, gameChairs, type GameMessage, Games, isGameMessage, leftEnd, replay, seatedAt, slotOf, type SlotSeats, SLOTS,
 } from '../src/games';
 import type { Seat } from '../src/seats';
 
@@ -18,6 +18,11 @@ describe('endText', () => {
     expect(endText({ winner: null, reason: 'material' })).toBe('Draw: insufficient material');
     expect(endText({ winner: null, reason: 'agreement' })).toBe('Draw: agreed');
   });
+  it("names backgammon's three wins", () => {
+    expect(endText({ winner: 'white', reason: 'single' })).toBe('White wins: single game');
+    expect(endText({ winner: 'black', reason: 'gammon' })).toBe('Black wins: gammon');
+    expect(endText({ winner: 'white', reason: 'backgammon' })).toBe('White wins: backgammon');
+  });
 });
 
 const chair = (name: string, x: number, z: number): Seat => ({
@@ -30,6 +35,9 @@ const SEATS: Seat[] = [
 ];
 
 describe('the chairs', () => {
+  it('knows which slot plays which game', () => {
+    expect([slotOf('chess'), slotOf('backgammon'), slotOf('go')]).toEqual([0, 1, 2]);
+  });
   it('finds the game chairs: S plays white, N black', () => {
     expect(gameChairs(SEATS)).toEqual([
       { slot: 0, side: 'black', x: 1.2517, z: 2.5143 }, { slot: 0, side: 'white', x: 1.2483, z: 3.8857 },
@@ -52,6 +60,7 @@ describe('game messages', () => {
     expect(isGameMessage(ok)).toBe(true);
     expect(isGameMessage({ ...ok, end: { winner: 'black', reason: 'left' } })).toBe(true);
     expect(isGameMessage({ ...ok, end: { winner: null, reason: 'agreement' } })).toBe(true);
+    expect(isGameMessage({ ...ok, end: { winner: 'black', reason: 'backgammon' } })).toBe(true);
   });
   it('drops junk', () => {
     expect(isGameMessage(null)).toBe(false);
@@ -69,6 +78,8 @@ describe('game messages', () => {
   it('replays a list of moves, or not when one is illegal or the kind has no rules yet', () => {
     expect(replay('chess', ['e2e4', 'e7e5'])?.moves).toEqual(['e2e4', 'e7e5']);
     expect(replay('chess', ['e2e4', 'e2e4'])).toBeNull();
+    expect(replay('backgammon', ['r35', '24/21'])?.moves).toEqual(['r35', '24/21']);
+    expect(replay('backgammon', ['r35', '24/18'])).toBeNull(); // no 6 was rolled
     expect(replay('go', [])).toBeNull();
   });
   it('ends a game when a player is out of their chair', () => {
@@ -91,7 +102,7 @@ function setup(self: string) {
 describe('Games', () => {
   it('only slots with rules are playable', () => {
     const g = setup('ana');
-    expect([0, 1, 2].map((s) => g.playable(s))).toEqual([true, false, false]);
+    expect([0, 1, 2].map((s) => g.playable(s))).toEqual([true, true, false]);
   });
   it("opens a game in the white player's browser once both chairs are taken", () => {
     const g = setup('ana');
@@ -102,6 +113,22 @@ describe('Games', () => {
     expect(g.update(at0('ana', 'rui'), 2)).toEqual([]); // once
     expect(g.at(0)?.rules.turn()).toBe('white');
   });
+  it("plays backgammon at slot 1, white's browser rolling the opening", () => {
+    const at1 = (white: string | null, black: string | null): SlotSeats[] =>
+      SLOTS.map((_, i) => (i === 1 ? { white, black } : { white: null, black: null }));
+    const ana = setup('ana');
+    const rui = setup('rui');
+    const [g1] = ana.update(at1('ana', 'rui'), 0);
+    expect(g1).toEqual({ slot: 1, id: 'g1', white: 'ana', black: 'rui', moves: [] });
+    expect(ana.at(1)?.rules.kind).toBe('backgammon');
+    rui.update(at1('ana', 'rui'), 0);
+    expect(rui.receive(g1)).toBe(true);
+    expect(rui.play(1, 'r35')).toBeNull(); // the opening roll is white's to make
+    const opened = ana.play(1, 'r35')!;
+    expect(rui.receive(opened)).toBe(true);
+    expect(rui.play(1, '24/21')?.moves).toEqual(['r35', '24/21']); // black's 5 beat white's 3
+  });
+
   it("leaves opening to the white player's browser", () => {
     const g = setup('rui');
     expect(g.update(at0('ana', 'rui'), 0)).toEqual([]);
@@ -154,7 +181,7 @@ describe('Games', () => {
     expect(rui.receive({ slot: 0, id: 'g9', white: 'ana', black: 'rui', moves: ['e2e4', 'e2e4'] })).toBe(false); // illegal
     expect(rui.receive({ slot: 0, id: 'g8', white: 'ana', black: 'rui', moves: [] })).toBe(false); // one is running
     expect(rui.receive({ slot: 0, id: 'g7', white: 'ze', black: 'rui', moves: [] })).toBe(false); // ze isn't seated
-    expect(rui.receive({ slot: 1, id: 'g6', white: 'ana', black: 'rui', moves: [] })).toBe(false); // no rules there yet
+    expect(rui.receive({ slot: 2, id: 'g6', white: 'ana', black: 'rui', moves: [] })).toBe(false); // no rules there yet
     expect(rui.at(0)?.id).toBe('g9');
     expect(rui.at(0)?.rules.moves).toEqual(['e2e4']);
   });

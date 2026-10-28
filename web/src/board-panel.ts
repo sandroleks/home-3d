@@ -21,19 +21,27 @@ export const GAME_COPY = {
 const theirMove = (name: string) => `${name}'s move`;
 const offersDraw = (name: string) => `${name} offers a draw`;
 
-/** A game's own board in the panel: chess now, backgammon and Go later. */
+/** What a board's own buttons and line go by: the game as `you` see it, whether it's your move, and how it ended. */
+export interface BoardView { game: GameRules | null; you: Side; live: boolean; end: GameEnd | null }
+
+/** A game's own button, between Resign and Stand up: chess's Offer draw, backgammon's Roll. */
+export interface PanelAction { label: string; enabled: boolean; run(): void }
+
+/** A game's own board in the panel; each game brings its own, with its own buttons and line. */
 export interface PanelBoard {
   readonly element: HTMLElement;
   /** Draws the game as `you` sit (your side at the bottom); `live`: your move, so clicks play. */
   draw(game: GameRules | null, you: Side, live: boolean): void;
+  /** The game's own buttons now. */
+  actions?(view: BoardView): PanelAction[];
+  /** A line of the game's own under the status (backgammon: the opening roll, the pip counts); '' for none. */
+  info?(view: BoardView): string;
 }
 
 export interface PanelPlayer { name: string; colour: string }
 
 export interface PanelInput {
   you: Side;
-  /** The slot's game has draw offers (chess). */
-  draws: boolean;
   me: PanelPlayer;
   /** Whoever sits opposite; null for an empty chair. */
   them: PanelPlayer | null;
@@ -42,12 +50,10 @@ export interface PanelInput {
   end: GameEnd | null;
 }
 
-export type DrawButton = 'offer' | 'accept' | 'offered' | null;
+/** What the panel says, and whether it's your move and you may resign. */
+export interface PanelState { status: string; live: boolean; resign: boolean }
 
-/** What the panel says and which buttons work. */
-export interface PanelState { status: string; live: boolean; resign: boolean; draw: DrawButton; drawEnabled: boolean }
-
-export function panelState({ you, draws, them, game, end }: PanelInput): PanelState {
+export function panelState({ you, them, game, end }: PanelInput): PanelState {
   const running = !!game && !end;
   const live = running && game.turn() === you;
   const offer = running ? game.drawOffer?.() ?? null : null;
@@ -58,24 +64,18 @@ export function panelState({ you, draws, them, game, end }: PanelInput): PanelSt
   else if (!live) status = theirMove(name);
   else if (offer === otherSide(you)) status = offersDraw(name);
   else status = game.inCheck?.() ? GAME_COPY.yourMoveCheck : GAME_COPY.yourMove;
-  let draw: DrawButton = null;
-  let drawEnabled = false;
-  if (draws) {
-    draw = offer === otherSide(you) ? 'accept' : offer === you ? 'offered' : 'offer';
-    drawEnabled = live && draw !== 'offered';
-  }
-  return { status, live, resign: live, draw, drawEnabled };
+  return { status, live, resign: live };
 }
 
 export interface PanelHandlers {
   resign(): void;
-  draw(): void;
   stand(): void;
 }
 
 /**
  * The overlay a player gets at a game chair: the board in the middle, your opponent above it and you below, whose
- * move it is or how it ended, and the buttons. Names come from other visitors: they are set as text only.
+ * move it is or how it ended, the game's own line, and the buttons: Resign, the game's own, Stand up. Names come from
+ * other visitors: they are set as text only.
  */
 export class BoardPanel {
   private board: PanelBoard | null = null;
@@ -84,7 +84,6 @@ export class BoardPanel {
 
   constructor(private doc: Document, handlers: PanelHandlers) {
     this.el('board-resign').addEventListener('click', () => handlers.resign());
-    this.el('board-draw').addEventListener('click', () => handlers.draw());
     this.el('board-stand').addEventListener('click', () => handlers.stand());
     this.el('board-confirm-yes').addEventListener('click', () => {
       const yes = this.onYes;
@@ -141,10 +140,18 @@ export class BoardPanel {
     this.player('board-me', input.me, input.you, true);
     this.el('board-status').textContent = s.status;
     this.el<HTMLButtonElement>('board-resign').disabled = !s.resign;
-    const draw = this.el<HTMLButtonElement>('board-draw');
-    draw.hidden = s.draw === null;
-    draw.disabled = !s.drawEnabled;
-    draw.textContent = s.draw === 'accept' ? GAME_COPY.acceptDraw : s.draw === 'offered' ? GAME_COPY.drawOffered : GAME_COPY.offerDraw;
+    const view: BoardView = { game: input.game, you: input.you, live: s.live, end: input.end };
+    const info = this.board?.info?.(view) ?? '';
+    this.el('board-info').textContent = info;
+    this.el('board-info').hidden = !info;
+    this.el('board-actions').replaceChildren(...(this.board?.actions?.(view) ?? []).map((a) => {
+      const b = this.doc.createElement('button');
+      b.type = 'button';
+      b.textContent = a.label;
+      b.disabled = !a.enabled;
+      b.addEventListener('click', () => a.run());
+      return b;
+    }));
     this.board?.draw(input.game, input.you, s.live);
   }
 

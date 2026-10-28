@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { panelState, type PanelInput } from '../src/board-panel';
-import { cellSquare, GLYPHS, squareCell } from '../src/chess-board';
+import { type BoardView, panelState, type PanelInput } from '../src/board-panel';
+import { cellSquare, drawAction, GLYPHS, squareCell } from '../src/chess-board';
 import { ChessGame } from '../src/chess-game';
 
 const chess = (...moves: string[]) => {
@@ -9,34 +9,29 @@ const chess = (...moves: string[]) => {
   return g;
 };
 const input = (over: Partial<PanelInput> = {}): PanelInput => ({
-  you: 'white', draws: true, me: { name: 'Ana', colour: '#e2bc94' }, them: { name: 'Rui', colour: '#a9d4f5' }, game: null, end: null, ...over,
+  you: 'white', me: { name: 'Ana', colour: '#e2bc94' }, them: { name: 'Rui', colour: '#a9d4f5' }, game: null, end: null, ...over,
 });
 
 describe('panelState', () => {
   it('waits for an opponent, then for the board', () => {
-    expect(panelState(input({ them: null }))).toEqual({ status: 'Waiting for an opponent', live: false, resign: false, draw: 'offer', drawEnabled: false });
+    expect(panelState(input({ them: null }))).toEqual({ status: 'Waiting for an opponent', live: false, resign: false });
     expect(panelState(input()).status).toBe('Setting up the board…');
   });
   it('says whose move it is, and only lets you play on yours', () => {
-    expect(panelState(input({ game: chess() }))).toEqual({ status: 'Your move', live: true, resign: true, draw: 'offer', drawEnabled: true });
-    expect(panelState(input({ game: chess('e2e4') }))).toEqual({ status: "Rui's move", live: false, resign: false, draw: 'offer', drawEnabled: false });
+    expect(panelState(input({ game: chess() }))).toEqual({ status: 'Your move', live: true, resign: true });
+    expect(panelState(input({ game: chess('e2e4') }))).toEqual({ status: "Rui's move", live: false, resign: false });
     expect(panelState(input({ you: 'black', game: chess('e2e4') })).live).toBe(true);
   });
   it('says check', () => {
     expect(panelState(input({ you: 'black', game: chess('e2e4', 'f7f6', 'd1h5') })).status).toBe('Your move: check');
   });
-  it('offers, shows the offer made, and lets the other side accept', () => {
-    expect(panelState(input({ game: chess('e2e4', 'e7e5', 'draw?') }))).toMatchObject({ draw: 'offered', drawEnabled: false });
-    const offered = chess('e2e4', 'e7e5', 'draw?', 'g1f3');
-    expect(panelState(input({ you: 'black', game: offered }))).toMatchObject({ status: 'Rui offers a draw', draw: 'accept', drawEnabled: true });
+  it("says when the other side offers a draw", () => {
+    expect(panelState(input({ you: 'black', game: chess('e2e4', 'e7e5', 'draw?', 'g1f3') })).status).toBe('Rui offers a draw');
   });
   it('shows how it ended, with nothing left to press', () => {
     const g = chess('f2f3', 'e7e5', 'g2g4', 'd8h4');
-    expect(panelState(input({ game: g, end: g.end() }))).toEqual({ status: 'Black wins: checkmate', live: false, resign: false, draw: 'offer', drawEnabled: false });
+    expect(panelState(input({ game: g, end: g.end() }))).toEqual({ status: 'Black wins: checkmate', live: false, resign: false });
     expect(panelState(input({ them: null, game: chess('e2e4'), end: { winner: 'white', reason: 'left' } })).status).toBe('White wins: Black left the table');
-  });
-  it('has no draw button in games without draws', () => {
-    expect(panelState(input({ draws: false, game: chess() })).draw).toBeNull();
   });
 });
 
@@ -54,5 +49,23 @@ describe('the chessboard in the panel', () => {
   });
   it('draws text glyphs, never emoji', () => {
     for (const g of Object.values(GLYPHS)) expect(g.endsWith('︎')).toBe(true);
+  });
+});
+
+describe("chess's draw button", () => {
+  const view = (over: Partial<BoardView> = {}): BoardView => ({ game: null, you: 'white', live: false, end: null, ...over });
+  it('offers a draw on your move only', () => {
+    expect(drawAction(view({ game: chess(), live: true }))).toEqual({ label: 'Offer draw', enabled: true, entry: 'draw?' });
+    expect(drawAction(view({ game: chess('e2e4') }))).toEqual({ label: 'Offer draw', enabled: false, entry: 'draw?' });
+    expect(drawAction(view())).toEqual({ label: 'Offer draw', enabled: false, entry: 'draw?' });
+  });
+  it('shows your own offer, and lets the other side accept it', () => {
+    expect(drawAction(view({ game: chess('e2e4', 'e7e5', 'draw?'), live: true }))).toEqual({ label: 'Draw offered', enabled: false, entry: 'draw?' });
+    const offered = chess('e2e4', 'e7e5', 'draw?', 'g1f3');
+    expect(drawAction(view({ you: 'black', game: offered, live: true }))).toEqual({ label: 'Accept draw', enabled: true, entry: 'draw!' });
+  });
+  it('offers nothing once the game is over', () => {
+    const offered = chess('e2e4', 'e7e5', 'draw?', 'g1f3');
+    expect(drawAction(view({ you: 'black', game: offered, end: { winner: 'black', reason: 'left' } }))).toEqual({ label: 'Offer draw', enabled: false, entry: 'draw?' });
   });
 });

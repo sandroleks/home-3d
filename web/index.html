@@ -51,7 +51,7 @@
             <ul class="controls">
               <li><span><kbd>Click</kbd></span> open doors, flip light switches, sit on sofas and chairs, lie on the bed</li>
               <li><span><kbd>L</kbd></span> toggle this room's light</li>
-              <li><span><kbd>Click</kbd></span> a chair at the chessboard on the dining table to play chess; <kbd>C</kbd> stands up</li>
+              <li><span><kbd>Click</kbd></span> a chair at the chessboard or the backgammon case on the dining table to play; <kbd>C</kbd> stands up</li>
             </ul>
             <h2>Time and light</h2>
             <ul class="controls">
@@ -74,7 +74,7 @@
               <li><span><kbd>Drag left</kbd></span> walk, push further to go faster</li>
               <li><span><kbd>Drag right</kbd></span> look around</li>
               <li><span><kbd>Tap</kbd></span> open doors, flip light switches, sit on sofas and chairs, lie on the bed</li>
-              <li><span><kbd>Tap</kbd></span> a chair at the chessboard on the dining table to play chess</li>
+              <li><span><kbd>Tap</kbd></span> a chair at the chessboard or the backgammon case on the dining table to play</li>
             </ul>
             <p class="controls-note">The buttons top right set the date and time (and the kitchen wall), show who's here, switch the room light, sound and mic, and pause.</p>
           </div>
@@ -97,9 +97,10 @@
         <div id="board-area"></div>
         <p class="board-player" id="board-me"><i></i><span></span><span class="board-side"></span></p>
         <p id="board-status" aria-live="polite"></p>
+        <p id="board-info" hidden></p>
         <div id="board-buttons">
           <button type="button" id="board-resign">Resign</button>
-          <button type="button" id="board-draw">Offer draw</button>
+          <span id="board-actions"></span>
           <button type="button" id="board-stand">Stand up</button>
         </div>
         <div id="board-confirm" hidden>

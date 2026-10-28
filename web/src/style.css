@@ -168,7 +168,7 @@ body.guests-open #people { display: none; } /* the open panel lists the same peo
 .board-player span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-side { color: var(--muted); font-size: 12px; }
 #board-area { position: relative; }
-.chess-board svg { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.chess-board svg, .backgammon-board svg { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; cursor: pointer; }
 .chess-board text { font-family: 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', 'Noto Sans Symbols 2', sans-serif; }
 .promotion {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: 6px; padding: 8px;
@@ -176,6 +176,8 @@ body.guests-open #people { display: none; } /* the open panel lists the same peo
 }
 .promotion button { width: 48px; height: 48px; padding: 0; font-size: 30px; line-height: 1; background: #f8f4ea; color: #2a2622; border-radius: 8px; }
 #board-status { margin: 0; min-height: 1.4em; }
+#board-info { margin: 0; color: var(--muted); font-size: 13px; }
+#board-actions { display: contents; }
 #board-buttons, #board-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 #board-buttons button, #board-confirm button { padding: 6px 14px; font-size: 13px; background: rgba(255, 255, 255, 0.12); color: var(--ink); }
 #board-stand { margin-left: auto; }

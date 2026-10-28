@@ -1,3 +1,4 @@
+import { BackgammonGame } from './backgammon-game';
 import { ChessGame } from './chess-game';
 import { CONFIG } from './config';
 import type { Seat } from './seats';
@@ -9,7 +10,9 @@ export type Side = 'white' | 'black';
 
 export const otherSide = (s: Side): Side => (s === 'white' ? 'black' : 'white');
 
-export const END_REASONS = ['checkmate', 'stalemate', 'repetition', 'fifty', 'material', 'agreement', 'resigned', 'left'] as const;
+export const END_REASONS = [
+  'checkmate', 'stalemate', 'repetition', 'fifty', 'material', 'agreement', 'resigned', 'left', 'single', 'gammon', 'backgammon',
+] as const;
 export type EndReason = (typeof END_REASONS)[number];
 /** How a game ended: who won (null: a draw, or both players gone) and why. A type, not an interface, so it can be
  * sent as JSON. */
@@ -35,22 +38,28 @@ export interface GameRules {
 }
 
 /** The table's three places, by slot number: the chairs `Dining chair N<slot>` and `S<slot>`. */
-export const SLOTS: readonly { kind: GameKind; title: string; draws: boolean }[] = [
-  { kind: 'chess', title: 'Chess', draws: true },
-  { kind: 'backgammon', title: 'Backgammon', draws: false },
-  { kind: 'go', title: 'Go', draws: false },
+export const SLOTS: readonly { kind: GameKind; title: string }[] = [
+  { kind: 'chess', title: 'Chess' },
+  { kind: 'backgammon', title: 'Backgammon' },
+  { kind: 'go', title: 'Go' },
 ];
+
+/** The slot a game is played at. */
+export const slotOf = (kind: GameKind): number => SLOTS.findIndex((s) => s.kind === kind);
 
 const SIDE_NAME: Record<Side, string> = { white: 'White', black: 'Black' };
 const DRAWN: Partial<Record<EndReason, string>> = {
   stalemate: 'stalemate', repetition: 'threefold repetition', fifty: '50-move rule', material: 'insufficient material', agreement: 'agreed',
 };
+/** Wins whose reason reads differently from its name (backgammon's single game). */
+const WON: Partial<Record<EndReason, string>> = { single: 'single game' };
 
-/** The result line: "White wins: checkmate", "Black wins: White left the table", "Draw: stalemate". */
+/** The result line: "White wins: checkmate", "Black wins: White left the table", "White wins: gammon",
+ * "Draw: stalemate". */
 export function endText(end: GameEnd): string {
   if (end.winner) {
     const loser = SIDE_NAME[otherSide(end.winner)];
-    const why = end.reason === 'resigned' ? `${loser} resigned` : end.reason === 'left' ? `${loser} left the table` : end.reason;
+    const why = end.reason === 'resigned' ? `${loser} resigned` : end.reason === 'left' ? `${loser} left the table` : WON[end.reason] ?? end.reason;
     return `${SIDE_NAME[end.winner]} wins: ${why}`;
   }
   if (end.reason === 'left') return 'Game over: both players left the table';
@@ -58,7 +67,10 @@ export function endText(end: GameEnd): string {
 }
 
 /** The games built so far; a slot whose kind has no rules here is just a table place. */
-export const RULES: Partial<Record<GameKind, () => GameRules>> = { chess: () => new ChessGame() };
+export const RULES: Partial<Record<GameKind, () => GameRules>> = {
+  chess: () => new ChessGame(),
+  backgammon: () => new BackgammonGame(),
+};
 
 /** A game replayed from its entries; null when the kind has no rules or an entry isn't legal. */
 export function replay(kind: GameKind, moves: readonly string[], rules = RULES): GameRules | null {

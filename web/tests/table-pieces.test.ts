@@ -1,10 +1,10 @@
-import { type Mesh, MeshMatcapMaterial } from 'three';
+import { Group, type Mesh, MeshMatcapMaterial } from 'three';
 import { describe, expect, it } from 'vitest';
 import { ChessGame } from '../src/chess-game';
 import { ChessSet, lostPosition, pieceGeometries, squarePosition } from '../src/chess-set';
 import { CONFIG } from '../src/config';
-import type { SlotGame } from '../src/games';
-import { TableGames, TableMaterials } from '../src/table-pieces';
+import type { GameRules, SlotGame } from '../src/games';
+import { TableGames, TableMaterials, type TableSet } from '../src/table-pieces';
 
 const step = (CONFIG.games.chess.size - 2 * CONFIG.games.chess.border) / 8;
 const chess = (...moves: string[]) => {
@@ -61,12 +61,26 @@ describe('the chessboard on the table', () => {
 });
 
 describe('TableGames', () => {
-  it("puts the chessboard at slot 0's place on the table, the other slots empty for now", () => {
+  it('puts the chessboard and the backgammon case at their slots\' places on the table, slot 2 empty for now', () => {
     const t = new TableGames(null);
-    expect(t.root.children).toHaveLength(1);
-    const [x, z] = CONFIG.games.slots[0];
-    expect(t.root.children[0].position.toArray()).toEqual([x, CONFIG.games.tableTop, z]);
+    expect(t.root.children.map((c) => c.name)).toEqual(['Chess', 'Backgammon']);
+    t.root.children.forEach((c, slot) => {
+      const [x, z] = CONFIG.games.slots[slot];
+      expect(c.position.toArray()).toEqual([x, CONFIG.games.tableTop, z]);
+    });
   });
+  it("puts each kind's set at its slot's place, from the sets it is given", () => {
+    const shown: (GameRules | null)[] = [];
+    const fake = (): TableSet => ({ root: new Group(), show: (g) => void shown.push(g), update: () => {} });
+    const t = new TableGames(null, { backgammon: fake });
+    expect(t.root.children).toHaveLength(1);
+    const [x, z] = CONFIG.games.slots[1];
+    expect(t.root.children[0].position.toArray()).toEqual([x, CONFIG.games.tableTop, z]);
+    const game: SlotGame = { id: 'g1', white: 'a', black: 'b', rules: chess('e2e4'), left: null };
+    t.update(0.1, (slot) => (slot === 1 ? game : null), 1);
+    expect(shown).toEqual([game.rules]);
+  });
+
   it('shows each slot\'s game when it changes, and dims with the light', () => {
     const t = new TableGames(null);
     const game: SlotGame = { id: 'g1', white: 'a', black: 'b', rules: chess('e2e4'), left: null };
