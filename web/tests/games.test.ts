@@ -162,6 +162,17 @@ describe('Games', () => {
     expect(ana.at(2)?.rules.resultText?.()).toBe('Black wins by 74');
   });
 
+  it('takes no Go end from the network except a left one', () => {
+    const at2 = (white: string | null, black: string | null): SlotSeats[] =>
+      SLOTS.map((_, i) => (i === 2 ? { white, black } : { white: null, black: null }));
+    const rui = setup('rui');
+    rui.update(at2('ana', 'rui'), 0);
+    const forged = { slot: 2, id: 'g1', white: 'ana', black: 'rui', moves: ['E5'], end: { winner: 'white', reason: 'score' } } as Parameters<typeof rui.receive>[0];
+    expect(rui.receive(forged)).toBe(true);
+    expect(rui.at(2)?.rules.moves).toEqual(['E5']);
+    expect(endOf(rui.at(2)!)).toBeNull(); // the moves don't end it, and only a left end is taken
+  });
+
   it("leaves opening to the white player's browser", () => {
     const g = setup('rui');
     expect(g.update(at0('ana', 'rui'), 0)).toEqual([]);

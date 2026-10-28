@@ -18,11 +18,20 @@ export function pointPosition(point: number, cfg: Cfg = CONFIG.games.go): [numbe
   return [(point % SIZE - 4) * s, (4 - Math.floor(point / SIZE)) * s];
 }
 
+/** Prisoners fill four rows of nine; further ones stack in layers on top, so they never leave the table. */
+const PRISONER_LAYER = 4 * SIZE;
+
 /** Where the `n`th stone `capturer` has taken lies: on the table in front of the capturer (white's by the S edge,
- * black's by the N edge), nine to a row along the lines, a row further out after nine. */
+ * black's by the N edge), nine to a row along the lines, a row further out after nine, four rows in all (see
+ * `prisonerLift` for the layers above). */
 export function prisonerPosition(capturer: Side, n: number, cfg: Cfg = CONFIG.games.go): [number, number] {
   const toward = capturer === 'white' ? 1 : -1;
-  return [(n % SIZE - 4) * step(cfg), toward * (cfg.size / 2 + (2 * cfg.stone + 0.002) * (0.7 + Math.floor(n / SIZE)))];
+  return [(n % SIZE - 4) * step(cfg), toward * (cfg.size / 2 + (2 * cfg.stone + 0.002) * (0.7 + Math.floor((n % PRISONER_LAYER) / SIZE)))];
+}
+
+/** How far above the table the `n`th prisoner lies: a stone's height for each full block of 36 before it. */
+export function prisonerLift(n: number, cfg: Cfg = CONFIG.games.go): number {
+  return Math.floor(n / PRISONER_LAYER) * cfg.height;
 }
 
 /** The board's top: the wood, the 9 × 9 lines and the star points, as white sees it. */
@@ -92,7 +101,7 @@ export class GoSet implements TableSet {
       const key = `${s.side}${s.point}`;
       if (this.placed.get(s.id)?.key !== key) this.remove(s.id);
       const [x, z] = s.taken === null ? pointPosition(s.point) : prisonerPosition(s.side === 'white' ? 'black' : 'white', s.taken);
-      const y = s.taken === null ? cfg.thickness : 0;
+      const y = s.taken === null ? cfg.thickness : prisonerLift(s.taken);
       const item = this.placed.get(s.id);
       if (!item) {
         const mesh = new Mesh(this.geometry, this.sides[s.side]);

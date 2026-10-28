@@ -2,7 +2,7 @@ import type { MeshMatcapMaterial } from 'three';
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import { GoGame, parsePoint } from '../src/go-game';
-import { GoSet, pointPosition, prisonerPosition } from '../src/go-set';
+import { GoSet, pointPosition, prisonerLift, prisonerPosition } from '../src/go-set';
 import { TableMaterials } from '../src/table-pieces';
 
 const cfg = CONFIG.games.go;
@@ -28,6 +28,19 @@ describe('the Go board on the table', () => {
         expect(x + px - cfg.stone).toBeGreaterThanOrEqual(2.265);
         expect(Math.abs(pz) + cfg.stone).toBeLessThanOrEqual(0.3);
       }
+    }
+  });
+  it('stacks prisoners in layers past four rows instead of growing the footprint', () => {
+    for (const side of ['white', 'black'] as const) {
+      for (let n = 0; n < 200; n++) {
+        const [px, pz] = prisonerPosition(side, n);
+        const [fx, fz] = prisonerPosition(side, n % 36);
+        expect(px).toBeCloseTo(fx);
+        expect(pz).toBeCloseTo(fz);
+        expect(prisonerLift(n)).toBeCloseTo(Math.floor(n / 36) * cfg.height);
+        if (n >= 36) expect(prisonerLift(n)).toBeGreaterThan(prisonerLift(n - 36) - 1e-12);
+      }
+      expect(prisonerLift(36)).toBeGreaterThan(prisonerLift(35));
     }
   });
   it('puts row 1 at the S chair (+z) with column A toward -x, the lines a stone apart', () => {
