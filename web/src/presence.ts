@@ -48,6 +48,21 @@ export function saveName(storage: () => KeyValueStore, name: string): void {
   }
 }
 
+const ARRIVED_KEY = 'walkthrough.arrived.';
+
+/** When this tab first arrived in the room (ms since 1970), kept across a reload so a host who reloads stays host; a
+ * closed tab forgets it. Blocked storage: now. */
+export function loadArrived(storage: () => KeyValueStore, room: string, now: number): number {
+  try {
+    const kept = Number(storage().getItem(ARRIVED_KEY + room));
+    if (kept > 0 && Number.isFinite(kept)) return kept;
+    storage().setItem(ARRIVED_KEY + room, String(now));
+  } catch {
+    // private mode: each reload arrives afresh
+  }
+  return now;
+}
+
 /** FNV-1a, so every browser picks the same colour for the same peer. */
 export function hashId(id: string): number {
   let h = 0x811c9dc5;
@@ -191,7 +206,7 @@ export function applyState(world: StateWorld, delta: StateMap, now: number): str
   return changed;
 }
 
-export interface PeerInfo { name: string | null; since: number | null; lastSeen: number }
+export interface PeerInfo { name: string | null; since: number | null; arrived: number | null; lastSeen: number }
 
 /** Who is here: names, when they joined, when they last sent anything. */
 export class Peers {
@@ -218,15 +233,17 @@ export class Peers {
       p.lastSeen = now;
       return false;
     }
-    this.table.set(id, { name: null, since: null, lastSeen: now });
+    this.table.set(id, { name: null, since: null, arrived: null, lastSeen: now });
     return true;
   }
 
-  hello(id: string, name: string, since: number, now: number): void {
+  /** `arrived` is when it first came to the room (a visitor from before hosts sends none: its join time stands in). */
+  hello(id: string, name: string, since: number, now: number, arrived = since): void {
     this.seen(id, now);
     const p = this.table.get(id)!;
     p.name = name;
     p.since = since;
+    p.arrived = arrived;
   }
 
   remove(id: string): boolean {
@@ -245,8 +262,22 @@ export class Peers {
     return [...this.table.values()].map((p) => p.name ?? fallback);
   }
 
-  /** Ids and names, in join order, for showing who is talking. */
-  list(fallback = CONFIG.multiplayer.defaultName): { id: string; name: string }[] {
-    return [...this.table].map(([id, p]) => ({ id, name: p.name ?? fallback }));
+  /** Ids, names and arrival times, in join order, for showing who is talking and who is host. */
+  list(fallback = CONFIG.multiplayer.defaultName): { id: string; name: string; arrived: number | null }[] {
+    return [...this.table].map(([id, p]) => ({ id, name: p.name ?? fallback, arrived: p.arrived }));
   }
+}
+
+/** A visitor and when it arrived; null until its hello. */
+export interface Arrival { id: string; arrived: number | null }
+
+/** Earliest arrival first, ties to the lower id, those without a hello last: the same order in every browser. */
+export function byArrival(a: Arrival, b: Arrival): number {
+  if (a.arrived === null || b.arrived === null) return (a.arrived === null ? 1 : 0) - (b.arrived === null ? 1 : 0);
+  return a.arrived - b.arrived || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+
+/** The host: whoever arrived first among this visitor and the peers it has a hello from. */
+export function hostOf(self: { id: string; arrived: number }, others: Arrival[]): string {
+  return [self, ...others.filter((p) => p.arrived !== null)].sort(byArrival)[0].id;
 }
