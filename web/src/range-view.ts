@@ -25,6 +25,8 @@ export class RangeView {
   private looks: Record<TargetKind, MeshMatcapMaterial>;
   private rotor: MeshMatcapMaterial;
   private shardGeometry = new BoxGeometry(0.07, 0.025, 0.06);
+  /** Built once and shared by every target of its kind, so a new round frees nothing on the GPU. */
+  private geo: { clay: CylinderGeometry; gold: CylinderGeometry; body: BoxGeometry; arm: BoxGeometry; rotor: CylinderGeometry };
   private targets: Object3D[] = [];
   private shown = '';
   private shards: Shard[] = [];
@@ -42,6 +44,16 @@ export class RangeView {
       drone: this.materials.make('Drone', c.drone, null, true),
     };
     this.rotor = this.materials.make('Drone rotor', c.rotor);
+    const k = CONFIG.range.kinds;
+    const disc = (size: number) => new CylinderGeometry(size / 2, size * 0.4, 0.07, 20);
+    const d = k.drone.size;
+    this.geo = {
+      clay: disc(k.clay.size),
+      gold: disc(k.gold.size),
+      body: new BoxGeometry(d * 0.45, d * 0.18, d * 0.45),
+      arm: new BoxGeometry(d * 0.5, 0.02, 0.03),
+      rotor: new CylinderGeometry(d * 0.18, d * 0.18, 0.01, 16),
+    };
   }
 
   get shardCount(): number {
@@ -99,21 +111,20 @@ export class RangeView {
 
   /** A clay or gold clay: a shallow disc, tilted as it flies. A drone: a body with four rotors. */
   private makeTarget(kind: TargetKind): Object3D {
-    const size = CONFIG.range.kinds[kind].size;
+    const g = new Group();
     if (kind !== 'drone') {
-      const disc = new Mesh(new CylinderGeometry(size / 2, size * 0.4, 0.07, 20), this.looks[kind]);
+      const disc = new Mesh(kind === 'gold' ? this.geo.gold : this.geo.clay, this.looks[kind]);
       disc.rotation.x = 0.35;
-      const g = new Group();
       g.add(disc);
       return g;
     }
-    const g = new Group();
-    g.add(new Mesh(new BoxGeometry(size * 0.45, size * 0.18, size * 0.45), this.looks.drone));
+    const size = CONFIG.range.kinds.drone.size;
+    g.add(new Mesh(this.geo.body, this.looks.drone));
     for (const [x, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-      const arm = new Mesh(new BoxGeometry(size * 0.5, 0.02, 0.03), this.looks.drone);
+      const arm = new Mesh(this.geo.arm, this.looks.drone);
       arm.position.set((x * size) / 4, 0, (z * size) / 4);
       arm.rotation.y = x * z > 0 ? -Math.PI / 4 : Math.PI / 4;
-      const rotor = new Mesh(new CylinderGeometry(size * 0.18, size * 0.18, 0.01, 16), this.rotor);
+      const rotor = new Mesh(this.geo.rotor, this.rotor);
       rotor.position.set((x * size) / 2, size * 0.1, (z * size) / 2);
       g.add(arm, rotor);
     }
@@ -169,7 +180,7 @@ export class RangeView {
     this.tracers.push({ line, age: 0 });
   }
 
-  /** Shards fall and fade, points rise and fade, tracers fade; each goes once its time is up. */
+  /** Shards fall, points rise and fade, tracers fade; each goes once its time is up. */
   private age(dt: number): void {
     const cfg = CONFIG.range;
     this.shards = this.shards.filter((s) => {

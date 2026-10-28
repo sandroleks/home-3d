@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { type Group, type Mesh } from 'three';
 import { CONFIG } from '../src/config';
-import { flightAt, schedule } from '../src/range-flights';
+import { type Flight, flightAt, schedule } from '../src/range-flights';
 import { RangeView } from '../src/range-view';
 
 const flights = schedule(11);
@@ -50,5 +51,42 @@ describe('the range view', () => {
     expect(v.objectFor(0)).not.toBe(first);
     v.update(0.016, null, 0, none, [], colour, 1);
     expect(v.objectFor(0)).toBeUndefined();
+  });
+
+  it('shares one geometry per kind, within a round and across a rebuild', () => {
+    const v = new RangeView(null);
+    const clayAt = (fs: readonly Flight[]) => fs.filter((f) => f.kind === 'clay').map((f) => f.i);
+    const droneAt = (fs: readonly Flight[]) => fs.filter((f) => f.kind === 'drone').map((f) => f.i);
+    const discGeo = (i: number) => ((v.objectFor(i) as Group).children[0] as Mesh).geometry;
+    const bodyGeo = (i: number) => ((v.objectFor(i) as Group).children[0] as Mesh).geometry;
+    const armGeo = (i: number) => ((v.objectFor(i) as Group).children[1] as Mesh).geometry;
+    v.update(0.016, round, 1, none, [], colour, 1);
+    const [c0, c1] = clayAt(flights);
+    const [d0, d1] = droneAt(flights);
+    expect(discGeo(c0)).toBe(discGeo(c1));
+    expect(bodyGeo(d0)).toBe(bodyGeo(d1));
+    expect(armGeo(d0)).toBe(armGeo(d1));
+    const [disc, body, arm] = [discGeo(c0), bodyGeo(d0), armGeo(d0)]; // read before the rebuild replaces the targets
+    const second = schedule(12);
+    v.update(0.016, { id: 'r2', flights: second }, 0.6, none, [], colour, 1);
+    const [e0] = clayAt(second);
+    const [f0] = droneAt(second);
+    expect(discGeo(e0)).toBe(disc);
+    expect(bodyGeo(f0)).toBe(body);
+    expect(armGeo(f0)).toBe(arm);
+  });
+
+  it('leaves only the round\'s targets on the root once its effects have expired', () => {
+    const v = new RangeView(null);
+    v.update(0.016, round, 1, none, [
+      { kind: 'break', target: 0, by: 'a', points: 10, at: [1, 5, -30] },
+      { kind: 'shot', by: 'b', o: [1, 1.6, -8.5], d: [0, 0, -1] },
+    ], colour, 1);
+    expect(v.root.children.length).toBeGreaterThan(flights.length);
+    for (let s = 0; s < Math.max(CONFIG.range.shards, CONFIG.range.float, CONFIG.range.tracer) + 0.1; s += 0.05) v.update(0.05, round, 1, none, [], colour, 1);
+    expect(v.root.children.length).toBe(flights.length);
+    const second = schedule(12);
+    v.update(0.016, { id: 'r2', flights: second }, 0.6, none, [], colour, 1);
+    expect(v.root.children.length).toBe(second.length);
   });
 });
