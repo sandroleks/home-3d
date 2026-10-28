@@ -1,4 +1,4 @@
-import { Box3, Object3D, Quaternion, Vector3 } from 'three';
+import { Box3, BoxGeometry, type Mesh, type MeshMatcapMaterial, Object3D, Quaternion, Texture, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import type { PlacedProp } from '../src/prop-places';
@@ -69,6 +69,54 @@ describe('Props', () => {
     expect(props.top(bottom)).toBe(top);
     expect(props.pickUp(bottom)?.id).toBe('p/plate/1');
     expect(props.top(bottom)).toBe(bottom);
+  });
+
+  it('lets one thing carry several: the highest first, the carrier last, and each goes back onto it', () => {
+    const tray = placed('t/plate/0', { kind: 'plate' });
+    const bottle = (i: number, y: number) => placed(`t/winebottle/${i}`, { kind: 'winebottle', position: new Vector3(0.05 * i, y, 0), on: tray.id });
+    const { props } = setup([tray, bottle(0, 0.93), bottle(1, 0.95), bottle(2, 0.94)]);
+    const [t, b0, b1, b2] = props.list;
+    expect(t.over).toHaveLength(3);
+    expect(props.top(t)).toBe(b1);
+    const taken: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      taken.push(props.pickUp(t)!.id);
+      props.place({ point: new Vector3(0.5 + i, 0.9, -0.5), yaw: 0, node: null });
+    }
+    expect(taken.slice(0, 3).sort()).toEqual([b0.id, b1.id, b2.id]);
+    expect(taken[3]).toBe(t.id);
+    expect(props.pickUp(t)?.id).toBe(t.id); // bare now
+  });
+
+  it('links a bottle put back home onto its tray, once', () => {
+    const tray = placed('t/plate/0', { kind: 'plate' });
+    const bottle = (i: number) => placed(`t/winebottle/${i}`, { kind: 'winebottle', position: new Vector3(0.05 * i, 0.93, 0), on: tray.id });
+    const { props } = setup([tray, bottle(0), bottle(1)]);
+    const [t, b0, b1] = props.list;
+    props.pickUp(b0);
+    props.place({ point: new Vector3(0.5, 0.9, 0), yaw: 0, node: null });
+    expect(t.over).toEqual([b1]);
+    props.receive({ id: b0.id, n: 10, by: 'ana', s: 'home' });
+    expect(t.over).toHaveLength(2);
+    expect(t.over).toContain(b0);
+    expect(b0.under).toBe(t);
+    props.receive({ id: b0.id, n: 11, by: 'ana', s: 'home' });
+    expect(t.over.filter((q) => q === b0)).toHaveLength(1);
+  });
+
+  it('builds a thing from the model with its own name, map and size, and picks it up and puts it down', () => {
+    const map = new Texture();
+    const info = { name: 'mug', size: [0.08, 0.1, 0.08] as [number, number, number], tips: false, parts: () => [{ geometry: new BoxGeometry(0.08, 0.1, 0.08), look: { colour: '#ff8800', map } }] };
+    const { props } = setup([placed('m/model/0', { kind: 'model', info })]);
+    const [mug] = props.list;
+    expect(mug.info.name).toBe('mug');
+    expect(((mug.root.children[0] as Mesh).material as MeshMatcapMaterial).map).toBe(map);
+    expect(props.pickUp(mug)?.id).toBe(mug.id);
+    expect(props.place({ point: new Vector3(0.5, 0.9, 0), yaw: 0, node: null })).toMatchObject({ s: 'rest' });
+  });
+
+  it('says which thing has no model info when a model place lacks it', () => {
+    expect(() => setup([placed('m/model/9', { kind: 'model' })])).toThrow('m/model/9');
   });
 
   it('puts a thing down in the room or in a drawer, relative to it', () => {

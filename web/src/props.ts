@@ -1,7 +1,7 @@
 import { Box3, Color, Group, Matrix4, Mesh, MeshMatcapMaterial, type Object3D, Quaternion, Vector3 } from 'three';
 import { CONFIG } from './config';
 import type { Matcaps } from './creatures';
-import { KINDS, type KindInfo, type PropKind } from './prop-models';
+import { KINDS, type KindInfo } from './prop-models';
 import type { PlacedProp } from './prop-places';
 import type { Placement } from './prop-placement';
 import { type Flight, fly, type Landing, launch, type Raycast, type Shape } from './prop-physics';
@@ -85,15 +85,17 @@ export class Prop {
   /** The last change this visitor took or made, passed on as it was to a newcomer (null: none yet). */
   last: PropMessage | null = null;
   atHome = true;
-  /** At home in a stack: what lies on it, and what it lies on. */
-  over: Prop | null = null;
+  /** At home in a stack: what lies on it (several things may), and what it lies on. */
+  over: Prop[] = [];
   under: Prop | null = null;
   readonly shape: Shape;
   private materials: { material: MeshMatcapMaterial; base: Color }[] = [];
   private level = -1;
 
   constructor(readonly place: PlacedProp, matcaps: Matcaps) {
-    this.info = place.info ?? KINDS[place.kind as PropKind];
+    const info = place.info ?? (place.kind === 'model' ? undefined : KINDS[place.kind]);
+    if (!info) throw new Error(`Loose thing ${place.id} comes from the model but has no kind info`);
+    this.info = info;
     this.root.name = `Prop_${place.id}`;
     // Loose things are never solid to flights and placement rays; placement keeps them apart with `overlaps`.
     this.root.userData.loose = true;
@@ -102,7 +104,7 @@ export class Prop {
       const see = part.look.opacity !== undefined;
       const material = new MeshMatcapMaterial({
         color: base.clone(), matcap: (part.look.gloss ? matcaps.gloss : matcaps.matte) ?? null,
-        transparent: see, opacity: part.look.opacity ?? 1, depthWrite: !see,
+        map: part.look.map ?? null, transparent: see, opacity: part.look.opacity ?? 1, depthWrite: !see,
       });
       this.materials.push({ material, base });
       const mesh = new Mesh(part.geometry, material);
@@ -156,9 +158,17 @@ export class Props {
     return this.list.find((p) => p.state === 'held' && p.holder === me) ?? null;
   }
 
-  /** The top of a stack: picking up any of it takes that one. */
+  /** The top of a stack: picking up any of it takes that one. Where several lie on a thing, the highest is next. */
   top(p: Prop): Prop {
-    while (p.over) p = p.over;
+    while (p.over.length) {
+      let best = p.over[0];
+      let y = box.setFromObject(best.root).max.y;
+      for (const q of p.over) {
+        const h = box.setFromObject(q.root).max.y;
+        if (h > y) { best = q; y = h; }
+      }
+      p = best;
+    }
     return p;
   }
 
@@ -399,22 +409,20 @@ export class Props {
     for (const q of this.list) if (q.atHome && q.place.on === p.id) this.stackHome(q);
   }
 
-  /** At home, lie on what it lay on, if that's at home and bare. */
+  /** At home, lie on what it lay on, if that's at home. */
   private stackHome(p: Prop): void {
     const under = p.place.on ? this.byId.get(p.place.on) : undefined;
-    if (under && under.atHome && !under.over) {
-      under.over = p;
+    if (under && under.atHome && p.under !== under) {
+      under.over.push(p);
       p.under = under;
     }
   }
 
   /** Out of its stack, as it leaves its place: what lies on it is let go too. */
   private detach(p: Prop): void {
-    if (p.over) {
-      p.over.under = null;
-      p.over = null;
-    }
-    if (p.under) p.under.over = null;
+    for (const q of p.over) q.under = null;
+    p.over = [];
+    if (p.under) p.under.over = p.under.over.filter((q) => q !== p);
     p.under = null;
   }
 
