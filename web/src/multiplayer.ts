@@ -3,13 +3,14 @@ import type { Avatars } from './avatars';
 import { CONFIG } from './config';
 import { type DrawMessage, isDrawMessage } from './draw-game';
 import { type GameMessage, isGameMessage } from './games';
+import { isRangeMessage, type RangeMessage } from './range-game';
 import {
   applyState, cleanName, collectState, colourFor, encodePose, isPose, isStateMap, Peers, type PoseMessage, poseMoved,
   type Seating, shouldSend, type StateMap, type StateWorld, hostOf,
 } from './presence';
 
-export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'draw';
-const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'draw'];
+export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'draw' | 'range';
+const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'draw', 'range'];
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 /** What the walkthrough needs from a network: Trystero today, a WebSocket server another day. */
@@ -70,6 +71,10 @@ export interface MultiplayerHooks {
   onDraw?: (msg: DrawMessage, from: string) => void;
   /** A visitor new here (or back after timing out), to greet with this visitor's part of draw and guess. */
   onArrive?: (id: string) => void;
+  /** A visitor left or timed out (before their animal goes). */
+  onLeave?: (id: string) => void;
+  /** The shooting range: a message from another visitor (well-formed; what to do with it is the range's call). */
+  onRange?: (msg: RangeMessage, from: string) => void;
 }
 
 /**
@@ -142,6 +147,11 @@ export class Multiplayer {
       if (this.arrive(id)) this.greet(id, true);
       hooks.onDraw?.(data, id);
     });
+    room.onMessage('range', (data, id) => {
+      if (!isRangeMessage(data)) return;
+      if (this.arrive(id)) this.greet(id, true);
+      hooks.onRange?.(data, id);
+    });
   }
 
   get names(): string[] {
@@ -203,6 +213,7 @@ export class Multiplayer {
   private depart(id: string): void {
     this.streams.delete(id);
     if (!this.peers.remove(id)) return;
+    this.hooks.onLeave?.(id);
     this.avatars.remove(id);
     this.voice?.remove(id);
     this.hooks.onPeers(this.peers.names());
@@ -236,10 +247,16 @@ export class Multiplayer {
     this.room.send('draw', msg, to);
   }
 
+  /** The shooting range: to everyone, or (a newcomer's catch-up) to one visitor. */
+  sendRange(msg: RangeMessage, to?: string): void {
+    this.room.send('range', msg, to);
+  }
+
   /** Every frame: drop the silent. */
   tick(): void {
     const gone = this.peers.prune(this.hooks.now());
     for (const id of gone) {
+      this.hooks.onLeave?.(id);
       this.avatars.remove(id);
       this.voice?.remove(id);
     }

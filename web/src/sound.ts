@@ -30,6 +30,8 @@ export class Sound {
   private musicSource: AudioBufferSourceNode | null = null;
   private lastStep = -1;
   private position = new Vector3();
+  /** The shot's burst of noise, made on first use. */
+  private shotNoise: AudioBuffer | null = null;
 
   constructor(camera: Camera) {
     camera.add(this.listener);
@@ -152,19 +154,42 @@ export class Sound {
     const gain = this.ctx.createGain();
     gain.gain.value = level;
     src.connect(gain);
-    let out: AudioNode = gain;
-    if (at) {
-      at.getWorldPosition(this.position);
-      const panner = this.ctx.createPanner();
-      panner.panningModel = 'HRTF';
-      panner.refDistance = 1;
-      panner.positionX.value = this.position.x;
-      panner.positionY.value = this.position.y;
-      panner.positionZ.value = this.position.z;
-      gain.connect(panner);
-      out = panner;
-    }
+    const out = at ? this.pannerAt(at.getWorldPosition(this.position), gain) : gain;
     out.connect(to);
+    src.start();
+  }
+
+  /** `from` placed at a point, through an HRTF panner heard at full level within `ref` metres. */
+  private pannerAt(p: Vector3, from: AudioNode, ref = 1): AudioNode {
+    const panner = this.ctx.createPanner();
+    panner.panningModel = 'HRTF';
+    panner.refDistance = ref;
+    panner.positionX.value = p.x;
+    panner.positionY.value = p.y;
+    panner.positionZ.value = p.z;
+    from.connect(panner);
+    return panner;
+  }
+
+  /** A rifle shot, made here rather than loaded: a burst of noise with a fast decay, low-passed. From another
+   * shooter's spot, or (null) this visitor's own. */
+  shot(at: Vector3 | null): void {
+    const s = CONFIG.audio.shot;
+    if (!this.shotNoise) {
+      const n = Math.round(this.ctx.sampleRate * s.length);
+      this.shotNoise = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
+      const data = this.shotNoise.getChannelData(0);
+      for (let i = 0; i < n; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * s.decay));
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.shotNoise;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = s.cutoff;
+    const gain = this.ctx.createGain();
+    gain.gain.value = s.level;
+    src.connect(filter).connect(gain);
+    (at ? this.pannerAt(at, gain, s.reach) : gain).connect(this.effects);
     src.start();
   }
 

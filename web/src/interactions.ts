@@ -16,7 +16,14 @@ export type Target =
    * taken; `node` is a stand-in with nothing to highlight. */
   | { kind: 'seat'; seat: Seat; spot: Spot | null; node: Object3D }
   /** The bottle of red in the kitchen (wine.ts): a sip is the visitor's own, never shared. */
-  | { kind: 'wine'; node: Object3D };
+  | { kind: 'wine'; node: Object3D }
+  /** The shooting range's rifle rack and Start button on the Varanda (range-rack.ts): this visitor's own to use. */
+  | { kind: 'rack'; range: RangeStatus; node: Object3D }
+  | { kind: 'range-button'; range: RangeStatus; node: Object3D };
+
+/** What the rack's and the button's prompts need: whether this visitor holds a rifle, whether a round is on
+ * (range-game.ts), and whether they may pick one up where they stand (main.ts knows the room and the seat). */
+export interface RangeStatus { readonly armed: boolean; readonly busy: boolean; readonly canArm: boolean }
 
 /** The seat at a point where the crosshair meets the room, if any. */
 export type SeatFinder = (point: Vector3) => Target | null;
@@ -39,6 +46,10 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
     case 'lamp': return `${verb}: turn ${lampName(t.name)} ${lights.isOn(t.group) ? 'off' : 'on'}`;
     case 'seat': return t.spot ? `${verb}: ${t.seat.pose === 'lie' ? 'lie down' : 'sit down'}` : 'Someone is here';
     case 'wine': return `${verb}: drink some wine`;
+    case 'rack':
+      if (!t.range.armed && !t.range.canArm) return 'Step onto the balcony to pick up the rifle'; // seen through the glass door, or sitting
+      return `${verb}: ${t.range.armed ? 'put the rifle back' : 'pick up the rifle'}`;
+    case 'range-button': return t.range.busy ? 'A round is on' : t.range.armed ? `${verb}: start a round` : 'Pick up a rifle to play';
     case 'screen': {
       const s = t.screen;
       return s.isTv ? `${verb}: TV` : `${verb}: turn screen ${s.on ? 'off' : 'on'}`;
@@ -47,11 +58,13 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
   }
 }
 
-/** `now`: seconds, for the screens' pictures. Sitting down, drinking and the TV's panel are the player's (main.ts). */
+/** `now`: seconds, for the screens' pictures. Sitting down, drinking, the rifle and the TV's panel are the player's (main.ts). */
 export function activate(t: Target, lights: LightGroups, now = 0): void {
   switch (t.kind) {
     case 'seat': return;
     case 'wine': return;
+    case 'rack':
+    case 'range-button': return; // the rifle and the round are the player's (main.ts)
     case 'door': return t.door.toggle();
     case 'movable': return t.movable.toggle();
     case 'lamp': return lights.toggle(t.group);

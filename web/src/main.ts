@@ -7,7 +7,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { doorSound, loadMuted, saveMuted, StepTimer } from './audio';
 import { CONFIG } from './config';
-import { Interactions, promptFor, type Target } from './interactions';
+import { Interactions, promptFor, type RangeStatus, type Target } from './interactions';
 import { LIGHT_SPILL } from './lightmaps';
 import { loadAssets, type LoadedAssets, type LoadedMap } from './loader';
 import { addMirrors } from './mirrors';
@@ -24,13 +24,16 @@ import { endOf, gameChairs, type GameKind, Games, otherSide, seatedAt, type Side
 import { GoBoard } from './go-board';
 import { TableGames } from './table-pieces';
 import { DrawGame, type DrawOut, type Visitor } from './draw-game';
+import { HeldRifle, RifleRack } from './range-rack';
+import { RangeGame, rangeHud, type RangeOut } from './range-game';
+import { RangeView } from './range-view';
 import { TvPanel, tvPanelView } from './draw-panel';
 import { tvView } from './draw-tv';
 import { Drunk, viewFilter, wobbleAt } from './drunk';
 import { WineBottle } from './wine';
 import { fetchIceServers } from './turn';
 import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
-import { applyState, cleanName, collectState, colourFor, lightValue, loadArrived, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
+import { applyState, cleanName, collectState, colourFor, isShared, lightValue, loadArrived, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
 import { activeScene, colourAt, groupsIn, HUE_SCENES, levelFor, nextScene, NO_HUE_LINK, packColour, sceneById } from './hue';
 import { Player, screenFov, vfovFromHfov } from './player';
 import { freeSpot, seatAt, seatedOn, seatingCode } from './seats';
@@ -134,6 +137,22 @@ async function run(): Promise<void> {
     world.pickables.push(wine.root);
     world.targets.set(wine.root, wine.target);
   }
+  // The shooting range's rack, targets and rifle (see `range`, below), built now so the warm-up compiles them too: the
+  // rack reads the range's status only when asked, so it can come before the game.
+  const rangeStatus: RangeStatus = {
+    get armed() { return range.armed; },
+    get busy() { return range.busy; },
+    get canArm() { return canHold(); },
+  };
+  const rack = new RifleRack(rangeStatus);
+  const rangeView = new RangeView();
+  const rifle = new HeldRifle();
+  if (!params.has('autostart')) {
+    scene.add(rack.root, rangeView.root);
+    world.pickables.push(rack.rack, rack.button);
+    world.targets.set(rack.rack, rack.rackTarget);
+    world.targets.set(rack.button, rack.buttonTarget);
+  }
   const ear = new Vector3();
   const wallsBetween = wallCounter(world.occluders); // walls and closed doors between a voice and the listener
   // How lit a visitor's figure is: its room's ceiling light and lamps, or the daylight
@@ -167,13 +186,13 @@ async function run(): Promise<void> {
     const size = renderer.getDrawingBufferSize(new Vector2()).multiplyScalar(CONFIG.mirrorScale).round();
     mirrorTarget.setSize(size.x, size.y);
   }
-  warmUpShaders(renderer, scene, camera, world.screens.map((s) => s.pictureMaterial), mirrorTarget ? [mirrorTarget] : [])
+  warmUpShaders(renderer, scene, camera, [...world.screens.map((s) => s.pictureMaterial), ...rangeView.warmMaterials(), ...rifle.materials], mirrorTarget ? [mirrorTarget] : [])
     .catch((err) => console.warn('Shader warm-up failed; shaders compile when first needed.', err));
   const names = new Map(assets.manifest.rooms.map((r) => [r.id, CONFIG.roomNames[r.id] ?? r.name]));
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
-  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; }, get draw() { return draw; }, drunk } }); // tuning from the console
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; }, get draw() { return draw; }, get range() { return range; }, drunk } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;
@@ -279,7 +298,7 @@ async function run(): Promise<void> {
   ui.onGuests(() => {
     if (started && !autostart) toggleGuests();
   });
-  const byKey = new Map([...world.targets.values()].flatMap((t) => (t.kind === 'seat' || t.kind === 'wine' ? [] : [[stateKey(t), t] as const])));
+  const byKey = new Map([...world.targets.values()].flatMap((t) => (isShared(t) ? [[stateKey(t), t] as const] : [])));
   const share = (t: Target | null) => {
     if (t) others?.broadcast(stateDelta(t, world.lights));
   };
@@ -436,6 +455,70 @@ async function run(): Promise<void> {
       youJoined: draw.joined, secret: draw.secret, choices: draw.choices, close: draw.close,
     }), draw.sketch.strokes, draw.sketch.version);
   };
+  /** The shooting range on the Varanda (range-*.ts): the rack and the button, the rifle in hand, the targets for
+   * everyone in the flat, and the round shared with whoever else holds a rifle. Not in reference views, as the
+   * games aren't. */
+  const range = new RangeGame(selfId, newId, undefined, undefined, nameOf);
+  const sendRange = (out: RangeOut[]) => {
+    for (const o of out) others?.sendRange(o.msg, o.to);
+  };
+  /** Whether this visitor may hold the rifle now: on the balcony, standing, awake. */
+  // The loose-objects merge adds `&& !holding.holding` here.
+  const canHold = () => currentRoom === CONFIG.range.room && !player.seat && !player.frozen;
+  /** Picks up the rifle or puts it back on the rack. */
+  const arm = (on: boolean) => {
+    if (on === range.armed) return;
+    sendRange(range.setArmed(on, cleanName(ui.getName()), performance.now()));
+    rifle.shown = on;
+    ui.setArmed(on);
+    sound?.click(rack.rack);
+  };
+  /** A click or tap on the rack picks up or puts back the rifle; on the button, starts a round. True when it was one
+   * of them, so nothing else takes the click. */
+  const useRange = (t: Target | null): boolean => {
+    if (t?.kind === 'rack') {
+      if (canHold()) arm(!range.armed);
+      return true;
+    }
+    if (t?.kind !== 'range-button') return false;
+    const out = range.start(performance.now());
+    if (out.length) {
+      sendRange(out);
+      sound?.click(rack.button);
+    }
+    return true;
+  };
+  /** A shot along the crosshair (the drunk wobble included), once the bolt has cycled: it kicks, it sounds, and the
+   * others hear it. */
+  let nextShot = 0;
+  const shotFrom = new Vector3();
+  const shotDir = new Vector3();
+  const fire = () => {
+    const now = performance.now();
+    if (!range.armed || player.frozen || paused || tvPanel.isOpen || boardPanel.isOpen || now < nextShot) return;
+    nextShot = now + CONFIG.range.cycle * 1000;
+    camera.getWorldPosition(shotFrom);
+    camera.getWorldDirection(shotDir);
+    sendRange(range.shoot([shotFrom.x, shotFrom.y, shotFrom.z], [shotDir.x, shotDir.y, shotDir.z], now));
+    rifle.fire();
+    sound?.shot(null);
+  };
+  ui.onFire(fire);
+  const otherShot = new Vector3();
+  /** From the frame loop (`now` in ms): off the balcony, sitting or blacked out the rifle goes back; the round's step,
+   * the targets, the rack and the rifle in hand, and the strip. */
+  const updateRange = (dt: number, now: number) => {
+    if (range.armed && !canHold()) arm(false);
+    range.update(now);
+    const events = range.takeEvents();
+    for (const e of events) if (e.kind === 'shot') sound?.shot(otherShot.fromArray(e.o));
+    const outside = avatarLight(CONFIG.range.middle, CONFIG.range.rail - CONFIG.range.near); // the open air: daylight only
+    rangeView.update(dt, range.round, range.roundTime(now), range.broken(), events, colourFor, outside);
+    const on = interactions.current?.kind;
+    rack.update(avatarLight(CONFIG.range.rack[0], CONFIG.range.rack[1]), on === 'rack' || on === 'range-button' ? on : null, range.busy);
+    rifle.update(dt, camera, avatarLight(player.x, player.z));
+    ui.setRange(started && !autostart ? rangeHud(range, now, selfId()) : null, colourFor);
+  };
   ui.setName(loadName(() => localStorage));
   ui.setVoice(loadVoice(() => localStorage));
   // TURN credentials, asked for while the visitor reads the start screen so joining doesn't wait on them
@@ -463,7 +546,12 @@ async function run(): Promise<void> {
         onGame: (g) => { games.receive(g); },
         games: () => games.messages(),
         onDraw: (m, from) => sendDraw(draw.receive(m, from, performance.now())),
-        onArrive: (id) => sendDraw(draw.greet(id)),
+        onRange: (m, from) => sendRange(range.receive(m, from, performance.now())),
+        onArrive: (id) => {
+          sendDraw(draw.greet(id));
+          sendRange(range.greet(id, visitors(), performance.now()));
+        },
+        onLeave: (id) => range.leave(id),
       }, joinedAt, arrived);
       if (voices) others.setVoice(voices);
       window.addEventListener('pagehide', () => others?.leave(), { once: true });
@@ -645,8 +733,11 @@ async function run(): Promise<void> {
     tap: (x, y) => {
       if (!started || paused || tvPanel.isOpen) return;
       const r = canvas.getBoundingClientRect();
-      const t = interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2));
+      const point = new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2);
+      if (range.armed) return void useRange(interactions.at(point)); // with the rifle in hand, only the rack and the button take a tap (Fire fires)
+      const t = interactions.tap(point);
       if (t?.kind === 'screen' && t.screen.isTv) return openTv();
+      if (useRange(t)) return;
       sitOn(t);
       drinkFrom(t);
       used(t);
@@ -690,8 +781,15 @@ async function run(): Promise<void> {
       return;
     }
     if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
+    if (range.armed) { // with the rifle in hand a click fires, except on the rack and the button
+      const t = interactions.current;
+      if (t?.kind === 'range-button' && range.busy) fire(); // the button mid-round is just a spot on the wall: shoot through it
+      else if (!useRange(t)) fire();
+      return;
+    }
     const t = interactions.click();
     if (t?.kind === 'screen' && t.screen.isTv) return openTv();
+    if (useRange(t)) return;
     sitOn(t);
     drinkFrom(t);
     used(t);
@@ -782,6 +880,7 @@ async function run(): Promise<void> {
     avatars.update(dt, avatarLight);
     updateGames(dt, now / 1000);
     updateDraw(now);
+    updateRange(dt, now);
     wine.update(dt, avatarLight(CONFIG.wine.at[0], CONFIG.wine.at[1]), interactions.current?.kind === 'wine');
     if (voices) {
       voices.update(dt, camera.getWorldPosition(ear), (id, out) => avatars.mouth(id, out), wallsBetween);
@@ -793,7 +892,8 @@ async function run(): Promise<void> {
     sound?.setRoom(currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');
     const target = started ? interactions.update() : null;
-    ui.setPrompt(boardPanel.isOpen || tvPanel.isOpen ? null : target ? promptFor(target, world.lights, touch ? 'Tap' : 'Click') : player.seat && started ? COPY.stand : null);
+    const prompted = range.armed && target?.kind !== 'rack' && target?.kind !== 'range-button' ? null : target; // with the rifle, a click fires
+    ui.setPrompt(boardPanel.isOpen || tvPanel.isOpen ? null : prompted ? promptFor(prompted, world.lights, touch ? 'Tap' : 'Click') : player.seat && started ? COPY.stand : null);
     ui.setSitting(player.seat !== null);
     ui.setRoomLight(currentRoom && world.lights.has(currentRoom) ? world.lights.isOn(currentRoom) : null);
     ui.setScenes(activeScene(world.lights, sceneGroups(currentRoom)));
@@ -820,6 +920,10 @@ async function run(): Promise<void> {
     surroundings.render(renderer, camera);
     renderer.clearDepth();
     renderer.render(scene, camera);
+    if (rifle.shown) { // the rifle in hand over everything, so it never sinks into the railing
+      renderer.clearDepth();
+      renderer.render(rifle.scene, camera);
+    }
   });
 }
 
