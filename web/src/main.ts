@@ -17,6 +17,7 @@ import { applyMovable } from './movables';
 import { Avatars, figureLight } from './avatars';
 import { Multiplayer, trysteroRoom } from './multiplayer';
 import { guestList } from './guests';
+import { BackgammonBoard } from './backgammon-board';
 import { BoardPanel, GAME_COPY, type PanelBoard } from './board-panel';
 import { ChessBoard } from './chess-board';
 import { endOf, gameChairs, type GameKind, Games, otherSide, seatedAt, type Side, slotOf, SLOTS } from './games';
@@ -159,7 +160,7 @@ async function run(): Promise<void> {
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
-  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; } } }); // tuning from the console
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; } } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;
@@ -266,6 +267,7 @@ async function run(): Promise<void> {
   /** Each game's board in the panel; each plays its entries at its own slot. */
   const boards: Partial<Record<GameKind, PanelBoard>> = {
     chess: new ChessBoard(document, (entry) => playEntry(slotOf('chess'), entry)),
+    backgammon: new BackgammonBoard(document, (entry) => playEntry(slotOf('backgammon'), entry)),
   };
   /** Where this visitor plays while the panel is open: the slot and the side. */
   let atBoard: { slot: number; side: Side } | null = null;

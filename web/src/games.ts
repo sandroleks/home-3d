@@ -1,3 +1,4 @@
+import { BackgammonGame } from './backgammon-game';
 import { ChessGame } from './chess-game';
 import { CONFIG } from './config';
 import type { Seat } from './seats';
@@ -66,7 +67,10 @@ export function endText(end: GameEnd): string {
 }
 
 /** The games built so far; a slot whose kind has no rules here is just a table place. */
-export const RULES: Partial<Record<GameKind, () => GameRules>> = { chess: () => new ChessGame() };
+export const RULES: Partial<Record<GameKind, () => GameRules>> = {
+  chess: () => new ChessGame(),
+  backgammon: () => new BackgammonGame(),
+};
 
 /** A game replayed from its entries; null when the kind has no rules or an entry isn't legal. */
 export function replay(kind: GameKind, moves: readonly string[], rules = RULES): GameRules | null {
