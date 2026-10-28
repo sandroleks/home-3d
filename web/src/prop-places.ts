@@ -9,7 +9,7 @@ export interface Level { min: [number, number, number]; max: [number, number, nu
 /** A drawer or cupboard whose things are loose (blender/tools/loose_contents.py writes them): `node` is the drawer they
  * ride with (null: a cupboard's, in the room), `front` the movable that opens it, `out` the way it faces. */
 export interface PropFrame { source: string; fill: Fill; node: string | null; front: string; out: [number, number, number]; levels: Level[] }
-/** One object in a level: `a` across from its left edge (facing it), `b` in from the front, `c` up from the floor (m);
+/** One object in a level: `a` across from the edge `levelFrame` starts at (its right, facing it), `b` in from the front, `c` up from the floor (m);
  * `yaw` about up (0: its length runs inward); `on`: the slot it lies on, by its index in the level's list. */
 export interface Slot { kind: PropKind; variant?: number; a: number; b: number; c?: number; yaw?: number; on?: number }
 /** An object at home: its world pose with the drawers shut, the drawer node it rides with (null: the room), and what it
@@ -77,7 +77,7 @@ export const LAYOUTS: Record<Fill, (w: number, d: number, h: number, level: numb
     : level === 1 ? glasses(w, h) : []),
 };
 
-/** A level's front left corner (facing it), at its floor, and its axes: across to the right, and inward. */
+/** A level's front corner at its floor, on the right as you face it, and its axes: `across` (toward your left) and `inward`. */
 export function levelFrame(out: [number, number, number], level: Level) {
   const o = new Vector3(...out);
   const inward = o.clone().negate();
@@ -118,7 +118,7 @@ export function placesFor(fronts: Set<string>, frames: PropFrame[] = FRAMES): Pl
       const ids: (string | null)[] = [];
       for (const s of LAYOUTS[f.fill](fr.w, fr.d, fr.h, li, f.levels.length)) {
         const on = s.on === undefined ? null : ids[s.on];
-        if (!fits(s, fr.w, fr.d, fr.h) || on === undefined || (s.on !== undefined && on === null)) {
+        if (!fits(s, fr.w, fr.d, fr.h) || (s.on !== undefined && !on)) {
           ids.push(null);
           continue;
         }

@@ -60,6 +60,18 @@ describe('prop places', () => {
     expect(drawerHeights(new Set(['Move_test-drawer']), [drawer]).get('Move_test-drawer')).toBeCloseTo(0.1);
   });
 
+  it('leaves out a stack whose base does not fit', () => {
+    // 0.2 deep, 0.3 wide: a plate's 0.27 length can't fit along the depth, so the stack's base is left out
+    const shallow: PropFrame = {
+      source: 'Shallow drawer', fill: 'plates', node: 'Move_shallow', front: 'Move_shallow', out: [1, 0, 0],
+      levels: [{ min: [0, 0.7, 0], max: [0.2, 0.9, 0.3] }],
+    };
+    const placed = placesFor(new Set(['Move_shallow']), [shallow]);
+    expect(placed).toEqual([]);
+    const ids = new Set(placed.map((p) => p.id));
+    for (const p of placed) if (p.on) expect(ids.has(p.on)).toBe(true);
+  });
+
   it('slugs like the export', () => {
     expect(slug('Island front 00')).toBe('island-front-00');
     expect(slug('Front S1 pull-out')).toBe('front-s1-pull-out');
