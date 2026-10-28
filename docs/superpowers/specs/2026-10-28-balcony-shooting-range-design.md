@@ -58,7 +58,8 @@ Not in this: a scope or zoom, bullet drop, your animal holding a rifle, ammo lim
 ## Sharing
 
 - A new message kind, **`range`**. Older visitors ignore it: no targets, no tracers.
-- **`start`**: the round id (random), the seed and the time left until the round ends. Times are sent as time left, as draw and guess does, so no clocks need to agree; each browser turns it into its own clock. A browser accepts a start when no round is running; if two starts cross (both pressed at once), every browser keeps the one with the lower round id, so all settle on the same round.
+- **`arm`**: this visitor picked up a rifle or put it back, with their name, so the board can list shooters still on 0 (and keep their names after they leave). Sent on each change and to each newcomer.
+- **`start`**: the round id (random), the seed, the time left until the round ends, the shooters in it, and the claims so far (none for a fresh start; a newcomer's catch-up carries them). Times are sent as time left, as draw and guess does, so no clocks need to agree; each browser turns it into its own clock. A browser accepts a start when no round is running; if two starts cross (both pressed at once), every browser keeps the one with the lower round id, so all settle on the same round.
 - **`shot`**: the round id, the shooter's round time, where the shot came from, its direction, and the target it hit (its index in the schedule), or none. Sent for misses too, for the tracer.
 - **A newcomer**, or a visitor whose tab was hidden, gets the running round and its claims from the earliest-arrived visitor who knows it (the party host's rule, `guests.ts`), as the draw game's leader does.
 - A shooter who leaves keeps their score; their claims still count.
@@ -73,7 +74,7 @@ Small pure modules, testable without a scene, and the 3D parts apart from them:
 - `src/range-game.ts`: the round's state (countdown, running, final scores), starts and shots in and out, checking messages (`isRangeMessage`), catching up a newcomer.
 - `src/range-rack.ts`: the rack, the button and the held rifle (its kick and flash), and their targets for the crosshair.
 - `src/range-view.ts`: drawing the targets in flight, the shards, the floating points and the tracers.
-- The top strip in the existing HUD (`ui.ts`, `style.css`); the Fire button with the touch controls (`touch.ts`); the shot sound in `sound.ts`; wiring in `main.ts` and `interactions.ts` (new target kinds `rack` and `range-button`); `CONFIG.range` in `config.ts`.
+- The top strip and the touch Fire button in the existing HUD (`ui.ts`, `index.html`, `style.css`); the shot sound in `sound.ts`; wiring in `main.ts` and `interactions.ts` (new target kinds `rack` and `range-button`); `CONFIG.range` in `config.ts`.
 - The README: the controls, the touch controls, and a short Shooting range section.
 
 ## Testing
