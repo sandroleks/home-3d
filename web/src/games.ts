@@ -12,6 +12,7 @@ export const otherSide = (s: Side): Side => (s === 'white' ? 'black' : 'white');
 
 export const END_REASONS = [
   'checkmate', 'stalemate', 'repetition', 'fifty', 'material', 'agreement', 'resigned', 'left', 'single', 'gammon', 'backgammon',
+  'score',
 ] as const;
 export type EndReason = (typeof END_REASONS)[number];
 /** How a game ended: who won (null: a draw, or both players gone) and why. A type, not an interface, so it can be
@@ -35,6 +36,9 @@ export interface GameRules {
   drawOffer?(): Side | null;
   /** Games with check: the side to move is in check. */
   inCheck?(): boolean;
+  /** Games whose result says more than `endText` can (Go: "White wins by 7"), worked out here from the entries; null
+   * while the game runs or when its end has nothing to add. */
+  resultText?(): string | null;
 }
 
 /** The table's three places, by slot number: the chairs `Dining chair N<slot>` and `S<slot>`. */
@@ -50,9 +54,10 @@ export const slotOf = (kind: GameKind): number => SLOTS.findIndex((s) => s.kind 
 const SIDE_NAME: Record<Side, string> = { white: 'White', black: 'Black' };
 const DRAWN: Partial<Record<EndReason, string>> = {
   stalemate: 'stalemate', repetition: 'threefold repetition', fifty: '50-move rule', material: 'insufficient material', agreement: 'agreed',
+  score: 'equal score',
 };
-/** Wins whose reason reads differently from its name (backgammon's single game). */
-const WON: Partial<Record<EndReason, string>> = { single: 'single game' };
+/** Wins whose reason reads differently from its name (backgammon's single game, Go's count). */
+const WON: Partial<Record<EndReason, string>> = { single: 'single game', score: 'on points' };
 
 /** The result line: "White wins: checkmate", "Black wins: White left the table", "White wins: gammon",
  * "Draw: stalemate". */

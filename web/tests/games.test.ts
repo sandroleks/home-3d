@@ -23,6 +23,10 @@ describe('endText', () => {
     expect(endText({ winner: 'black', reason: 'gammon' })).toBe('Black wins: gammon');
     expect(endText({ winner: 'white', reason: 'backgammon' })).toBe('White wins: backgammon');
   });
+  it("names Go's count, a win or an equal score", () => {
+    expect(endText({ winner: 'black', reason: 'score' })).toBe('Black wins: on points');
+    expect(endText({ winner: null, reason: 'score' })).toBe('Draw: equal score');
+  });
 });
 
 const chair = (name: string, x: number, z: number): Seat => ({
@@ -61,6 +65,7 @@ describe('game messages', () => {
     expect(isGameMessage({ ...ok, end: { winner: 'black', reason: 'left' } })).toBe(true);
     expect(isGameMessage({ ...ok, end: { winner: null, reason: 'agreement' } })).toBe(true);
     expect(isGameMessage({ ...ok, end: { winner: 'black', reason: 'backgammon' } })).toBe(true);
+    expect(isGameMessage({ ...ok, end: { winner: null, reason: 'score' } })).toBe(true);
   });
   it('drops junk', () => {
     expect(isGameMessage(null)).toBe(false);

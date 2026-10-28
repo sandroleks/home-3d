@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { type BoardView, panelState, type PanelInput } from '../src/board-panel';
 import { cellSquare, drawAction, GLYPHS, squareCell } from '../src/chess-board';
 import { ChessGame } from '../src/chess-game';
+import type { GameRules } from '../src/games';
 
 const chess = (...moves: string[]) => {
   const g = new ChessGame();
@@ -27,6 +28,16 @@ describe('panelState', () => {
   });
   it("says when the other side offers a draw", () => {
     expect(panelState(input({ you: 'black', game: chess('e2e4', 'e7e5', 'draw?', 'g1f3') })).status).toBe('Rui offers a draw');
+  });
+  it("shows a game's own result line when its rules ended it, but not a leave", () => {
+    const scored: GameRules = {
+      kind: 'go', moves: ['pass', 'pass'], turn: () => 'black', play: () => false,
+      end: () => ({ winner: 'white', reason: 'score' }), resultText: () => 'White wins by 7',
+    };
+    expect(panelState(input({ game: scored, end: scored.end() })).status).toBe('White wins by 7');
+    const running: GameRules = { ...scored, moves: [], end: () => null, resultText: () => null };
+    expect(panelState(input({ game: running, end: { winner: 'white', reason: 'left' } })).status).toBe('White wins: Black left the table');
+    expect(panelState(input({ game: { ...scored, resultText: undefined }, end: scored.end() })).status).toBe('White wins: on points');
   });
   it('shows how it ended, with nothing left to press', () => {
     const g = chess('f2f3', 'e7e5', 'g2g4', 'd8h4');
