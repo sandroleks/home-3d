@@ -295,6 +295,28 @@ describe('Props', () => {
     expect(Math.abs(new Box3().setFromObject(m.root).min.y)).toBeLessThan(0.005);
   });
 
+  it('sends home what lands in an open drawer too low for it, and keeps what fits', () => {
+    const fall = (kind: 'tumbler' | 'mug', height: number, from = 1) => {
+      const { props, world: w, drawer } = setup([placed('x/0', { kind })]);
+      w.raycast = planesRaycast([floor(0, undefined, drawer)]); // the floor is the drawer's
+      w.drawerHeight = (node) => (node === drawer ? height : null);
+      const [p] = props.list;
+      props.pickUp(p);
+      props.drop(new Vector3(0, from, 0));
+      let sent: PropMessage[] = [];
+      for (let i = 0; i < 600 && !sent.length; i++) sent = props.update(1 / 60);
+      return { p, sent, drawer };
+    };
+    const low = fall('tumbler', 0.05);
+    expect(low.sent[0]).toMatchObject({ s: 'home', n: 3 });
+    expect(low.p.atHome).toBe(true);
+    const tall = fall('tumbler', 0.2);
+    expect(tall.sent[0]).toMatchObject({ s: 'rest', parent: 'Move_drawer' });
+    expect(tall.p.root.parent).toBe(tall.drawer);
+    const tipped = fall('mug', 0.092, 3); // lands on its side: 0.09 high, not 0.095
+    expect(tipped.sent[0]).toMatchObject({ s: 'rest', parent: 'Move_drawer' });
+  });
+
   it('unlinks a stack when its top leaves and its bottom is taken', () => {
     const { props } = setup([placed('p/plate/0', { kind: 'plate' }), placed('p/plate/1', { kind: 'plate', position: new Vector3(0, 0.92, 0), on: 'p/plate/0' })]);
     const [bottom, top] = props.list;

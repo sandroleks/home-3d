@@ -42,6 +42,8 @@ export interface PropWorld {
   node: (name: string) => Object3D | null;
   /** The drawer node a mesh is part of, if any. */
   drawerOf: (o: Object3D) => Object3D | null;
+  /** How tall a thing may be inside a drawer (null: not known). */
+  drawerHeight?: (node: Object3D) => number | null;
   raycast: Raycast;
   /** How lit a spot is, 0..1. */
   light: (x: number, z: number) => number;
@@ -211,11 +213,11 @@ export class Props {
         if (step.kind === 'flying') this.poseFlight(p);
         else {
           const mine = p.holder === me;
-          if (step.kind === 'rest') this.land(p, step);
-          else this.goHome(p);
+          const home = step.kind !== 'rest' || !this.land(p, step);
+          if (home) this.goHome(p);
           if (mine) {
             this.bump(p, me);
-            out.push(this.made(p, step.kind === 'rest' ? this.restMessage(p) : { id: p.id, n: p.n, by: p.by, s: 'home' }));
+            out.push(this.made(p, home ? { id: p.id, n: p.n, by: p.by, s: 'home' } : this.restMessage(p)));
           }
         }
       }
@@ -343,15 +345,19 @@ export class Props {
     setWorldPose(p.root, pos, f.quaternion);
   }
 
-  private land(p: Prop, l: Landing): void {
-    const parent = this.world.drawerOf(l.support) ?? this.world.root;
+  /** Rests where a flight came down; false when that's in a drawer too low for it (it would stick out of it shut). */
+  private land(p: Prop, l: Landing): boolean {
+    const drawer = this.world.drawerOf(l.support);
+    const room = drawer && this.world.drawerHeight?.(drawer);
+    if (typeof room === 'number' && room < p.info.size[l.tipped ? 2 : 1]) return false;
     const q = upright(l.yaw);
     const point = l.point.clone();
     if (l.tipped) { // on its side, along its heading
       q.multiply(new Quaternion().setFromAxisAngle(SIDE, Math.PI / 2));
       point.addScaledVector(UP, p.info.size[2] / 2);
     }
-    this.restAt(p, parent, point, q);
+    this.restAt(p, drawer ?? this.world.root, point, q);
+    return true;
   }
 
   private restAt(p: Prop, parent: Object3D, point: Vector3, q: Quaternion): void {

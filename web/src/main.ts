@@ -145,7 +145,7 @@ async function run(): Promise<void> {
   // The loose things in the drawers and cupboards (props.ts): built now, so the warm-up compiles them and the crosshair
   // finds them; held and flying ones are drawn on their own layer, which the crosshair leaves out.
   const solidRay = meshRaycast(world.solids);
-  const movableNodes = new Set(world.movables.map((m) => m.node));
+  const movableNodes = new Set(world.movables.filter((m) => m.state.info.kind === 'slide').map((m) => m.node)); // not doors or the platter
   const drawerOf = (o: Object3D): Object3D | null => {
     for (let p: Object3D | null = o; p; p = p.parent) if (movableNodes.has(p)) return p;
     return null;
@@ -157,6 +157,7 @@ async function run(): Promise<void> {
     root: world.root,
     node: (name) => world.root.getObjectByName(name) ?? null,
     drawerOf,
+    drawerHeight: (node) => heights.get(node.name) ?? null,
     raycast: solidRay,
     light: avatarLight,
     selfId: () => selfId(),
