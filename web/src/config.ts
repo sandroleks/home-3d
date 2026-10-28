@@ -189,6 +189,13 @@ export const CONFIG = {
       nod: 0.06,
     },
   },
+  /** The games on the dining table (games.ts): chess at N0/S0, backgammon at N1/S1, Go at N2/S2; the S chair plays white. */
+  games: {
+    /** A visitor is in a game chair when seated within this many metres of its spot (poses are sent to the mm). */
+    chairRadius: 0.05,
+    /** Seconds a game sent by another visitor waits for its two players to show in their chairs here. */
+    pendingFor: 5,
+  },
   /** The office's Nanoleaf panels (nanoleaf.ts): a gradient between two hues (0..1: teal to magenta, through blue)
    * drifting across the panels, `speed` radians a second, `spread` radians a metre along the wall. `glow` scales the
    * panels' baked glow so the colours stay deep instead of clipping to white. */
