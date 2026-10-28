@@ -91,6 +91,8 @@ export class Prop {
   constructor(readonly place: PlacedProp, matcaps: Matcaps) {
     this.info = KINDS[place.kind];
     this.root.name = `Prop_${place.id}`;
+    // Loose things are never solid to flights and placement rays; placement keeps them apart with `overlaps`.
+    this.root.userData.loose = true;
     for (const part of this.info.parts(place.variant)) {
       const base = new Color(part.look.colour);
       const see = part.look.opacity !== undefined;

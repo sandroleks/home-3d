@@ -139,4 +139,17 @@ describe('meshRaycast', () => {
     expect(down(2)!.point.y).toBeCloseTo(0.1, 5);
     expect(down(0)).toBeNull();
   });
+
+  it('never hits a loose thing, but hits the solid behind it', () => {
+    const loose = new Group();
+    loose.userData.loose = true;
+    loose.add(new Mesh(new BoxGeometry(0.2, 0.2, 0.2), new MeshBasicMaterial()));
+    const solid = new Mesh(new BoxGeometry(2, 0.1, 2), new MeshBasicMaterial());
+    solid.position.y = -1;
+    const root = new Group();
+    root.add(loose, solid);
+    root.updateMatrixWorld(true);
+    const hit = meshRaycast([root])(new Vector3(0, 1, 0), new Vector3(0, -2, 0));
+    expect(hit!.object).toBe(solid);
+  });
 });

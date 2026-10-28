@@ -26,6 +26,12 @@ const nm = new Matrix3();
 
 const PAD = 1e-3;
 
+/** Whether a node is, or sits under, a loose prop (`userData.loose`): those are never solid to the rays. */
+function isLoose(n: Object3D | null): boolean {
+  for (; n; n = n.parent) if (n.userData.loose) return true;
+  return false;
+}
+
 /** A mesh with its world bounding box, and the matrix the box was worked out from (so a moved mesh gets a fresh one). */
 interface Boxed { mesh: Mesh; box: Box3; from: number[]; valid: boolean }
 
@@ -42,8 +48,9 @@ export function meshRaycast(objects: Object3D[]): Raycast {
 
   const flatten = (): Boxed[] => {
     const all: Boxed[] = [];
+    // Safe as a snapshot: the solids' meshes are fixed at load, and loose things (which come and go from drawers) are skipped.
     for (const o of objects) o.traverse((n) => {
-      if ((n as Mesh).isMesh) all.push({ mesh: n as Mesh, box: new Box3(), from: [], valid: false });
+      if ((n as Mesh).isMesh && !isLoose(n)) all.push({ mesh: n as Mesh, box: new Box3(), from: [], valid: false });
     });
     return all;
   };
