@@ -12,7 +12,8 @@ const EYE: Vec3 = [1.7, 1.6, -8.6];
  */
 function party(...ids: string[]) {
   let now = 1000;
-  const browsers = ids.map((id, i) => ({ id, arrived: i + 1, game: new RangeGame(() => id, () => `${id}-round`, () => 0.5) }));
+  const names: Record<string, string> = { ana: 'Ana', bo: 'Bo', cy: 'Cy' };
+  const browsers = ids.map((id, i) => ({ id, arrived: i + 1, game: new RangeGame(() => id, () => `${id}-round`, () => 0.5, cfg, (who) => names[who] ?? 'Someone') }));
   const here = new Set(ids);
   const by = (id: string) => browsers.find((b) => b.id === id)!.game;
   const deliver = (from: string, outs: RangeOut[]) => {
@@ -238,6 +239,25 @@ describe('converging when messages cross', () => {
     expect(p.by('ana').round).toBeNull();
     p.by('ana').start(p.now);
     expect(p.by('ana').standings().map((s) => s.id)).toEqual(['ana']);
+  });
+
+  it('lists a shooter back, under their name, from a hit after a timeout dropped them', () => {
+    const p = party('ana', 'bo', 'cy');
+    p.deliver('ana', p.by('ana').setArmed(true, 'Ana', p.now));
+    p.deliver('bo', p.by('bo').setArmed(true, 'Bo', p.now));
+    p.deliver('ana', p.by('ana').start(p.now));
+    toFirstTarget(p, 'ana');
+    p.by('ana').leave('bo'); // pruned while Bo's tab was hidden; Bo never re-sends their arm
+    const { o, d } = aimAt(p.by('bo'), 0, p.now);
+    p.deliver('bo', p.by('bo').shoot(o, d, p.now));
+    expect(p.by('ana').standings().find((s) => s.id === 'bo')).toMatchObject({ name: 'Bo' });
+    expect(p.by('ana').standings().find((s) => s.id === 'bo')!.score).toBeGreaterThan(0);
+    p.advance((cfg.countdown + cfg.length + cfg.end) * 1000 + 1);
+    p.by('cy').leave('bo'); // Cy never learned of Bo either, so only Ana's own list can carry Bo into Cy's round
+    p.deliver('cy', p.by('cy').setArmed(true, 'Cy', p.now));
+    p.deliver('cy', p.by('cy').start(p.now)); // someone else starts the next round: Bo is in it
+    expect(p.by('ana').standings().map((s) => s.id).sort()).toEqual(['ana', 'bo', 'cy']);
+    expect(p.by('ana').standings().find((s) => s.id === 'bo')!.name).toBe('Bo');
   });
 
   it('replays a hit that came before the round it belongs to', () => {

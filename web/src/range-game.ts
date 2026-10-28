@@ -80,7 +80,11 @@ export class RangeGame {
   /** Hits on rounds this browser doesn't hold yet, kept (at most `pending`, oldest dropped) until the round arrives. */
   private pending: { msg: Extract<RangeMessage, { k: 'shot' }>; from: string }[] = [];
 
-  constructor(private selfId: () => string, private newId: () => string, private rand: () => number = Math.random, private config = CONFIG.range) {}
+  /** `nameOf` is the name a visitor goes by, for a shooter heard of only from their shot (see `learn`). */
+  constructor(
+    private selfId: () => string, private newId: () => string, private rand: () => number = Math.random, private config = CONFIG.range,
+    private nameOf: (id: string) => string = () => CONFIG.multiplayer.defaultName,
+  ) {}
 
   /** This visitor holds a rifle. */
   get armed(): boolean {
@@ -244,8 +248,15 @@ export class RangeGame {
     const r = this.round;
     const f = r && msg.hit >= 0 ? r.flights[msg.hit] : undefined;
     if (!r || !f || !flightAt(f, msg.t, this.config)) return;
-    if (!r.players.has(from)) r.players.set(from, this.others.get(from) ?? CONFIG.multiplayer.defaultName);
+    this.learn(from);
+    if (!r.players.has(from)) r.players.set(from, this.others.get(from)!);
     this.addClaim({ target: f.i, t: msg.t, by: from }, show);
+  }
+
+  /** A hit shot is proof its sender holds a rifle: one pruned after a timeout (`leave`) and now back never re-sends
+   * their `arm`, so they're listed again here, under the name `nameOf` gives. */
+  private learn(id: string): void {
+    if (id !== this.selfId() && !this.others.has(id)) this.others.set(id, this.nameOf(id));
   }
 
   private startMessage(now: number): RangeMessage {

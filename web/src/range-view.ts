@@ -1,6 +1,6 @@
 import {
   BoxGeometry, BufferGeometry, CanvasTexture, CylinderGeometry, Float32BufferAttribute, Group, Line, LineBasicMaterial,
-  Mesh, type MeshMatcapMaterial, type Object3D, Sprite, SpriteMaterial, SRGBColorSpace, Vector3,
+  type Material, Mesh, type MeshMatcapMaterial, type Object3D, Sprite, SpriteMaterial, SRGBColorSpace, Vector3,
 } from 'three';
 import { CONFIG } from './config';
 import { makeMatcaps } from './creatures';
@@ -33,6 +33,7 @@ export class RangeView {
   private floats: Float[] = [];
   private tracers: Tracer[] = [];
   private labels = new Map<number, CanvasTexture | null>();
+  private warm: Material[] | null = null;
 
   constructor(private canvas: CanvasFactory | null = typeof document === 'undefined' ? null : domCanvas) {
     const c = CONFIG.range.colours;
@@ -54,6 +55,16 @@ export class RangeView {
       arm: new BoxGeometry(d * 0.5, 0.02, 0.03),
       rotor: new CylinderGeometry(d * 0.18, d * 0.18, 0.01, 16),
     };
+  }
+
+  /** A sprite and a line material, as the points and the tracers use them, for the shader warm-up to compile before
+   * the first hit or shot (main.ts); built once. */
+  warmMaterials(): Material[] {
+    this.warm ??= [
+      new SpriteMaterial({ map: this.labelFor(CONFIG.range.kinds.clay.points), transparent: true, depthTest: false }),
+      new LineBasicMaterial({ color: CONFIG.range.colours.tracer, transparent: true, opacity: 0.8 }),
+    ];
+    return this.warm;
   }
 
   get shardCount(): number {
@@ -85,7 +96,6 @@ export class RangeView {
       o.visible = p !== null;
       if (!p) return;
       o.position.set(p[0], p[1], p[2]);
-      if (f.kind !== 'drone') o.rotation.y = 12 * (t - f.at) + f.phase; // a clay spins as it flies
     });
     for (const e of events) {
       if (e.kind === 'shot') this.addTracer(e.o, e.d);
@@ -109,12 +119,15 @@ export class RangeView {
     this.shown = round?.id ?? '';
   }
 
-  /** A clay or gold clay: a shallow disc, tilted as it flies. A drone: a body with four rotors. */
+  /** A clay or gold clay: a shallow disc, its face turned toward the balcony. A drone: a body with four rotors. */
   private makeTarget(kind: TargetKind): Object3D {
     const g = new Group();
     if (kind !== 'drone') {
       const disc = new Mesh(kind === 'gold' ? this.geo.gold : this.geo.clay, this.looks[kind]);
-      disc.rotation.x = 0.35;
+      // A fixed tilt on the group, not a spin: the face (the disc's +y) leans toward +z, where the balcony is, so every
+      // target shows its face to the shooter for the whole flight. Spinning a disc about its own axis would look the
+      // same anyway, and turning it about the vertical made it go edge-on twice a turn.
+      g.rotation.x = 1.0;
       g.add(disc);
       return g;
     }
@@ -145,12 +158,16 @@ export class RangeView {
 
   /** "+10" (or 30, 50) in white, tinted with the shooter's colour; one texture per value. */
   private addFloat(at: readonly number[], points: number, colour: string): void {
-    if (!this.labels.has(points)) this.labels.set(points, this.label(`+${points}`));
-    const sprite = new Sprite(new SpriteMaterial({ map: this.labels.get(points) ?? null, color: colour, transparent: true, depthTest: false }));
+    const sprite = new Sprite(new SpriteMaterial({ map: this.labelFor(points), color: colour, transparent: true, depthTest: false }));
     sprite.position.set(at[0], at[1] + 0.4, at[2]);
     sprite.scale.set(2.4, 1.2, 1);
     this.root.add(sprite);
     this.floats.push({ sprite, age: 0 });
+  }
+
+  private labelFor(points: number): CanvasTexture | null {
+    if (!this.labels.has(points)) this.labels.set(points, this.label(`+${points}`));
+    return this.labels.get(points) ?? null;
   }
 
   private label(text: string): CanvasTexture | null {

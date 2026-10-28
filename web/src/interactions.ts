@@ -21,9 +21,9 @@ export type Target =
   | { kind: 'rack'; range: RangeStatus; node: Object3D }
   | { kind: 'range-button'; range: RangeStatus; node: Object3D };
 
-/** What the rack's and the button's prompts need: whether this visitor holds a rifle, and whether a round is on
- * (range-game.ts). */
-export interface RangeStatus { readonly armed: boolean; readonly busy: boolean }
+/** What the rack's and the button's prompts need: whether this visitor holds a rifle, whether a round is on
+ * (range-game.ts), and whether they may pick one up where they stand (main.ts knows the room and the seat). */
+export interface RangeStatus { readonly armed: boolean; readonly busy: boolean; readonly canArm: boolean }
 
 /** The seat at a point where the crosshair meets the room, if any. */
 export type SeatFinder = (point: Vector3) => Target | null;
@@ -46,7 +46,9 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
     case 'lamp': return `${verb}: turn ${lampName(t.name)} ${lights.isOn(t.group) ? 'off' : 'on'}`;
     case 'seat': return t.spot ? `${verb}: ${t.seat.pose === 'lie' ? 'lie down' : 'sit down'}` : 'Someone is here';
     case 'wine': return `${verb}: drink some wine`;
-    case 'rack': return `${verb}: ${t.range.armed ? 'put the rifle back' : 'pick up the rifle'}`;
+    case 'rack':
+      if (!t.range.armed && !t.range.canArm) return 'Step onto the balcony to pick up the rifle'; // seen through the glass door, or sitting
+      return `${verb}: ${t.range.armed ? 'put the rifle back' : 'pick up the rifle'}`;
     case 'range-button': return t.range.busy ? 'A round is on' : t.range.armed ? `${verb}: start a round` : 'Pick up a rifle to play';
     case 'screen': {
       const s = t.screen;

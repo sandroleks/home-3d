@@ -1,4 +1,4 @@
-import { BoxGeometry, type Camera, Color, CylinderGeometry, Group, Mesh, MeshBasicMaterial, Scene, SphereGeometry } from 'three';
+import { BoxGeometry, type Camera, Color, CylinderGeometry, Group, type Material, Mesh, MeshBasicMaterial, Scene, SphereGeometry } from 'three';
 import { CONFIG } from './config';
 import { makeMatcaps } from './creatures';
 import type { RangeStatus, Target } from './interactions';
@@ -110,13 +110,13 @@ export class HeldRifle {
   private holder = new Group();
   private gun: Group;
   private flash: Mesh;
-  private materials: TableMaterials;
+  private tableMaterials: TableMaterials;
   private kick = 1;
 
   constructor(canvas: CanvasFactory | null = defaultCanvas()) {
     const cfg = CONFIG.range;
-    this.materials = new TableMaterials(makeMatcaps(canvas));
-    this.gun = makeRifle(this.materials);
+    this.tableMaterials = new TableMaterials(makeMatcaps(canvas));
+    this.gun = makeRifle(this.tableMaterials);
     this.gun.position.set(...cfg.hold);
     this.gun.rotation.set(0.03, 0.04, 0); // the muzzle turned a little in, toward the crosshair
     this.flash = new Mesh(new SphereGeometry(0.035, 10, 8), new MeshBasicMaterial({ color: cfg.colours.flash, transparent: true, opacity: 0.9, depthWrite: false }));
@@ -126,6 +126,11 @@ export class HeldRifle {
     this.holder.add(this.gun);
     this.holder.visible = false;
     this.scene.add(this.holder);
+  }
+
+  /** Every material the rifle in hand uses, for the shader warm-up (its scene isn't the flat's). */
+  get materials(): Material[] {
+    return [...this.tableMaterials.all, this.flash.material as Material];
   }
 
   get shown(): boolean {
@@ -154,6 +159,6 @@ export class HeldRifle {
     this.gun.position.z = cfg.hold[2] + 0.07 * k;
     this.gun.rotation.x = 0.03 + 0.2 * k;
     this.flash.visible = this.kick < 0.25;
-    this.materials.setLight(light);
+    this.tableMaterials.setLight(light);
   }
 }

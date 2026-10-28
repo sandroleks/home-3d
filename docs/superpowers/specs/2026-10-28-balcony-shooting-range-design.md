@@ -30,7 +30,7 @@ Not in this: a scope or zoom, bullet drop, your animal holding a rifle, ammo lim
 
 - They fly beyond the railing, 12–30 m away and from balcony height up to about 15 m above it, in open air: nothing in the neighbourhood blocks a shot or hides a target.
 - Three kinds:
-  - **Clay pigeon:** an orange disc, spinning, 10 points. Most of the targets.
+  - **Clay pigeon:** an orange disc, tilted to face the balcony, 10 points. Most of the targets.
   - **Gold clay:** smaller and faster, on a flatter arc, 30 points. About one in eight.
   - **Drone:** a little quadcopter that zig-zags across rather than arcing, slower but erratic, 50 points. Two or three a round.
 - Clays launch from below the railing line or from the sides and fly a gravity arc for 2.5–4 s, then fall away out of sight. Drones cross from one side to the other in 5–7 s.
@@ -65,6 +65,13 @@ Not in this: a scope or zoom, bullet drop, your animal holding a rifle, ammo lim
 - A newcomer may hear a hit for a round it hasn't heard of yet (the catch-up arrives after it); it keeps up to `pending` such hits and replays them, without a shatter, when the round arrives.
 - A shooter who leaves keeps their score; their claims still count.
 - Clock skew between browsers is the network delay (tens of milliseconds), which only matters for two shots at one clay; fine.
+
+### Known limits
+
+- Two starts pressed almost exactly `crossing` ms apart can split browsers (some keep one round, some the other) by about the network delay.
+- Three or more unseen presses within a few seconds may settle differently in different browsers.
+- Hits sent for a round that lost a crossing stay in the bounded pending buffer until newer ones push them out.
+- A shooter who returns after a timeout (their tab was hidden for over 15 s, so the others dropped them) is only listed as holding a rifle again from their next hit; their `arm` isn't re-sent.
 
 ## Code
 

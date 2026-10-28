@@ -5,7 +5,7 @@ import { HeldRifle, RifleRack } from '../src/range-rack';
 
 describe('the rack and the button', () => {
   it('stand where the config says, and are the targets for the crosshair', () => {
-    const range = { armed: false, busy: false };
+    const range = { armed: false, busy: false, canArm: true };
     const r = new RifleRack(range, null);
     expect(r.rack.position.toArray()).toEqual([CONFIG.range.rack[0], CONFIG.range.floor, CONFIG.range.rack[1]]);
     expect(r.button.position.toArray()).toEqual([CONFIG.range.button[0], CONFIG.range.floor, CONFIG.range.button[1]]);
@@ -14,7 +14,7 @@ describe('the rack and the button', () => {
     if (r.rackTarget.kind === 'rack') expect(r.rackTarget.range).toBe(range);
   });
   it('lights the button while a round is on', () => {
-    const r = new RifleRack({ armed: false, busy: false }, null);
+    const r = new RifleRack({ armed: false, busy: false, canArm: true }, null);
     r.update(0.5, null, false);
     const idle = r.capColour;
     r.update(0.5, null, true);

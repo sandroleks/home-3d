@@ -10,6 +10,7 @@ import {
   shortestTurn, shouldSend, smoothPose, stateDelta, stateKey, stateValue,
 } from '../src/presence';
 import { Screen } from '../src/screens';
+import type { Seat } from '../src/seats';
 
 const door = (node: string): DoorInfo => ({ node, hinge: [0, 0], dir: [0, 1], width: 0.8, openAngle: -1.5, opening: 1, lightmap: { file: 'd', range: 1 }, packs: [] });
 const movable = (node: string, kind: MovableInfo['kind'] = 'slide'): MovableInfo => ({ node, room: 'sala', kind, dir: [0, 0, 1], distance: 0.3, lightmap: { file: 'm', range: 1 }, packs: [] });
@@ -297,8 +298,8 @@ describe('the host', () => {
 describe('personal targets', () => {
   it('shares nothing for a seat, the wine, the rifle rack or the Start button', () => {
     const lights = new LightGroups([]);
-    const range = { armed: false, busy: false };
-    for (const t of [{ kind: 'wine', node: new Object3D() }, { kind: 'rack', range, node: new Object3D() }, { kind: 'range-button', range, node: new Object3D() }] as const) {
+    const range = { armed: false, busy: false, canArm: true };
+    for (const t of [{ kind: 'wine', node: new Object3D() }, { kind: 'seat', seat: { pose: 'sit' } as Seat, spot: null, node: new Object3D() }, { kind: 'rack', range, node: new Object3D() }, { kind: 'range-button', range, node: new Object3D() }] as const) {
       expect(isShared(t)).toBe(false);
       expect(stateDelta(t, lights)).toEqual({});
     }

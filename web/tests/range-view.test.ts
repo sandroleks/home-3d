@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type Group, type Mesh } from 'three';
+import { type Group, type Mesh, Vector3 } from 'three';
 import { CONFIG } from '../src/config';
 import { type Flight, flightAt, schedule } from '../src/range-flights';
 import { RangeView } from '../src/range-view';
@@ -23,6 +23,21 @@ describe('the range view', () => {
     expect(v.objectFor(0)!.visible).toBe(false);
     v.update(0.016, round, f.at + f.dur + 0.1, none, [], colour, 1);
     expect(v.objectFor(0)!.visible).toBe(false);
+  });
+
+  it('keeps a clay\'s face toward the balcony all through its flight', () => {
+    const v = new RangeView(null);
+    const i = flights.findIndex((f) => f.kind === 'clay');
+    const f = flights[i];
+    const normal = new Vector3();
+    for (const k of [0.15, 0.35, 0.5, 0.65, 0.85]) {
+      v.update(0.016, round, f.at + f.dur * k, none, [], colour, 1);
+      const o = v.objectFor(i)!;
+      o.updateMatrixWorld(true);
+      const disc = o.children[0];
+      normal.set(0, 1, 0).transformDirection(disc.matrixWorld);
+      expect(normal.z, `at ${k}`).toBeGreaterThan(0.5);
+    }
   });
 
   it('shatters a hit into shards and floats its points, both gone in time', () => {

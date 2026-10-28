@@ -69,6 +69,8 @@ export class UI {
   private touch = false;
   private lastGuests = '';
   private lastRange = '';
+  private lastFinal = false;
+  private lastHead = '';
   private sceneList: readonly HueScene[] = [];
   /** The scene the swatch shows ('' for none), null before the first. */
   private swatchFor: string | null = null;
@@ -225,6 +227,13 @@ export class UI {
     this.lastRange = key;
     const box = this.el('range');
     box.hidden = !hud;
+    // The strip itself isn't a live region (it would read the clock every second); this hidden one is told only when
+    // the final scores show or the round starts running (the head is "1:00" then), nothing in between.
+    if (hud && ((hud.final && !this.lastFinal) || (!hud.final && hud.head === '1:00' && this.lastHead !== '1:00'))) {
+      this.el('range-live').textContent = hud.final ? `${hud.head}: ${hud.rows.map((r) => `${r.place}. ${r.name} ${r.score}`).join(', ')}` : `Round started, ${hud.head}`;
+    }
+    this.lastFinal = hud?.final ?? false;
+    this.lastHead = hud?.head ?? '';
     if (!hud) return;
     box.classList.toggle('final', hud.final);
     this.el('range-head').textContent = hud.head;
