@@ -297,6 +297,16 @@ def tips(size, min_height=0.12, ratio=1.8):
     return h > min_height and h > ratio * min(w, l)
 
 
+def tips_value(raw, size, name="object"):
+    """Whether a prop tips: the `web_tips` value if it was set (None if not), which must be a bool or 0/1; otherwise
+    the guess from its three.js size."""
+    if raw is None:
+        return tips(size)
+    if isinstance(raw, (bool, int)) and raw in (0, 1):  # numpy bools and Blender ints are not always plain ones
+        return bool(raw)
+    raise RuntimeError(f"{name}: web_tips must be true/false (or 1/0), not {raw!r}")
+
+
 def yaw_pitch_from_forward(f):
     """three.js camera yaw/pitch (rotation order YXZ) for a forward vector."""
     fx, fy, fz = f

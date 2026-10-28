@@ -1,7 +1,7 @@
 """Small things on surfaces (`web_prop = "<what the viewer calls it>"`): visitors pick them up, put them down and throw
 them. Each becomes its own node (Prop_<slug>) with its origin at the middle of its base, so the viewer can stand it on
 any surface. Props are never baked (they move; the viewer lights them live) and never block the way (they're small).
-`web_tips` (bool) overrides the guess from its shape of whether it falls over when knocked."""
+`web_tips` (true/false or 1/0) overrides the guess from its shape of whether it falls over when knocked."""
 import bpy
 from mathutils import Matrix, Vector
 
@@ -25,7 +25,7 @@ def prepare_props(objs, floor_index):
         size = geom.box_size_three(lo, hi)
         spec = {"source": o.name, "node": f"Prop_{geom.slugify(o.name)}", "name": str(o[config.PROP_PROP]),
                 "room": floor_index.ids[k] if k >= 0 else None, "size": size,
-                "tips": bool(o[config.TIPS_PROP]) if config.TIPS_PROP in o else geom.tips(size)}
+                "tips": geom.tips_value(o.get(config.TIPS_PROP), size, o.name)}
         if any(s["node"] == spec["node"] for s in specs):
             raise RuntimeError(f"{o.name}: another prop's node is also {spec['node']}; rename one")
         o.data.transform(Matrix.Translation(-base))  # the mesh is in world space (scene_select realizes it)

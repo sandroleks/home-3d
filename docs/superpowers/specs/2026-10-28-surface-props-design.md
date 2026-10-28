@@ -1,7 +1,7 @@
 # Surface Props — Design
 
 **Date:** 2026-10-28
-**Status:** Approved, not yet implemented.
+**Status:** Implemented (preview export; final export pending).
 **Builds on:** `2026-10-28-loose-objects-design.md` (the loose things in drawers and cupboards: picking up, putting down, throwing, sharing).
 
 ## Goal
@@ -45,7 +45,7 @@ By hand afterwards: `web_prop` on any mesh makes it loose; `web_tips = true | fa
 ## In the viewer
 
 - **A loose thing from the model:** each manifest prop's node becomes a loose object. Its kind is built from the node: the prompt name, its size, whether it tips, and its meshes' geometry with their materials' colour, texture and opacity, as the same light-dimmed matcaps. The node itself leaves the scene; the loose object takes its place and pose. Its id is `surface/<slug>` (the node name without `Prop_`), the same in every browser.
-- **Long thin things lie down:** something more than four times taller than it is wide (knives, utensils, pegboard tools) is set down and lands lying along its length; at home it still hangs or stands as modelled.
+- **Long thin things lie down:** something long and flat (its height over five times its thinnest side, and its widest side over 1.5 times its thinnest: knives, utensils, pegboard tools; round bottles stand) is set down and lands lying along its length; at home it still hangs or stands as modelled. Books lie when set down too. The Entrada bench cushion stays fixed (it's the bench's seat).
 - **Things on things:** worked out at load from the boxes. A thing whose base sits on another (between just above that one's base and just above its top, and over its footprint) lies on it: plate stacks, the office shelf's stacked books, the bottles on the bar tray, the fruit in the island's bowl. A thing can have several on it; picking it up takes one of the things on it first, the highest, until it's bare. This replaces the one-on-one stacks the drawer things had, and they keep working.
 - **Everything else is as for the drawer things:** pick up, the ghost, putting down, throwing, dropping, sharing and the change counter, layers, light. They're never hidden behind a shut front (they have none).
 
