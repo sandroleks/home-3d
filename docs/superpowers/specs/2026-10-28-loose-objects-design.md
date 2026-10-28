@@ -11,16 +11,16 @@ Today the contents are rough boxes and cylinders (`blender/tools/model_details.p
 
 ## The objects
 
-Thirteen kinds, replacing the baked contents in these places (about 150 objects in all):
+Seventeen kinds, replacing the baked contents in these places (about 150 objects in all):
 
 | Kind | Where it starts |
 |---|---|
-| fork, knife, spoon, teaspoon | the cutlery drawers, in the oak insert: west run (`Front S3 prep drawers 0`), island (`Island front 00`), Sala storage (`Sala storage drawer 01`), and in the kitchen-wall layout the east run (`East front 1`) |
-| dinner plate, bowl | the plates drawers: island (`Island front 10`), Sala storage (`Sala storage drawer 10`), east run (`East front 4`) |
+| fork, knife, spoon, teaspoon | the cutlery drawers, in the oak insert: west run (`Front S3 prep drawers 0`), island (`Island front 00`), Sala storage (`Sala storage drawer 00`), and in the kitchen-wall layout the east run (`East front 1`) |
+| dinner plate, bowl | the plates drawers: island (`Island front 10`), Sala storage (`Sala storage drawer 11`), east run (`East front 4`) |
 | tumbler, wine glass | the glasses cupboards: coffee station upper (`Coffee station upper door 0`), Sala storage tall left, and in the kitchen-wall layout the east and west wall cabinets |
 | mug | the coffee cupboards: coffee station lower, and in the kitchen-wall layout the east and west wall cabinets |
 | spice jar | the spice drawer (`Island front 30`) |
-| food container | the containers drawers (`Island front 01`, `31`, `Sala storage drawer 11`, `East front 3`) |
+| food container | the containers drawers (`Island front 01`, `31`, `Sala storage drawer 10`, `East front 3`) |
 | oil bottle | the oils pull-out (`Front S1 pull-out`) |
 | wine bottle | the bar cabinet's lower shelf (tumblers and wine glasses on its upper shelf) |
 | book, glasses case | the nightstands |
@@ -47,7 +47,7 @@ Objects in a drawer of one kitchen layout exist only in that layout; the Sala, b
 Small files beside the games', each testable on its own:
 
 - **`prop-models.ts`:** one builder per kind — lathe profiles (glasses, mugs, bowls, plates, bottles, jars, spools), extrusions (cutlery, screwdrivers), boxes (books, cases, containers) — with geometry shared by kind. Each kind has its size (a bounding box), whether it tips over, and its materials.
-- **`prop-places.ts`:** where each object starts: per drawer or cupboard (a movable node, or a cupboard named by its carcass), a list of `{kind, position, rotation}` inside it, relative to the node. Drawer objects are children of the drawer's node, so they slide with it; cupboard objects are in the room. Each object's id comes from its start (`island-front-00/fork/3`), the same in every browser. The table is per layout, read with the manifest.
+- **`prop-places.ts`:** where each object starts. `prop-frames.json` (written by the model tool, below) gives each place's insides: the fill (`cutlery`, `plates`, …), the drawer node it belongs to (null for a cupboard), the front that opens it, which way it faces, and its levels (floor and shelves) as boxes in three.js space. A layout per fill, like the model's own fills, puts the objects on each level; anything that wouldn't fit is left out. Drawer objects are children of the drawer's node, so they slide with it; cupboard objects are in the room. A place is in this layout when its front is in the manifest. Each object's id comes from its start (`island-front-00/fork/3`), the same in every browser. Plates, bowls, books and cutlery start in stacks: picking up any of a stack takes the top one.
 - **`props.ts`:** the objects and their state. Each is **at rest** (a parent — the room or a drawer node — and a pose; at home or not), **held** (by a visitor id), or **flying** (position, velocity, spin, and who threw it). It picks up, places, throws and drops, and updates the flights each frame. Materials are matcaps dimmed by the light where the object is, like `TableMaterials`, a little darker inside a cupboard or drawer (`CONFIG.props.insideLight`). Objects never cast sun shadows, so drawers keep leaving the shadow map alone.
 - **`prop-physics.ts`:** one pure step of a flight: position, velocity and spin, a time step and a `raycast(from, to)` → `{point, normal} | null`, to the new state. Gravity; a ray along each step against the flat's meshes and the open drawers; meeting a surface that faces up: a bounce that keeps a fraction of the speed, then friction until it's slow enough to stop; meeting a wall or a side: a bounce off it. Tall kinds landing faster than `tipSpeed` rest on their side. Anything below the floor goes back home; a flight longer than `maxFlight` seconds sets the object down where it is. Windows and glazed doors stop it like walls (physics rays don't see through glass, unlike the crosshair).
 - **`prop-placement.ts`:** the ghost: the crosshair's ray, a surface that faces up within reach, a fit test (a few short rays up and around the footprint, and no other object's box overlapping), and the result: the pose, and which drawer node it would belong to if it's inside an open drawer's box (and then it must fit below the drawer's sides).
@@ -70,6 +70,8 @@ A new one-off tool, `blender/tools/loose_contents.py`, with the same refuse-to-r
 - In a drawer they're part of the drawer's mesh: delete the faces inside the drawer box, above its floor (the cutlery insert stays).
 - In a cupboard they're in `<carcass> contents` with the shelves: delete the faces of the contents' materials on that cupboard's levels and keep the shelves.
 
+It also writes `web/src/prop-frames.json`: for each place, its fill, drawer node, front, outward direction and levels (from the drawer box or the shelves and the hollow's cutter), in three.js space with the drawers shut.
+
 It runs headless on a staged copy of the repo's `Untitled.blend` (the repo's copy is the newest; Blender is started with `open -a` from the terminal panel, not from Claude's shell), checked with `look`, then a preview export, then — after the user has seen it — a final export (about 1 to 1.5 hours). The other kinds of contents keep their bakes.
 
 ## Edge cases and known limits
@@ -77,7 +79,7 @@ It runs headless on a staged copy of the repo's `Untitled.blend` (the repo's cop
 - A swinging door or a closing drawer goes through objects in its way; nothing is pushed. A drawer can always close on what's inside it, since only what fits is placed there.
 - Visitors walk through objects and aren't hit by them.
 - Objects don't meet each other: placing keeps them apart, but a thrown one flies through others and may come to rest overlapping one. Both can still be picked up.
-- Switching the kitchen layout (K) sends home anything resting inside the other layout's walls or cabinets, and the drawers of the layout that goes away take their objects with them.
+- Each visitor picks their own kitchen layout. An object in a drawer of the other layout doesn't exist in yours; an object resting where your layout has nothing under it (the island, in the kitchen-wall layout) shows at home for you. Switching (K) drops what you hold first.
 - Objects through an open balcony door land on the balcony; nothing can fall out of the flat for good (the floor catch).
 - Each drawer's light stays as baked; an object takes the light of where it is, not shadows from what's around it.
 
