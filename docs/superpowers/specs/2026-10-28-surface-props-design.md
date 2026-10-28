@@ -1,7 +1,7 @@
 # Surface Props — Design
 
 **Date:** 2026-10-28
-**Status:** Implemented (preview export; final export pending).
+**Status:** Implemented.
 **Builds on:** `2026-10-28-loose-objects-design.md` (the loose things in drawers and cupboards: picking up, putting down, throwing, sharing).
 
 ## Goal
