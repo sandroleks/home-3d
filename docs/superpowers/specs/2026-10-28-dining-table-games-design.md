@@ -1,7 +1,7 @@
 # Dining Table Games — Design
 
 **Date:** 2026-10-28
-**Status:** Approved. Phase 1 (the frame and chess) and Phase 2 (backgammon) implemented; Go to come.
+**Status:** Approved. All three phases implemented: Phase 1 (the frame and chess), Phase 2 (backgammon) and Phase 3 (Go 9×9).
 
 ## Goal
 
@@ -45,7 +45,7 @@ Each game is a pure TypeScript module with the same shape: it **replays a list o
 
 - **Chess** — `chess.js` (BSD-2-Clause, pinned): legal moves, check, castling, en passant, promotion (a picker in the overlay), checkmate, stalemate, threefold repetition, the 50-move rule, insufficient material. Moves are stored as UCI strings (`e2e4`, `e7e8q`). Draw by agreement: an offer and an acceptance are entries in the move list; an offer lapses when the offerer's opponent moves.
 - **Backgammon** — our own `backgammon-game.ts`: the standard starting position; the opening roll (one die each, re-rolled on a tie; the higher plays both); then each turn a roll, and moves one die at a time; doubles give four moves; checkers on the bar must enter first; a point with two or more opposing checkers is blocked; a single opposing checker is hit to the bar; bearing off only when all 15 are in the home board, with a higher die bearing off the furthest checker when no exact move exists; a player must use both dice if possible, the larger if only one can be used; no legal move ends the turn. The result names single, gammon or backgammon. No doubling cube.
-- **Go 9×9** — our own `go.ts`: placement on an empty point; captures of groups without liberties; no suicide; simple ko (no immediate recapture that repeats the previous position); pass; two passes in a row end the game. Area scoring (stones plus surrounded empty points) with komi 7; the stones on the board count as they stand — players capture dead stones before passing ("play it out"). Captures are shown as prisoners.
+- **Go 9×9** — our own `go-game.ts`: placement on an empty point; captures of groups without liberties; no suicide; simple ko (no immediate recapture that repeats the previous position); pass; two passes in a row end the game. Area scoring (stones plus surrounded empty points) with komi 7 (an equal score is a draw: empty points between the two sides count for no one); the stones on the board count as they stand — players capture dead stones before passing ("play it out"). Captures are shown as prisoners.
 - Resign is an entry in every game's move list.
 
 ## The overlay (players only)
@@ -62,7 +62,7 @@ Each game is a pure TypeScript module with the same shape: it **replays a list o
 
 ## On the table (everyone)
 
-- Built in the walkthrough from simple shapes, no Blender export: chess pieces turned from profiles (pawn, rook, bishop, queen, king) and a cut-out knight on a 40 cm board; a wooden 9×9 Go board with drawn lines and slightly flattened stones; an open backgammon travel case (30 × 28 cm: the table's fruit bowl, mug and books leave 34 cm at slot 1) with 24 painted points, 30 checkers and two dice with pips.
+- Built in the walkthrough from simple shapes, no Blender export: chess pieces turned from profiles (pawn, rook, bishop, queen, king) and a cut-out knight on a 40 cm board; a wooden 9×9 Go board (28 cm, at the table's rounded end, right of the table runner under the mug and books) with drawn lines and slightly flattened stones; an open backgammon travel case (30 × 28 cm: the table's fruit bowl, mug and books leave 34 cm at slot 1) with 24 painted points, 30 checkers and two dice with pips.
 - Shaded like the visitors' animals (matcaps), dimmed with the room's light, so they sit in the baked lighting.
 - Pieces slide to their squares (about 0.3 s); captured pieces lift off to the side; the dice tumble when rolled.
 - Pieces of a kind share geometry and materials; the shader warm-up compiles them at load.
