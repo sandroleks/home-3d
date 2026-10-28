@@ -254,10 +254,12 @@ export const CONFIG = {
    * drifting across the panels, `speed` radians a second, `spread` radians a metre along the wall. `glow` scales the
    * panels' baked glow so the colours stay deep instead of clipping to white. */
   nanoleaf: { hues: [0.47, 0.83] as [number, number], speed: 0.45, spread: 4.5, saturation: 1, lightness: 0.5, glow: 0.22 },
-  /** Philips Hue scenes (hue.ts): S in the sun panel, H steps through them in the room you're in. */
+  /** Philips Hue scenes (hue.ts): the menu in the sun panel, H steps through them in the room you're in. */
   hue: {
     /** Colour temperature the lamps were baked at (model_details.py: 3000 K ceilings, 2700 K lamps). */
     bakedKelvin: 2850,
+    /** The most a colour scene lifts any channel of the baked light (hue.ts tintFor): more washes deep colours out. */
+    colourGain: 1.5,
     /** For linking the flat's real bridge later: its address and app key, and each room id's Hue room (group) id.
      * Until then (bridge null) scenes only change the walkthrough. */
     bridge: null as string | null,
