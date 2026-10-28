@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  endOf, endText, gameChairs, type GameMessage, Games, isGameMessage, leftEnd, replay, seatedAt, slotOf, type SlotSeats, SLOTS,
+  endOf, endText, gameChairs, type GameMessage, Games, isGameMessage, leftEnd, replay, RULES, seatedAt, slotOf, type SlotSeats, SLOTS,
 } from '../src/games';
 import type { Seat } from '../src/seats';
 
@@ -85,7 +85,9 @@ describe('game messages', () => {
     expect(replay('chess', ['e2e4', 'e2e4'])).toBeNull();
     expect(replay('backgammon', ['r35', '24/21'])?.moves).toEqual(['r35', '24/21']);
     expect(replay('backgammon', ['r35', '24/18'])).toBeNull(); // no 6 was rolled
-    expect(replay('go', [])).toBeNull();
+    expect(replay('go', ['E5', 'D4', 'pass'])?.moves).toEqual(['E5', 'D4', 'pass']);
+    expect(replay('go', ['E5', 'E5'])).toBeNull(); // a taken point
+    expect(replay('go', [], { chess: RULES.chess })).toBeNull(); // no rules for the kind
   });
   it('ends a game when a player is out of their chair', () => {
     expect(leftEnd(true, true)).toBeNull();
@@ -107,7 +109,11 @@ function setup(self: string) {
 describe('Games', () => {
   it('only slots with rules are playable', () => {
     const g = setup('ana');
-    expect([0, 1, 2].map((s) => g.playable(s))).toEqual([true, true, false]);
+    expect([0, 1, 2].map((s) => g.playable(s))).toEqual([true, true, true]);
+    const chessOnly = new Games(() => 'rui', () => 'g1', { chess: RULES.chess });
+    expect([0, 1, 2].map((s) => chessOnly.playable(s))).toEqual([true, false, false]);
+    chessOnly.update(SLOTS.map(() => ({ white: 'ana', black: 'rui' })), 0);
+    expect(chessOnly.receive({ slot: 2, id: 'g6', white: 'ana', black: 'rui', moves: [] })).toBe(false); // no rules there
   });
   it("opens a game in the white player's browser once both chairs are taken", () => {
     const g = setup('ana');
@@ -132,6 +138,28 @@ describe('Games', () => {
     const opened = ana.play(1, 'r35')!;
     expect(rui.receive(opened)).toBe(true);
     expect(rui.play(1, '24/21')?.moves).toEqual(['r35', '24/21']); // black's 5 beat white's 3
+  });
+
+  it('plays Go at slot 2, opened by white and started by black', () => {
+    const at2 = (white: string | null, black: string | null): SlotSeats[] =>
+      SLOTS.map((_, i) => (i === 2 ? { white, black } : { white: null, black: null }));
+    const ana = setup('ana');
+    const rui = setup('rui');
+    const [g1] = ana.update(at2('ana', 'rui'), 0);
+    expect(g1).toEqual({ slot: 2, id: 'g1', white: 'ana', black: 'rui', moves: [] });
+    expect(ana.at(2)?.rules.kind).toBe('go');
+    rui.update(at2('ana', 'rui'), 0);
+    expect(rui.receive(g1)).toBe(true);
+    expect(ana.play(2, 'E5')).toBeNull(); // black moves first
+    const first = rui.play(2, 'E5')!;
+    expect(ana.receive(first)).toBe(true);
+    const passed = ana.play(2, 'pass')!;
+    expect(rui.receive(passed)).toBe(true);
+    const ended = rui.play(2, 'pass')!;
+    expect(ended.end).toEqual({ winner: 'black', reason: 'score' });
+    expect(ana.receive(ended)).toBe(true);
+    expect(endOf(ana.at(2)!)).toEqual({ winner: 'black', reason: 'score' });
+    expect(ana.at(2)?.rules.resultText?.()).toBe('Black wins by 74');
   });
 
   it("leaves opening to the white player's browser", () => {
@@ -186,7 +214,7 @@ describe('Games', () => {
     expect(rui.receive({ slot: 0, id: 'g9', white: 'ana', black: 'rui', moves: ['e2e4', 'e2e4'] })).toBe(false); // illegal
     expect(rui.receive({ slot: 0, id: 'g8', white: 'ana', black: 'rui', moves: [] })).toBe(false); // one is running
     expect(rui.receive({ slot: 0, id: 'g7', white: 'ze', black: 'rui', moves: [] })).toBe(false); // ze isn't seated
-    expect(rui.receive({ slot: 2, id: 'g6', white: 'ana', black: 'rui', moves: [] })).toBe(false); // no rules there yet
+    expect(rui.receive({ slot: 2, id: 'g6', white: 'ana', black: 'rui', moves: [] })).toBe(false); // not in those chairs
     expect(rui.at(0)?.id).toBe('g9');
     expect(rui.at(0)?.rules.moves).toEqual(['e2e4']);
   });

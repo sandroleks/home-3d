@@ -1,6 +1,7 @@
 import { BackgammonGame } from './backgammon-game';
 import { ChessGame } from './chess-game';
 import { CONFIG } from './config';
+import { GoGame } from './go-game';
 import type { Seat } from './seats';
 
 /** The games on the dining table. */
@@ -75,6 +76,7 @@ export function endText(end: GameEnd): string {
 export const RULES: Partial<Record<GameKind, () => GameRules>> = {
   chess: () => new ChessGame(),
   backgammon: () => new BackgammonGame(),
+  go: () => new GoGame(),
 };
 
 /** A game replayed from its entries; null when the kind has no rules or an entry isn't legal. */
