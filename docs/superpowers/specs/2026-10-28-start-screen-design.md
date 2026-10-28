@@ -25,7 +25,7 @@ One card in the middle of the screen:
 - The flat at the spawn shows through a radial vignette, about 35% dark in the middle and 70% at the edges, instead of the flat veil. Pause and notice overlays keep today's veil.
 - The card: a dark, see-through panel with a backdrop blur, a fine light border, rounded corners, about 420px wide.
 - The heading in the system serif (`ui-serif`, Georgia); the rest in the system sans as today; the existing gold accent.
-- The card fades in.
+- No fade-in: while the flat loads the main thread is busy and a fade stalls half-way, leaving the card dim.
 
 ## Small screens
 

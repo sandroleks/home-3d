@@ -3,44 +3,80 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Apartment Walkthrough</title>
+    <title>Sandrolek &amp; Jerry's apartment</title>
   </head>
   <body>
     <canvas id="view"></canvas>
     <div id="start" class="overlay">
-      <h1>Apartment Walkthrough</h1>
-      <p id="layout-note" hidden></p>
-      <div class="progress"><div id="progress-bar"></div></div>
-      <label class="name-field"><span>Your name, for anyone else here</span><input id="name" type="text" maxlength="24" autocomplete="nickname" placeholder="Guest" /></label>
-      <label class="voice-field"><input id="voice" type="checkbox" checked /> Talk with your voice</label>
-      <button id="start-button" disabled>Loading…</button>
-      <ul class="controls keys-only">
-        <li><kbd>W A S D</kbd> walk</li>
-        <li><kbd>Shift</kbd> walk faster</li>
-        <li><kbd>Mouse</kbd> look around</li>
-        <li><kbd>Click</kbd> open doors, flip light switches, sit on sofas and chairs, lie on the bed</li>
-        <li><kbd>C</kbd> sit on the floor, or get up (moving gets you up too)</li>
-        <li><kbd>L</kbd> toggle this room's light</li>
-        <li><kbd>M</kbd> mute sound</li>
-        <li><kbd>V</kbd> mic on or off</li>
-        <li><kbd>,</kbd><kbd>.</kbd> change the time</li>
-        <li><kbd>Shift</kbd> + <kbd>,</kbd><kbd>.</kbd> change the date</li>
-        <li><kbd>P</kbd> play the day</li>
-        <li><kbd>R</kbd> real sun and sky on or off</li>
-        <li><kbd>K</kbd> kitchen wall up (as it is now) or down</li>
-        <li><kbd>Tab</kbd> free the mouse for the sun panel, keep walking</li>
-        <li><kbd>Esc</kbd> pause</li>
-        <li>Anyone else exploring now walks the flat with you, and you can talk</li>
-      </ul>
-      <ul class="controls touch-only">
-        <li><kbd>Drag left</kbd> walk, push further to go faster</li>
-        <li><kbd>Drag right</kbd> look around</li>
-        <li><kbd>Tap</kbd> open doors, flip light switches, sit on sofas and chairs, lie on the bed</li>
-        <li>Buttons, top right: date and time (and the kitchen wall), room light, sound, mic, pause</li>
-        <li>Anyone else exploring now walks the flat with you, and you can talk</li>
-      </ul>
-      <p id="error" hidden></p>
-      <button id="retry-button" hidden>Try again</button>
+      <main class="card">
+        <header>
+          <p class="eyebrow">Welcome in</p>
+          <h1>Sandrolek &amp; Jerry's apartment</h1>
+          <p class="intro">Our home, modelled room by room. Open the doors and drawers, switch on the lamps, put a record on, sit on the sofa. Anyone else here now walks it with you.</p>
+          <p id="layout-note" hidden></p>
+        </header>
+        <div class="join">
+          <label class="name-field"><span>Your name, for anyone else here</span><input id="name" type="text" maxlength="24" autocomplete="nickname" placeholder="Guest" /></label>
+          <label class="voice-field"><input id="voice" type="checkbox" checked /> Talk with your voice</label>
+          <div class="start-action">
+            <div class="progress" aria-hidden="true"><div id="progress-bar"></div></div>
+            <button id="start-button" disabled>Loading…</button>
+          </div>
+          <p id="error" hidden></p>
+          <button id="retry-button" hidden>Try again</button>
+        </div>
+        <ul class="essentials keys-only">
+          <li><kbd>W A S D</kbd> walk</li>
+          <li><kbd>Mouse</kbd> look</li>
+          <li><kbd>Click</kbd> use</li>
+          <li><kbd>Esc</kbd> pause</li>
+        </ul>
+        <ul class="essentials touch-only">
+          <li><kbd>Drag left</kbd> walk</li>
+          <li><kbd>Drag right</kbd> look</li>
+          <li><kbd>Tap</kbd> use</li>
+        </ul>
+        <details class="all-controls">
+          <summary>All controls</summary>
+          <div class="keys-only">
+            <h2>Moving</h2>
+            <ul class="controls">
+              <li><span><kbd>W A S D</kbd></span> walk</li>
+              <li><span><kbd>Shift</kbd></span> walk faster</li>
+              <li><span><kbd>Mouse</kbd></span> look around</li>
+              <li><span><kbd>C</kbd></span> sit on the floor, or get up (moving gets you up too)</li>
+              <li><span><kbd>Esc</kbd></span> pause</li>
+            </ul>
+            <h2>Using things</h2>
+            <ul class="controls">
+              <li><span><kbd>Click</kbd></span> open doors, flip light switches, sit on sofas and chairs, lie on the bed</li>
+              <li><span><kbd>L</kbd></span> toggle this room's light</li>
+            </ul>
+            <h2>Time and light</h2>
+            <ul class="controls">
+              <li><span><kbd>,</kbd> <kbd>.</kbd></span> change the time</li>
+              <li><span><kbd>Shift</kbd> + <kbd>,</kbd> <kbd>.</kbd></span> change the date</li>
+              <li><span><kbd>P</kbd></span> play the day</li>
+              <li><span><kbd>R</kbd></span> real sun and sky on or off</li>
+              <li><span><kbd>K</kbd></span> kitchen wall up (as it is now) or down</li>
+              <li><span><kbd>Tab</kbd></span> free the mouse for the sun panel, keep walking</li>
+            </ul>
+            <h2>Sound and voice</h2>
+            <ul class="controls">
+              <li><span><kbd>M</kbd></span> mute sound</li>
+              <li><span><kbd>V</kbd></span> mic on or off</li>
+            </ul>
+          </div>
+          <div class="touch-only">
+            <ul class="controls">
+              <li><span><kbd>Drag left</kbd></span> walk, push further to go faster</li>
+              <li><span><kbd>Drag right</kbd></span> look around</li>
+              <li><span><kbd>Tap</kbd></span> open doors, flip light switches, sit on sofas and chairs, lie on the bed</li>
+            </ul>
+            <p class="controls-note">The buttons top right set the date and time (and the kitchen wall), the room light, sound and mic, and pause.</p>
+          </div>
+        </details>
+      </main>
     </div>
     <div id="hud" hidden>
       <div id="crosshair"></div>
