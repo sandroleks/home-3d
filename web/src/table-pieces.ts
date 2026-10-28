@@ -1,4 +1,5 @@
 import { Color, Group, MeshMatcapMaterial, type Object3D, type Texture } from 'three';
+import { BackgammonSet } from './backgammon-set';
 import { ChessSet } from './chess-set';
 import { CONFIG } from './config';
 import { makeMatcaps, type Matcaps } from './creatures';
@@ -43,6 +44,7 @@ export class TableMaterials {
  * bare table place. */
 export const SETS: Partial<Record<GameKind, (materials: TableMaterials, canvas: CanvasFactory | null) => TableSet>> = {
   chess: (materials, canvas) => new ChessSet(materials, canvas),
+  backgammon: (materials, canvas) => new BackgammonSet(materials, canvas),
 };
 
 /** The games on the dining table, as everyone sees them: each slot's set at its place on the table. */

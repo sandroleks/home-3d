@@ -61,11 +61,13 @@ describe('the chessboard on the table', () => {
 });
 
 describe('TableGames', () => {
-  it("puts the chessboard at slot 0's place on the table, the other slots empty for now", () => {
+  it('puts the chessboard and the backgammon case at their slots\' places on the table, slot 2 empty for now', () => {
     const t = new TableGames(null);
-    expect(t.root.children).toHaveLength(1);
-    const [x, z] = CONFIG.games.slots[0];
-    expect(t.root.children[0].position.toArray()).toEqual([x, CONFIG.games.tableTop, z]);
+    expect(t.root.children.map((c) => c.name)).toEqual(['Chess', 'Backgammon']);
+    t.root.children.forEach((c, slot) => {
+      const [x, z] = CONFIG.games.slots[slot];
+      expect(c.position.toArray()).toEqual([x, CONFIG.games.tableTop, z]);
+    });
   });
   it("puts each kind's set at its slot's place, from the sets it is given", () => {
     const shown: (GameRules | null)[] = [];
