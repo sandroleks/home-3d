@@ -71,6 +71,8 @@ export interface MultiplayerHooks {
   onDraw?: (msg: DrawMessage, from: string) => void;
   /** A visitor new here (or back after timing out), to greet with this visitor's part of draw and guess. */
   onArrive?: (id: string) => void;
+  /** A visitor left or timed out (before their animal goes). */
+  onLeave?: (id: string) => void;
   /** The shooting range: a message from another visitor (well-formed; what to do with it is the range's call). */
   onRange?: (msg: RangeMessage, from: string) => void;
 }
@@ -211,6 +213,7 @@ export class Multiplayer {
   private depart(id: string): void {
     this.streams.delete(id);
     if (!this.peers.remove(id)) return;
+    this.hooks.onLeave?.(id);
     this.avatars.remove(id);
     this.voice?.remove(id);
     this.hooks.onPeers(this.peers.names());
@@ -253,6 +256,7 @@ export class Multiplayer {
   tick(): void {
     const gone = this.peers.prune(this.hooks.now());
     for (const id of gone) {
+      this.hooks.onLeave?.(id);
       this.avatars.remove(id);
       this.voice?.remove(id);
     }

@@ -54,14 +54,15 @@ function setup(joinedAt = 1000, arrived = joinedAt) {
   const draws: [DrawMessage, string][] = [];
   const ranges: [RangeMessage, string][] = [];
   const arrivals: string[] = [];
+  const leavers: string[] = [];
   const mp = new Multiplayer(fake.room, world, avatars, 'Ana', {
     now: () => now, onChanged: (k) => void changed.push(k), onPeers: (n) => void peers.push(n), onHost: (h) => void hosts.push(h),
     onGame: (g) => void games.push(g), games: () => running,
     onDraw: (m, from) => void draws.push([m, from]), onRange: (m, from) => void ranges.push([m, from]),
-    onArrive: (id) => void arrivals.push(id),
+    onArrive: (id) => void arrivals.push(id), onLeave: (id) => void leavers.push(id),
   }, joinedAt, arrived);
   return {
-    fake, world, avatars, mp, changed, peers, hosts, games, draws, ranges, arrivals,
+    fake, world, avatars, mp, changed, peers, hosts, games, draws, ranges, arrivals, leavers,
     setNow: (t: number) => { now = t; }, setGames: (g: GameMessage[]) => { running = g; },
     node: new Object3D(),
   };
@@ -344,6 +345,16 @@ describe('Multiplayer', () => {
     setNow(1.2);
     mp.sendPose(1.1, 2, 0.5, 0); // heartbeat
     expect(fake.sent).toHaveLength(3);
+  });
+  it('tells the hook when a peer leaves or times out', () => {
+    const { fake, mp, leavers, setNow } = setup();
+    fake.receive('pose', [0, 0, 0, 0], 'p1');
+    fake.receive('pose', [0, 0, 0, 0], 'p2');
+    fake.leave('p1');
+    expect(leavers).toEqual(['p1']);
+    setNow(20);
+    mp.tick();
+    expect(leavers).toEqual(['p1', 'p2']);
   });
   it('removes the departed and the silent, and leaves the room', () => {
     const { fake, avatars, mp, peers, setNow } = setup();
