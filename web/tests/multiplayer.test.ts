@@ -359,10 +359,10 @@ describe('Multiplayer', () => {
 
   it('sends a newcomer the loose things away from home, with the flat', () => {
     const { fake, setAway } = setup();
-    fake.receive('hello', { name: 'Rui', since: 2000 }, 'p1');
     const away: PropMessage = { id: 'a/tumbler/0', n: 2, by: 'me', s: 'rest', parent: null, p: [1, 0, 1], q: [0, 0, 0, 1] };
     setAway([away]);
-    fake.receive('state', { want: 1 }, 'p1');
+    fake.receive('hello', { name: 'Rui', since: 2000 }, 'p1');
+    fake.receive('state', { want: 1 }, 'p1'); // the flat's state, but the loose things only once
     expect(fake.sent.filter((s) => s.kind === 'prop')).toEqual([{ kind: 'prop', data: away, to: 'p1' }]);
   });
 

@@ -1,5 +1,5 @@
 import {
-  AgXToneMapping, BufferGeometry, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, PMREMGenerator,
+  AgXToneMapping, Box3, BufferGeometry, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, PMREMGenerator,
   Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
@@ -165,7 +165,11 @@ async function run(): Promise<void> {
 
   // The loose things in the drawers and cupboards (props.ts): built now, so the warm-up compiles them and the crosshair
   // finds them; held and flying ones are drawn on their own layer, which the crosshair leaves out.
-  const solidRay = meshRaycast(world.solids);
+  // The table's games and the wine are made here, not in the model, and are in the way too: nothing is put down in them,
+  // and flights hit the bottle and glass (the games' pieces come and go, so the sets are only boxes).
+  const inTheWay = wine.root.parent ? [...tables.root.children, wine.root] : [];
+  const wayBox = new Box3();
+  const solidRay = meshRaycast(wine.root.parent ? [...world.solids, wine.root] : world.solids);
   const movableNodes = new Set(world.movables.filter((m) => m.state.info.kind === 'slide').map((m) => m.node)); // not doors or the platter
   const drawerOf = (o: Object3D): Object3D | null => {
     for (let p: Object3D | null = o; p; p = p.parent) if (movableNodes.has(p)) return p;
@@ -202,7 +206,7 @@ async function run(): Promise<void> {
   }
   const holding = new Holding(props, camera, {
     raycast: solidRay,
-    overlaps: (box) => props.overlaps(box),
+    overlaps: (box) => props.overlaps(box) || inTheWay.some((o) => wayBox.setFromObject(o).intersectsBox(box)),
     drawerOf: (o) => {
       const node = drawerOf(o);
       return node ? { node, height: heights.get(node.name) ?? null } : null;
@@ -303,6 +307,7 @@ async function run(): Promise<void> {
     if (t?.kind !== 'wine' || player.frozen) return;
     wine.sip(player.x, player.z);
     if (!drunk.sip()) return;
+    holding.drop(); // what they held falls as they do
     blackedOut = true;
     player.frozen = true;
   };

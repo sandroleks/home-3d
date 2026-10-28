@@ -134,8 +134,7 @@ export class Multiplayer {
       if ('want' in data) {
         room.send('state', { ...collectState(world), full: 1 }, id);
         for (const game of hooks.games?.() ?? []) room.send('game', game, id);
-        for (const m of hooks.props?.() ?? []) room.send('prop', m as unknown as Json, id);
-        return;
+        return; // the loose things went to it in arrive
       }
       if ('full' in data) this.settled = true;
       const changed = applyState(world, data, hooks.now());
