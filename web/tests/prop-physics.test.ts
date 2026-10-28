@@ -126,4 +126,17 @@ describe('meshRaycast', () => {
     expect(hit!.normal.length()).toBeCloseTo(1, 6);
     expect(hit!.normal.distanceTo(expected)).toBeLessThan(1e-5);
   });
+
+  it('follows a mesh that moves between calls: hits its new place, not the old one', () => {
+    const box = new Mesh(new BoxGeometry(0.2, 0.2, 0.2), new MeshBasicMaterial());
+    box.updateMatrixWorld(true);
+    const ray = meshRaycast([box]);
+    const down = (x: number) => ray(new Vector3(x, 1, 0), new Vector3(x, -1, 0));
+    expect(down(0)).not.toBeNull();
+    expect(down(2)).toBeNull();
+    box.position.x = 2;
+    box.updateMatrixWorld(true);
+    expect(down(2)!.point.y).toBeCloseTo(0.1, 5);
+    expect(down(0)).toBeNull();
+  });
 });

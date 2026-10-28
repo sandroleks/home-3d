@@ -1,4 +1,4 @@
-import { Euler, Matrix3, type Object3D, Quaternion, Raycaster, Vector3 } from 'three';
+import { Box3, Euler, type Intersection, Matrix3, type Mesh, type Object3D, Quaternion, Raycaster, Vector3 } from 'three';
 import { CONFIG } from './config';
 
 /** Where a segment first meets the flat: the point, the surface's normal facing back along the segment, and the mesh. */
@@ -24,18 +24,62 @@ const dq = new Quaternion();
 const euler = new Euler();
 const nm = new Matrix3();
 
-/** Rays against meshes (three-mesh-bvh makes them fast): the nearest hit, with its normal in world space. */
+const PAD = 1e-3;
+
+/** A mesh with its world bounding box, and the matrix the box was worked out from (so a moved mesh gets a fresh one). */
+interface Boxed { mesh: Mesh; box: Box3; from: number[]; valid: boolean }
+
+/** Rays against meshes (three-mesh-bvh makes them fast): the nearest hit, with its normal in world space.
+ * Meshes whose world box the segment's own box misses are skipped, so a short ray doesn't walk the whole flat. */
 export function meshRaycast(objects: Object3D[]): Raycast {
   const ray = new Raycaster() as Raycaster & { firstHitOnly?: boolean };
   ray.firstHitOnly = true;
   const dir = new Vector3();
+  const lo = new Vector3();
+  const hi = new Vector3();
+  const hits: Intersection[] = [];
+  let boxed: Boxed[] | null = null;
+
+  const flatten = (): Boxed[] => {
+    const all: Boxed[] = [];
+    for (const o of objects) o.traverse((n) => {
+      if ((n as Mesh).isMesh) all.push({ mesh: n as Mesh, box: new Box3(), from: [], valid: false });
+    });
+    return all;
+  };
+
+  const refresh = (b: Boxed): Box3 => {
+    const e = b.mesh.matrixWorld.elements;
+    let same = b.valid;
+    for (let i = 0; same && i < 16; i++) if (b.from[i] !== e[i]) same = false;
+    if (!same) {
+      const g = b.mesh.geometry;
+      if (!g.boundingBox) g.computeBoundingBox();
+      b.box.copy(g.boundingBox!).applyMatrix4(b.mesh.matrixWorld);
+      b.from = e.slice();
+      b.valid = true;
+    }
+    return b.box;
+  };
+
   return (from, to) => {
     dir.subVectors(to, from);
     const far = dir.length();
     if (far < 1e-9) return null;
     ray.set(from, dir.divideScalar(far));
     ray.far = far;
-    const hit = ray.intersectObjects(objects, true)[0];
+    lo.set(Math.min(from.x, to.x) - PAD, Math.min(from.y, to.y) - PAD, Math.min(from.z, to.z) - PAD);
+    hi.set(Math.max(from.x, to.x) + PAD, Math.max(from.y, to.y) + PAD, Math.max(from.z, to.z) + PAD);
+    boxed ??= flatten();
+    hits.length = 0;
+    for (const b of boxed) {
+      if (!b.mesh.layers.test(ray.layers)) continue;
+      const box = refresh(b);
+      if (box.max.x < lo.x || box.min.x > hi.x || box.max.y < lo.y || box.min.y > hi.y || box.max.z < lo.z || box.min.z > hi.z) continue;
+      b.mesh.raycast(ray, hits);
+    }
+    let hit: Intersection | undefined;
+    for (const h of hits) if (!hit || h.distance < hit.distance) hit = h;
     if (!hit?.face) return null;
     const normal = hit.face.normal.clone().applyNormalMatrix(nm.getNormalMatrix(hit.object.matrixWorld));
     if (normal.dot(dir) > 0) normal.negate();
