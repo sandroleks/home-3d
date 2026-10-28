@@ -250,6 +250,8 @@ export const CONFIG = {
     ghostOpacity: 0.35,
     /** Seconds the "someone else took it" note stays up. */
     noticeTime: 1.5,
+    /** A received change counted more than this far ahead of the one known is refused (a forged count would lock it). */
+    maxJump: 1000,
     physics: {
       gravity: 9.81,
       /** Longest step (s): a fast throw mustn't pass through a thin shelf. */

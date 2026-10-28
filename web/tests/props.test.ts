@@ -176,6 +176,88 @@ describe('Props', () => {
     expect(props.messages().map((m) => [m.id, m.s])).toEqual([[a.id, 'held'], [b.id, 'rest']]);
   });
 
+  it('sends a newcomer what went home after changes, so its counts match', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    const home: PropMessage = { id: a.id, n: 3, by: 'ana', s: 'home' };
+    props.receive(home);
+    expect(a.atHome).toBe(true);
+    expect(props.messages()).toEqual([home]);
+    const fresh = setup();
+    for (const m of props.messages()) fresh.props.receive(m);
+    expect(fresh.props.list[0].n).toBe(3);
+    expect(fresh.props.pickUp(fresh.props.list[0])?.n).toBe(4); // taken everywhere, not rejected as stale
+  });
+
+  it('relays a rest into a drawer this layout has not, unchanged, to a newcomer whose layout has it', () => {
+    const { props, world: w } = setup();
+    w.node = () => null; // the other kitchen: no such drawer here
+    const [, b] = props.list;
+    const rest: PropMessage = { id: b.id, n: 2, by: 'ana', s: 'rest', parent: 'Move_drawer', p: [0.1, 0.8, 0], q: [0, 0, 0, 1] };
+    props.receive(rest);
+    expect(b.atHome).toBe(true);
+    expect(props.messages()).toEqual([rest]);
+    const fresh = setup();
+    for (const m of props.messages()) fresh.props.receive(m);
+    const fb = fresh.props.list[1];
+    expect(fb.n).toBe(2);
+    expect(fb.root.parent).toBe(fresh.drawer);
+    expect(fb.atHome).toBe(false);
+  });
+
+  it('sends a newcomer its own changes, a flight in progress as it is now', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    props.pickUp(a);
+    props.throw(new Vector3(0, 1.2, 0), new Vector3(1, 0, 0));
+    props.update(0.1);
+    const [m] = props.messages() as Extract<PropMessage, { s: 'fly' }>[];
+    expect(m).toMatchObject({ id: a.id, n: 2, s: 'fly' });
+    expect(m.p[0]).toBeGreaterThan(0.05); // where it is now, not where it left the hand
+    for (let i = 0; i < 600; i++) props.update(1 / 60);
+    expect(props.messages()).toMatchObject([{ id: a.id, n: 3, s: 'rest' }]);
+  });
+
+  it('lets the drop of a timed-out holder win over its own late change', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    props.receive({ id: a.id, n: 4, by: 'ana', s: 'held' });
+    props.leave('ana', new Vector3(2, 1, 0));
+    expect(a.n).toBe(5);
+    expect(props.receive({ id: a.id, n: 5, by: 'ana', s: 'rest', parent: null, p: [0.5, 0, 0], q: [0, 0, 0, 1] })).toBe(false);
+    expect(props.messages()).toMatchObject([{ id: a.id, n: 5, by: '', s: 'rest' }]);
+    // the holder's own tab ('me' here), back from the background: its late put-down loses to the drop, which it takes
+    const back = setup();
+    const [ba] = back.props.list;
+    back.props.receive({ id: ba.id, n: 4, by: 'me', s: 'held' });
+    const late = back.props.place({ point: new Vector3(0.5, 0.9, 0), yaw: 0, node: null })!;
+    const others = setup();
+    others.props.receive({ id: a.id, n: 4, by: 'me', s: 'held' });
+    others.props.leave('me', new Vector3(2, 1, 0));
+    expect(others.props.receive(late)).toBe(false);
+    expect(back.props.receive(others.props.messages()[0])).toBe(true);
+    expect(world(ba.root).x).toBeCloseTo(2);
+  });
+
+  it('re-keys what was taken before joining finished to the id joining gave', () => {
+    const { props } = setup();
+    const [a, b] = props.list;
+    props.receive({ id: b.id, n: 1, by: 'self', s: 'rest', parent: null, p: [0.5, 0, 0], q: [0, 0, 0, 1] });
+    props.receive({ id: a.id, n: 1, by: 'self', s: 'held' });
+    props.rename('self', 'p9');
+    expect(a.holder).toBe('p9');
+    expect(a.by).toBe('p9');
+    expect(b.by).toBe('p9');
+    expect(props.messages()).toMatchObject([{ id: a.id, by: 'p9', s: 'held' }, { id: b.id, by: 'p9', s: 'rest' }]);
+  });
+
+  it('refuses a count far ahead of the one it has', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    expect(props.receive({ id: a.id, n: 1001, by: 'ana', s: 'held' })).toBe(false);
+    expect(props.receive({ id: a.id, n: 1000, by: 'ana', s: 'held' })).toBe(true);
+  });
+
   it('sends home what falls out of the flat', () => {
     const { props, world: w } = setup();
     w.raycast = () => null;

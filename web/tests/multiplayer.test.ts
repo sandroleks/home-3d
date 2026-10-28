@@ -330,10 +330,27 @@ describe('Multiplayer', () => {
 
   it('sends a newcomer the loose things away from home, with the flat', () => {
     const { fake, setAway } = setup();
+    fake.receive('hello', { name: 'Rui', since: 2000 }, 'p1');
     const away: PropMessage = { id: 'a/tumbler/0', n: 2, by: 'me', s: 'rest', parent: null, p: [1, 0, 1], q: [0, 0, 0, 1] };
     setAway([away]);
     fake.receive('state', { want: 1 }, 'p1');
     expect(fake.sent.filter((s) => s.kind === 'prop')).toEqual([{ kind: 'prop', data: away, to: 'p1' }]);
+  });
+
+  it('sends a peer back from a timeout the loose things, so it learns its held thing was dropped', () => {
+    const { fake, mp, setNow, setAway, leftIds } = setup();
+    fake.receive('hello', { name: 'Rui', since: 500 }, 'p1');
+    setNow(20);
+    mp.tick(); // p1's tab was hidden: it timed out here, and what it held was dropped
+    expect(leftIds).toEqual(['p1']);
+    const dropped: PropMessage = { id: 'a/tumbler/0', n: 5, by: '', s: 'rest', parent: null, p: [1, 0, 1], q: [0, 0, 0, 1] };
+    setAway([dropped]);
+    const n = fake.sent.length;
+    fake.receive('pose', [0, 0, 0, 0], 'p1');
+    expect(fake.sent.slice(n).filter((s) => s.kind === 'prop')).toEqual([{ kind: 'prop', data: dropped, to: 'p1' }]);
+    const again = fake.sent.length;
+    fake.receive('pose', [0, 0, 0, 0], 'p1'); // already here: not again
+    expect(fake.sent.length).toBe(again);
   });
 
   it('sends a loose thing to everyone', () => {

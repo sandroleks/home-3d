@@ -454,6 +454,7 @@ async function run(): Promise<void> {
           props.leave(id, f?.root.visible ? new Vector3(f.target[0], CONFIG.props.leaveHeight, f.target[1]) : null);
         },
       }, joinedAt, arrived);
+      props.rename('self', selfId); // what was picked up before joining finished is this visitor's under its real id
       if (voices) others.setVoice(voices);
       window.addEventListener('pagehide', () => others?.leave(), { once: true });
     } catch (err) {

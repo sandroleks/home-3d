@@ -80,6 +80,8 @@ export class Prop {
   /** Who holds it, or threw it while it flies. */
   holder: string | null = null;
   flight: Flight | null = null;
+  /** The last change this visitor took or made, passed on as it was to a newcomer (null: none yet). */
+  last: PropMessage | null = null;
   atHome = true;
   /** At home in a stack: what lies on it, and what it lies on. */
   over: Prop | null = null;
@@ -173,7 +175,7 @@ export class Props {
     if (t.state !== 'rest') return null;
     this.bump(t, this.world.selfId());
     this.hold(t, t.by);
-    return { id: t.id, n: t.n, by: t.by, s: 'held' };
+    return this.made(t, { id: t.id, n: t.n, by: t.by, s: 'held' });
   }
 
   place(at: Placement): PropMessage | null {
@@ -181,7 +183,7 @@ export class Props {
     if (!p) return null;
     this.bump(p, this.world.selfId());
     this.restAt(p, at.node ?? this.world.root, at.point, upright(at.yaw));
-    return this.restMessage(p);
+    return this.made(p, this.restMessage(p));
   }
 
   throw(from: Vector3, velocity: Vector3): PropMessage | null {
@@ -213,7 +215,7 @@ export class Props {
           else this.goHome(p);
           if (mine) {
             this.bump(p, me);
-            out.push(step.kind === 'rest' ? this.restMessage(p) : { id: p.id, n: p.n, by: p.by, s: 'home' });
+            out.push(this.made(p, step.kind === 'rest' ? this.restMessage(p) : { id: p.id, n: p.n, by: p.by, s: 'home' }));
           }
         }
       }
@@ -225,9 +227,10 @@ export class Props {
 
   receive(m: PropMessage): boolean {
     const p = this.byId.get(m.id);
-    if (!p || !(m.n > p.n || (m.n === p.n && m.by < p.by))) return false;
+    if (!p || !(m.n > p.n || (m.n === p.n && m.by < p.by)) || m.n > p.n + CONFIG.props.maxJump) return false;
     p.n = m.n;
     p.by = m.by;
+    p.last = m;
     if (m.s === 'held') this.hold(p, m.by);
     else if (m.s === 'home') this.goHome(p);
     else if (m.s === 'fly') {
@@ -256,25 +259,43 @@ export class Props {
     return true;
   }
 
+  /** For a newcomer: every thing changed since the flat loaded (home again included, so its count is known). Held and
+   * flying things as they are now; resting ones as the last change said, so a drawer of the other kitchen is passed on. */
   messages(): PropMessage[] {
-    return this.list.filter((p) => !p.atHome).map((p): PropMessage => {
+    return this.list.filter((p) => p.n > 0).map((p): PropMessage => {
       if (p.state === 'held') return { id: p.id, n: p.n, by: p.by, s: 'held' };
-      if (p.state === 'fly' && p.flight) {
-        const f = p.flight;
-        return { id: p.id, n: p.n, by: p.by, s: 'fly', p: f.position.toArray() as V3, v: f.velocity.toArray() as V3, w: f.spin.toArray() as V3 };
-      }
-      return this.restMessage(p);
+      if (p.state === 'fly' && p.flight) return this.flyMessage(p);
+      if (p.last && (p.last.s === 'rest' || p.last.s === 'home') && p.last.n === p.n) return p.last;
+      // came to rest from someone else's flight, before their word on where
+      return p.atHome ? { id: p.id, n: p.n, by: p.by, s: 'home' } : this.restMessage(p);
     });
   }
 
+  /** A visitor left or timed out: what they held drops where they were. The change is by no one (`''`, below every id),
+   * so it wins over the holder's own if their tab comes back and moves it too. */
   leave(id: string, at: Vector3 | null): void {
     for (const p of this.list) {
       if (p.state !== 'held' || p.holder !== id) continue;
-      this.bump(p, id);
+      this.bump(p, '');
       const hit = at && this.world.raycast(a.copy(at), b.copy(at).addScaledVector(UP, -3));
       if (hit) this.restAt(p, this.world.drawerOf(hit.object) ?? this.world.root, hit.point, upright(0));
       else this.goHome(p);
+      this.made(p, p.atHome ? { id: p.id, n: p.n, by: p.by, s: 'home' } : this.restMessage(p));
     }
+  }
+
+  /** This visitor's id changed (joining gave it one): what it holds or did is theirs under the new id. */
+  rename(from: string, to: string): void {
+    for (const p of this.list) {
+      if (p.holder === from) p.holder = to;
+      if (p.by === from) p.by = to;
+      if (p.last?.by === from) p.last = { ...p.last, by: to };
+    }
+  }
+
+  private made(p: Prop, m: PropMessage): PropMessage {
+    p.last = m;
+    return m;
   }
 
   private bump(p: Prop, by: string): void {
@@ -295,6 +316,10 @@ export class Props {
   private launchHeld(p: Prop, from: Vector3, velocity: Vector3, spin: Vector3): PropMessage {
     this.bump(p, this.world.selfId());
     this.startFlight(p, from, velocity, spin, p.by);
+    return this.made(p, this.flyMessage(p));
+  }
+
+  private flyMessage(p: Prop): PropMessage {
     const f = p.flight!;
     return { id: p.id, n: p.n, by: p.by, s: 'fly', p: f.position.toArray() as V3, v: f.velocity.toArray() as V3, w: f.spin.toArray() as V3 };
   }

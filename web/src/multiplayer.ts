@@ -68,7 +68,8 @@ export interface MultiplayerHooks {
   games?: () => GameMessage[];
   /** A loose thing another visitor moved (well-formed; whether to take it is the props' call). */
   onProp?: (m: PropMessage) => void;
-  /** Everything away from home, sent to a newcomer with the flat's state. */
+  /** Every loose thing moved since the flat loaded, sent to a newcomer with the flat's state (and to a peer back from a
+   * timeout). */
   props?: () => PropMessage[];
   /** A visitor left or timed out (before their animal goes). */
   onLeave?: (id: string) => void;
@@ -179,13 +180,15 @@ export class Multiplayer {
     this.room.addStream(mic);
   }
 
-  /** Notes a sign of life from a peer; true when the peer is new (or back after a timeout), with its animal and voice. */
+  /** Notes a sign of life from a peer; true when the peer is new (or back after a timeout), with its animal and voice.
+   * It's sent the loose things too: one back from a timeout may still hold what was dropped for it here. */
   private arrive(id: string): boolean {
     if (!this.peers.seen(id, this.hooks.now())) return false;
     this.avatars.add(id, colourFor(id), CONFIG.multiplayer.defaultName);
     const stream = this.streams.get(id);
     if (stream) this.voice?.add(id, stream);
     this.hooks.onPeers(this.peers.names());
+    for (const m of this.hooks.props?.() ?? []) this.room.send('prop', m as unknown as Json, id);
     return true;
   }
 
