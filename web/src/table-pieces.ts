@@ -2,10 +2,10 @@ import { Color, Group, MeshMatcapMaterial, type Object3D, type Texture } from 't
 import { ChessSet } from './chess-set';
 import { CONFIG } from './config';
 import { makeMatcaps, type Matcaps } from './creatures';
-import { type GameRules, type SlotGame, SLOTS } from './games';
+import { type GameKind, type GameRules, type SlotGame, SLOTS } from './games';
 import { type CanvasFactory, domCanvas } from './screens';
 
-/** One slot's board and pieces on the table. Each game adds its own: chess now, backgammon and Go later. */
+/** One slot's board and pieces on the table. Each game adds its own to `SETS`. */
 export interface TableSet {
   readonly root: Object3D;
   /** The game to show, when it changes; null shows the starting position. */
@@ -39,19 +39,25 @@ export class TableMaterials {
   }
 }
 
-/** The games on the dining table, as everyone sees them: each playable slot's board at its place on the table. */
+/** Each game's set on the table, by kind, as `RULES` has each game's rules; a slot whose kind has none here stays a
+ * bare table place. */
+export const SETS: Partial<Record<GameKind, (materials: TableMaterials, canvas: CanvasFactory | null) => TableSet>> = {
+  chess: (materials, canvas) => new ChessSet(materials, canvas),
+};
+
+/** The games on the dining table, as everyone sees them: each slot's set at its place on the table. */
 export class TableGames {
   readonly root = new Group();
   private materials: TableMaterials;
   private sets: (TableSet | null)[];
   private shown: string[] = SLOTS.map(() => '');
 
-  constructor(canvas: CanvasFactory | null = typeof document === 'undefined' ? null : domCanvas) {
+  constructor(canvas: CanvasFactory | null = typeof document === 'undefined' ? null : domCanvas, sets = SETS) {
     this.root.name = 'Table games';
     this.materials = new TableMaterials(makeMatcaps(canvas));
     const { slots, tableTop } = CONFIG.games;
     this.sets = SLOTS.map((s, i) => {
-      const set = s.kind === 'chess' ? new ChessSet(this.materials, canvas) : null;
+      const set = sets[s.kind]?.(this.materials, canvas) ?? null;
       if (!set) return null;
       set.root.position.set(slots[i][0], tableTop, slots[i][1]);
       this.root.add(set.root);
