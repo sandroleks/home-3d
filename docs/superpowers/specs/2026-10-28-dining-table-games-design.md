@@ -1,7 +1,7 @@
 # Dining Table Games — Design
 
 **Date:** 2026-10-28
-**Status:** Approved, not yet implemented
+**Status:** Approved. Phase 1 (the frame and chess) implemented; backgammon and Go to come.
 
 ## Goal
 
