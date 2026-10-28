@@ -191,10 +191,22 @@ export const CONFIG = {
   },
   /** The games on the dining table (games.ts): chess at N0/S0, backgammon at N1/S1, Go at N2/S2; the S chair plays white. */
   games: {
+    /** Each slot's middle (x, z): halfway between its two chairs' spots in seats.json (z 3.2), and level with them,
+     * except slot 0, 10 cm toward the table's end to clear the fruit bowl. */
+    slots: [[1.15, 3.2], [1.8, 3.2], [2.35, 3.2]] as [number, number][],
+    /** The table top's height (m): the model's dining table. */
+    tableTop: 0.76,
     /** A visitor is in a game chair when seated within this many metres of its spot (poses are sent to the mm). */
     chairRadius: 0.05,
     /** Seconds a game sent by another visitor waits for its two players to show in their chairs here. */
     pendingFor: 5,
+    /** Seconds a piece takes to slide to its square. */
+    slide: 0.3,
+    /** The chessboard: its size, the wooden border and its thickness (m), and the colours. */
+    chess: {
+      size: 0.4, border: 0.02, thickness: 0.015,
+      white: '#efe6d2', black: '#4a3b33', light: '#e8d5b0', dark: '#9c6b4a', wood: '#6b4630',
+    },
   },
   /** The office's Nanoleaf panels (nanoleaf.ts): a gradient between two hues (0..1: teal to magenta, through blue)
    * drifting across the panels, `speed` radians a second, `spread` radians a metre along the wall. `glow` scales the
