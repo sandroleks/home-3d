@@ -212,10 +212,11 @@ async function run(): Promise<void> {
   /** The others' voices and the local mic, once started (not with ?solo). */
   let voices: Voices | null = null;
   const showPeople = () => ui.setPeople((others?.people ?? []).map((p) => ({ name: p.name, talking: voices?.talking(p.id) ?? false })));
-  /** When this visitor first came to the room: kept through a reload, so a host who reloads stays host (set on joining). */
+  /** Set on joining. `arrived`: when this visitor first came to the room, kept through a reload, so a host who reloads
+   * stays host. `joinedAt`: when this page joined; it picks whom to ask for the flat's state, and breaks a tie against
+   * this visitor's own old page. */
   let arrived = Date.now();
-  /** When this page joined: with `arrived`, it breaks a tie against this visitor's own old page. */
-  const joinedAt = Date.now();
+  let joinedAt = arrived;
   /** Each visitor's last room for the guest list: outside every room, `locate` keeps the last one, as with your own. */
   const guestRooms = new Map<string, string | null>();
   let guestsDue = 0;
@@ -261,7 +262,8 @@ async function run(): Promise<void> {
     try {
       const [{ joinRoom, selfId }, turnConfig] = await Promise.all([import('trystero'), iceServers]);
       const roomName = params.get('room') || CONFIG.multiplayer.room;
-      arrived = loadArrived(() => sessionStorage, roomName, Date.now());
+      joinedAt = Date.now();
+      arrived = loadArrived(() => sessionStorage, roomName, joinedAt);
       const room = joinRoom(
         { appId: CONFIG.multiplayer.appId, ...(turnConfig.length ? { turnConfig } : {}) },
         roomName,
