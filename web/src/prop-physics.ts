@@ -1,4 +1,4 @@
-import { Euler, type Object3D, Quaternion, Raycaster, Vector3 } from 'three';
+import { Euler, Matrix3, type Object3D, Quaternion, Raycaster, Vector3 } from 'three';
 import { CONFIG } from './config';
 
 /** Where a segment first meets the flat: the point, the surface's normal facing back along the segment, and the mesh. */
@@ -22,6 +22,7 @@ const below = new Vector3();
 const axis = new Vector3();
 const dq = new Quaternion();
 const euler = new Euler();
+const nm = new Matrix3();
 
 /** Rays against meshes (three-mesh-bvh makes them fast): the nearest hit, with its normal in world space. */
 export function meshRaycast(objects: Object3D[]): Raycast {
@@ -36,7 +37,7 @@ export function meshRaycast(objects: Object3D[]): Raycast {
     ray.far = far;
     const hit = ray.intersectObjects(objects, true)[0];
     if (!hit?.face) return null;
-    const normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+    const normal = hit.face.normal.clone().applyNormalMatrix(nm.getNormalMatrix(hit.object.matrixWorld));
     if (normal.dot(dir) > 0) normal.negate();
     return { point: hit.point.clone(), normal, object: hit.object };
   };
