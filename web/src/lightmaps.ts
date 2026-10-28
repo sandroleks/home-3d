@@ -2,7 +2,7 @@ import { Color, DataTexture, MeshStandardMaterial, Texture, Vector3 } from 'thre
 import { CONFIG } from './config';
 import type { PackLayer } from './manifest';
 import { RGBM_GLSL } from './rgbm';
-import { toneFor } from './hue';
+import { type HueColour, tintFor, toneFor } from './hue';
 
 /** Up to three packed lamp layers in one texture's RGB: each channel is (L / range)^(1/2.2), coloured by its tint. */
 export interface PackBinding {
@@ -148,14 +148,14 @@ export function fadeToward(current: number, target: number, dt: number, duration
 /**
  * One fading level per light group: each room's wall switch (by room id) and each lamp that switches on its own.
  * A group is on or off, and when on it shines at its brightness (1 = as baked) and colour temperature (mireds, 0 = as
- * baked); a Hue scene sets both (setScene). Switching off and on again keeps them.
+ * baked) or Hue colour; a Hue scene sets them (setScene, setColour). Switching off and on again keeps them.
  */
 export class LightGroups {
   private uniforms = new Map<string, { value: number }>();
   private targets = new Map<string, number>();
   private linear = new Map<string, number>();
   private levels = new Map<string, { target: number; current: number }>();
-  private colors = new Map<string, { mireds: number; target: Color; value: Color }>();
+  private colors = new Map<string, { mireds: number; colour: HueColour | null; target: Color; value: Color }>();
 
   constructor(ids: string[], private duration = CONFIG.lightFadeDuration) {
     for (const id of ids) {
@@ -163,7 +163,7 @@ export class LightGroups {
       this.targets.set(id, 0);
       this.linear.set(id, 0);
       this.levels.set(id, { target: 1, current: 1 });
-      this.colors.set(id, { mireds: 0, target: new Color(1, 1, 1), value: new Color(1, 1, 1) });
+      this.colors.set(id, { mireds: 0, colour: null, target: new Color(1, 1, 1), value: new Color(1, 1, 1) });
     }
   }
 
@@ -219,12 +219,27 @@ export class LightGroups {
     if (mireds > 0) this.setTone(id, mireds);
   }
 
-  /** The colour temperature alone, in mireds (0: back to as baked). */
+  /** The colour temperature alone, in mireds (0: back to as baked). It takes the place of a colour. */
   setTone(id: string, mireds: number): void {
     const c = this.colors.get(id);
     if (!c) return;
     c.mireds = Math.max(0, mireds);
+    c.colour = null;
     c.target.copy(toneFor(c.mireds));
+  }
+
+  /** The group's Hue colour, while a colour scene set one; null while it shows a colour temperature or as baked. */
+  colour(id: string): HueColour | null {
+    return this.colors.get(id)?.colour ?? null;
+  }
+
+  /** A Hue colour in place of the colour temperature. */
+  setColour(id: string, colour: HueColour): void {
+    const c = this.colors.get(id);
+    if (!c) return;
+    c.mireds = 0;
+    c.colour = [colour[0], colour[1]];
+    c.target.copy(tintFor(colour));
   }
 
   update(dt: number): void {

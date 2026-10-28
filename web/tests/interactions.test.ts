@@ -61,6 +61,14 @@ describe('interactions', () => {
     expect(promptFor(m, lights)).toBe('Click: turn screen off');
   });
 
+  it('prompts the wine, which changes nothing shared', () => {
+    const lights = new LightGroups([]);
+    const t: Target = { kind: 'wine', node: new Object3D() };
+    expect(promptFor(t, lights)).toBe('Click: drink some wine');
+    expect(promptFor(t, lights, 'Tap')).toBe('Tap: drink some wine');
+    expect(() => activate(t, lights)).not.toThrow();
+  });
+
   it('prompts and activates switches', () => {
     const lights = new LightGroups(['sala']);
     const t: Target = { kind: 'switch', room: 'sala', node: new Object3D() };

@@ -14,7 +14,9 @@ export type Target =
   | { kind: 'screen'; screen: Screen; node: Object3D }
   /** Somewhere to sit or lie, part of the room's mesh: `spot` is the free place nearest the crosshair, null if all are
    * taken; `node` is a stand-in with nothing to highlight. */
-  | { kind: 'seat'; seat: Seat; spot: Spot | null; node: Object3D };
+  | { kind: 'seat'; seat: Seat; spot: Spot | null; node: Object3D }
+  /** The bottle of red in the kitchen (wine.ts): a sip is the visitor's own, never shared. */
+  | { kind: 'wine'; node: Object3D };
 
 /** The seat at a point where the crosshair meets the room, if any. */
 export type SeatFinder = (point: Vector3) => Target | null;
@@ -36,6 +38,7 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
       return `${verb}: ${t.movable.isOpen ? 'close' : 'open'} ${movableNoun(t.movable.info)}`;
     case 'lamp': return `${verb}: turn ${lampName(t.name)} ${lights.isOn(t.group) ? 'off' : 'on'}`;
     case 'seat': return t.spot ? `${verb}: ${t.seat.pose === 'lie' ? 'lie down' : 'sit down'}` : 'Someone is here';
+    case 'wine': return `${verb}: drink some wine`;
     case 'screen': {
       const s = t.screen;
       return s.isTv ? `${verb}: TV` : `${verb}: turn screen ${s.on ? 'off' : 'on'}`;
@@ -44,10 +47,11 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
   }
 }
 
-/** `now`: seconds, for the screens' pictures. Sitting down, and the TV's panel, are the player's (main.ts). */
+/** `now`: seconds, for the screens' pictures. Sitting down, drinking and the TV's panel are the player's (main.ts). */
 export function activate(t: Target, lights: LightGroups, now = 0): void {
   switch (t.kind) {
     case 'seat': return;
+    case 'wine': return;
     case 'door': return t.door.toggle();
     case 'movable': return t.movable.toggle();
     case 'lamp': return lights.toggle(t.group);

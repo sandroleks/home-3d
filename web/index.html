@@ -194,15 +194,15 @@
           <label class="sun-real"><input id="sun-real" type="checkbox" /> Real sun and sky</label>
         </div>
         <label class="sun-real"><input id="kitchen-wall" type="checkbox" /> Kitchen wall, as it is now</label>
-        <div id="scenes">
-          <div class="scenes-head">
-            <span>Hue scenes</span>
+        <div class="sun-row" id="scenes">
+          <span>Lights</span>
+          <div class="scene-pick">
+            <span class="scene-menu"><i id="scene-swatch" aria-hidden="true"></i><select id="scene" aria-label="Hue scene"></select></span>
             <select id="scene-scope" aria-label="Where the scene goes">
-              <option value="room">This room</option>
-              <option value="home">Whole home</option>
+              <option value="room">Room</option>
+              <option value="home">Home</option>
             </select>
           </div>
-          <div class="sun-buttons" id="scene-buttons"></div>
         </div>
         <fieldset id="sun-controls">
           <label class="sun-row"><span>Date</span><input id="sun-date" type="range" min="1" max="365" step="1" /></label>
@@ -210,7 +210,7 @@
             <span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span>
             <span>J</span><span>A</span><span>S</span><span>O</span><span>N</span><span>D</span>
           </div>
-          <div class="sun-buttons">
+          <div class="sun-buttons sun-seasons">
             <button type="button" data-season="12-21">Winter</button>
             <button type="button" data-season="3-20">Spring</button>
             <button type="button" data-season="6-21">Summer</button>

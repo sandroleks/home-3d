@@ -41,6 +41,9 @@ export interface Figure {
   /** How far it has sat down and lain down, eased: 0 standing, 1 all the way. */
   sit: number;
   lie: number;
+  /** How drunk its visitor is, as last sent (0..1), and the sway it shows, eased toward that. */
+  drunk: number;
+  sway: number;
 }
 
 /** Sitting and lying, in the figure's own metres: the body's height, lean and offset back, and how far its head turns
@@ -163,7 +166,7 @@ export class Avatars {
       root, creature, label: sprite, pose, target: [...pose] as Pose, speed: 0, phase: 0, light: 1, seed: (hashId(id) % 1000) / 159,
       pupils: creature.eyes.map(() => ({ at: [0, 0], vel: [0, 0] })), glance: [0, 0], nextGlance: 0,
       nextBlink: this.time + blink[0] + this.random() * (blink[1] - blink[0]), talk: 0,
-      seating: null, seatY: 0, seatYaw: 0, sit: 0, lie: 0,
+      seating: null, seatY: 0, seatYaw: 0, sit: 0, lie: 0, drunk: 0, sway: 0,
     };
     this.place(f);
     return f;
@@ -184,6 +187,11 @@ export class Avatars {
     const share = seated > 0 ? (SIT.share * f.sit + LIE.share * f.lie) / (f.sit + f.lie) : 0;
     const body = f.seatYaw + clamp(shortestTurn(f.seatYaw, look) * share, -SIT.turn, SIT.turn);
     root.rotation.y = look + shortestTurn(look, body) * seated;
+    // Drunk, it sways from its feet (or its seat, half as far): side to side, and a little forward and back
+    const sway = f.sway * (1 - seated * 0.5);
+    const swayAt = this.time * 2 * Math.PI * CONFIG.wine.wobble.speed + f.seed;
+    root.rotation.z = sway * CONFIG.wine.sway.roll * (0.6 * Math.sin(swayAt) + 0.4 * Math.sin(swayAt * 2.31 + 1.3));
+    root.rotation.x = sway * CONFIG.wine.sway.pitch * Math.sin(swayAt * 0.73 + 0.5);
     const walk = Math.min(1, f.speed / CONFIG.walkSpeed) * stand;
     const s = Math.sin(f.phase);
     const swing = s * 0.55 * walk;
@@ -272,9 +280,10 @@ export class Avatars {
   setPose(id: string, message: PoseMessage): void {
     const f = this.figures.get(id);
     if (!f) return;
-    const { pose, seating } = splitPose(message);
+    const { pose, seating, drunk } = splitPose(message);
     f.target = pose;
     f.seating = seating;
+    f.drunk = drunk;
     if (seating) [, f.seatY, f.seatYaw] = seating;
     if (!f.root.visible) {
       f.pose = [...pose] as Pose;
@@ -342,6 +351,7 @@ export class Avatars {
       const settle = 1 - Math.exp(-dt / CONFIG.multiplayer.creature.settle);
       f.sit += ((f.seating?.[0] === 1 ? 1 : 0) - f.sit) * settle;
       f.lie += ((f.seating?.[0] === 2 ? 1 : 0) - f.lie) * settle;
+      f.sway += (f.drunk - f.sway) * settle;
       f.phase = (f.phase + (f.speed * dt / CONFIG.multiplayer.creature.stride) * 2 * Math.PI) % (2 * Math.PI);
       if (dt > 0) this.moveEyes(f, dt, turnRate, Math.min(1, f.speed / CONFIG.walkSpeed));
       const l = light(f.pose[0], f.pose[1]);
