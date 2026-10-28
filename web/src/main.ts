@@ -1,5 +1,5 @@
 import {
-  AgXToneMapping, BufferGeometry, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, PMREMGenerator,
+  AgXToneMapping, Box3, BufferGeometry, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, PMREMGenerator,
   Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
@@ -7,6 +7,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { doorSound, loadMuted, saveMuted, StepTimer } from './audio';
 import { CONFIG } from './config';
+import { makeMatcaps } from './creatures';
+import { Holding } from './holding';
 import { Interactions, promptFor, type RangeStatus, type Target } from './interactions';
 import { LIGHT_SPILL } from './lightmaps';
 import { loadAssets, type LoadedAssets, type LoadedMap } from './loader';
@@ -16,6 +18,11 @@ import { lightmapTextures, UploadQueue, warmUpShaders } from './warmup';
 import { applyMovable } from './movables';
 import { Avatars, figureLight } from './avatars';
 import { Multiplayer, trysteroRoom } from './multiplayer';
+import { meshRaycast } from './prop-physics';
+import { drawerHeights, placesFor } from './prop-places';
+import { surfacePlaces } from './surface-props';
+import { CARRIED_LAYER, type PropMessage, Props } from './props';
+import { domCanvas } from './screens';
 import { guestList } from './guests';
 import { BackgammonBoard } from './backgammon-board';
 import { BoardPanel, GAME_COPY, type PanelBoard } from './board-panel';
@@ -91,6 +98,7 @@ async function run(): Promise<void> {
   });
 
   const scene = new Scene();
+  const UP = new Vector3(0, 1, 0);
   const surroundings = new Surroundings();
   scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = CONFIG.envIntensity;
@@ -120,6 +128,14 @@ async function run(): Promise<void> {
   }
 
   const world = buildWorld(assets, scene);
+  // The model's loose things leave the scene now, before anything renders or collects casters; buildWorld already
+  // counted their meshes as occluders, so those go too (anything no longer under the world's root).
+  const surfaceProps = surfacePlaces(assets.manifest.props, world.root);
+  world.occluders = world.occluders.filter((m) => {
+    let o: Object3D | null = m;
+    while (o && o !== world.root) o = o.parent;
+    return o === world.root;
+  });
   const mirrors = addMirrors(world.root, surroundings);
   const nanoleaf = new Nanoleaf(world.glows);
   const halos = new Halos(world.glows.filter((g) => !nanoleaf.has(g)));
@@ -165,6 +181,70 @@ async function run(): Promise<void> {
     const lamps = (room && roomGroups.get(room)) || [];
     return figureLight(lamps.reduce((a, g) => Math.max(a, g.weight * world.lights.uniform(g.id).value), 0), world.sky.value);
   };
+
+  // The loose things in the drawers and cupboards (props.ts): built now, so the warm-up compiles them and the crosshair
+  // finds them; held and flying ones are drawn on their own layer, which the crosshair leaves out.
+  // The table's games and the wine are made here, not in the model, and are in the way too: nothing is put down in them,
+  // and flights hit the bottle and glass (the games' pieces come and go, so the sets are only boxes).
+  const inTheWay = wine.root.parent ? [...tables.root.children, wine.root] : [];
+  const wayBox = new Box3();
+  const solidRay = meshRaycast(wine.root.parent ? [...world.solids, wine.root] : world.solids);
+  const movableNodes = new Set(world.movables.filter((m) => m.state.info.kind === 'slide').map((m) => m.node)); // not doors or the platter
+  const drawerOf = (o: Object3D): Object3D | null => {
+    for (let p: Object3D | null = o; p; p = p.parent) if (movableNodes.has(p)) return p;
+    return null;
+  };
+  const fronts = new Set(assets.manifest.movables.map((m) => m.node));
+  const heights = drawerHeights(fronts);
+  const handAt = new Vector3();
+  const props = new Props([...placesFor(fronts), ...surfaceProps], {
+    root: world.root,
+    node: (name) => world.root.getObjectByName(name) ?? null,
+    drawerOf,
+    drawerHeight: (node) => heights.get(node.name) ?? null,
+    raycast: solidRay,
+    light: avatarLight,
+    selfId: () => selfId(),
+    hand: (id, p, q) => {
+      if (id === selfId()) {
+        holding.hand(p, q);
+        return true;
+      }
+      const figure = avatars.get(id);
+      if (!figure || !avatars.mouth(id, p)) return false;
+      const yaw = figure.pose[2];
+      const [ahead, below] = CONFIG.props.otherHand;
+      p.add(handAt.set(-Math.sin(yaw) * ahead, -below, -Math.cos(yaw) * ahead));
+      q.setFromAxisAngle(UP, yaw);
+      return true;
+    },
+  }, makeMatcaps(domCanvas));
+  for (const p of props.list) {
+    world.targets.set(p.root, { kind: 'prop', prop: p, node: p.root });
+    world.pickables.push(p.root);
+  }
+  const holding = new Holding(props, camera, {
+    raycast: solidRay,
+    overlaps: (box) => props.overlaps(box) || inTheWay.some((o) => wayBox.setFromObject(o).intersectsBox(box)),
+    drawerOf: (o) => {
+      const node = drawerOf(o);
+      return node ? { node, height: heights.get(node.name) ?? null } : null;
+    },
+  }, (m) => sendProp(m));
+  scene.add(holding.ghost);
+  camera.layers.enable(CARRIED_LAYER);
+  // Things in shut drawers and cupboards aren't drawn (props.hideShut, each frame).
+  const movableAt = new Map(world.movables.map((m) => [m.state.info.node, m.state]));
+  const shut = (node: string) => movableAt.get(node)?.progress === 0;
+  const sendProp = (m: PropMessage | null) => {
+    if (m) others?.sendProp(m);
+  };
+  /** Picks up a loose thing under the crosshair or a tap; false when it wasn't one. */
+  const pickUp = (t: Target | null): boolean => {
+    if (t?.kind !== 'prop') return false;
+    if (!holding.holding && !player.frozen) sendProp(props.pickUp(t.prop));
+    return true;
+  };
   const site = assets.manifest.site;
   const clock = new SunClock(carry?.utc ?? parseSunParam(params.get('sun'), site.timeZone) ?? Date.now(), site.timeZone);
   const daylight = new Daylight(renderer, scene, world, assets.manifest, assets.climate, surroundings, touch ? CONFIG.touch.shadowMapSize : undefined);
@@ -186,13 +266,13 @@ async function run(): Promise<void> {
     const size = renderer.getDrawingBufferSize(new Vector2()).multiplyScalar(CONFIG.mirrorScale).round();
     mirrorTarget.setSize(size.x, size.y);
   }
-  warmUpShaders(renderer, scene, camera, [...world.screens.map((s) => s.pictureMaterial), ...rangeView.warmMaterials(), ...rifle.materials], mirrorTarget ? [mirrorTarget] : [])
+  warmUpShaders(renderer, scene, camera, [...world.screens.map((s) => s.pictureMaterial), holding.ghostMaterial, ...rangeView.warmMaterials(), ...rifle.materials], mirrorTarget ? [mirrorTarget] : [])
     .catch((err) => console.warn('Shader warm-up failed; shaders compile when first needed.', err));
   const names = new Map(assets.manifest.rooms.map((r) => [r.id, CONFIG.roomNames[r.id] ?? r.name]));
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
-  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; }, get draw() { return draw; }, get range() { return range; }, drunk } }); // tuning from the console
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; }, props, holding, get draw() { return draw; }, get range() { return range; }, drunk } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;
@@ -246,6 +326,7 @@ async function run(): Promise<void> {
     if (t?.kind !== 'wine' || player.frozen) return;
     wine.sip(player.x, player.z);
     if (!drunk.sip()) return;
+    holding.drop(); // what they held falls as they do
     blackedOut = true;
     player.frozen = true;
   };
@@ -462,9 +543,9 @@ async function run(): Promise<void> {
   const sendRange = (out: RangeOut[]) => {
     for (const o of out) others?.sendRange(o.msg, o.to);
   };
-  /** Whether this visitor may hold the rifle now: on the balcony, standing, awake. */
+  /** Whether this visitor may hold the rifle now: on the balcony, standing, awake, hands empty. */
   // The loose-objects merge adds `&& !holding.holding` here.
-  const canHold = () => currentRoom === CONFIG.range.room && !player.seat && !player.frozen;
+  const canHold = () => currentRoom === CONFIG.range.room && !player.seat && !player.frozen && !holding.holding;
   /** Picks up the rifle or puts it back on the rack. */
   const arm = (on: boolean) => {
     if (on === range.armed) return;
@@ -545,14 +626,25 @@ async function run(): Promise<void> {
         onHost: () => { guestsDue = 0; },
         onGame: (g) => { games.receive(g); },
         games: () => games.messages(),
+        onProp: (m) => {
+          const had = props.held;
+          props.receive(m);
+          if (had && !props.held) holding.lost();
+        },
+        props: () => props.messages(),
         onDraw: (m, from) => sendDraw(draw.receive(m, from, performance.now())),
         onRange: (m, from) => sendRange(range.receive(m, from, performance.now())),
         onArrive: (id) => {
           sendDraw(draw.greet(id));
           sendRange(range.greet(id, visitors(), performance.now()));
         },
-        onLeave: (id) => range.leave(id),
+        onLeave: (id) => {
+          range.leave(id);
+          const f = avatars.get(id);
+          props.leave(id, f?.root.visible ? new Vector3(f.target[0], CONFIG.props.leaveHeight, f.target[1]) : null);
+        },
       }, joinedAt, arrived);
+      props.rename('self', selfId); // what was picked up before joining finished is this visitor's under its real id
       if (voices) others.setVoice(voices);
       window.addEventListener('pagehide', () => others?.leave(), { once: true });
     } catch (err) {
@@ -636,6 +728,7 @@ async function run(): Promise<void> {
   /** The other kitchen is another export: reload into it, keeping the visitor's place, the time and the lights. */
   const setKitchen = (k: Kitchen) => {
     if (k === kitchen) return;
+    holding.drop(); // the other kitchen reloads the page: let go first
     saveCarry(() => sessionStorage, {
       x: player.x, z: player.z, yaw: player.yaw, pitch: player.pitch, utc: clock.utc, state: collectState(world),
     });
@@ -671,6 +764,7 @@ async function run(): Promise<void> {
   let freeing = false; // the next unlock is Tab's, not Esc's
   const setPausedState = (on: boolean) => {
     paused = on;
+    if (on) holding.cancelThrow();
     ui.setPaused(on);
     sound?.setPaused(on);
     voices?.setPaused(on);
@@ -733,9 +827,12 @@ async function run(): Promise<void> {
     tap: (x, y) => {
       if (!started || paused || tvPanel.isOpen) return;
       const r = canvas.getBoundingClientRect();
-      const point = new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2);
-      if (range.armed) return void useRange(interactions.at(point)); // with the rifle in hand, only the rack and the button take a tap (Fire fires)
-      const t = interactions.tap(point);
+      const aim = new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2);
+      if (range.armed) return void useRange(interactions.at(aim)); // with the rifle in hand, only the rack and the button take a tap (Fire fires)
+      if (holding.holding && holding.placeAt(aim)) return;
+      if (holding.holding && interactions.at(aim)?.kind === 'prop') return;
+      const t = interactions.tap(aim);
+      if (pickUp(t)) return;
       if (t?.kind === 'screen' && t.screen.isTv) return openTv();
       if (useRange(t)) return;
       sitOn(t);
@@ -754,6 +851,11 @@ async function run(): Promise<void> {
     pause: () => {
       if (started && !autostart) setPausedState(true);
     },
+  });
+  ui.bindHoldBar({
+    throwStart: () => holding.startThrow(),
+    throwEnd: () => holding.releaseThrow(),
+    drop: () => holding.drop(),
   });
   document.addEventListener('visibilitychange', () => {
     if (touch && document.hidden && started && !autostart) setPausedState(true); // with a mouse, losing the pointer lock pauses
@@ -780,14 +882,21 @@ async function run(): Promise<void> {
       if (!boardPanel.isOpen && !tvPanel.isOpen) lockPointer();
       return;
     }
-    if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
+    if (!(autostart || document.pointerLockElement === canvas)) return;
+    if (e.button === 2) return holding.startThrow();
+    if (e.button !== 0) return;
     if (range.armed) { // with the rifle in hand a click fires, except on the rack and the button
       const t = interactions.current;
       if (t?.kind === 'range-button' && range.busy) fire(); // the button mid-round is just a spot on the wall: shoot through it
       else if (!useRange(t)) fire();
       return;
     }
+    if (holding.holding) {
+      if (holding.place()) return;
+      if (interactions.current?.kind === 'prop') return; // another loose thing: one at a time
+    }
     const t = interactions.click();
+    if (pickUp(t)) return;
     if (t?.kind === 'screen' && t.screen.isTv) return openTv();
     if (useRange(t)) return;
     sitOn(t);
@@ -795,6 +904,10 @@ async function run(): Promise<void> {
     used(t);
     share(t);
   });
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 2) holding.releaseThrow();
+  });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // the right button throws
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') {
       e.preventDefault(); // Tab toggles the free mouse, never focus cycling
@@ -823,6 +936,8 @@ async function run(): Promise<void> {
       return;
     }
     if (e.repeat) return;
+    if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey && !e.altKey) holding.startThrow();
+    if (e.code === 'KeyQ' && !e.metaKey && !e.ctrlKey && !e.altKey) holding.drop();
     if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey && !e.altKey) setReal(!real);
     if (e.code === 'KeyK' && !e.metaKey && !e.ctrlKey && !e.altKey) switchKitchen(kitchen === 'wall' ? 'open' : 'wall');
     if (e.code === 'KeyL') toggleRoomLight();
@@ -830,6 +945,10 @@ async function run(): Promise<void> {
     if (e.code === 'KeyM') toggleMute();
     if (e.code === 'KeyV' && !e.metaKey && !e.ctrlKey && !e.altKey) toggleMic();
     if (e.code === 'KeyC' && !e.metaKey && !e.ctrlKey && !e.altKey) toggleSit();
+  });
+  window.addEventListener('blur', () => holding.cancelThrow());
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'KeyF') holding.releaseThrow();
   });
 
   const screenCentre = new Vector3();
@@ -857,6 +976,7 @@ async function run(): Promise<void> {
       before.target = m.state.target;
       before.progress = m.state.progress;
     });
+    props.hideShut(shut);
     drunk.update(dt);
     if (blackedOut && drunk.darkness === 1 && !player.seat) player.sit({ posture: 'sit', x: player.x, y: 0, z: player.z, yaw: player.yaw }, false);
     if (blackedOut && !drunk.passedOut) {
@@ -878,6 +998,8 @@ async function run(): Promise<void> {
       others.tick();
     }
     avatars.update(dt, avatarLight);
+    for (const m of props.update(dt)) sendProp(m);
+    holding.update(dt);
     updateGames(dt, now / 1000);
     updateDraw(now);
     updateRange(dt, now);
@@ -892,8 +1014,16 @@ async function run(): Promise<void> {
     sound?.setRoom(currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');
     const target = started ? interactions.update() : null;
-    const prompted = range.armed && target?.kind !== 'rack' && target?.kind !== 'range-button' ? null : target; // with the rifle, a click fires
-    ui.setPrompt(boardPanel.isOpen || tvPanel.isOpen ? null : prompted ? promptFor(prompted, world.lights, touch ? 'Tap' : 'Click') : player.seat && started ? COPY.stand : null);
+    const verb = touch ? 'Tap' : 'Click';
+    props.highlight(!holding.holding && !range.armed && target?.kind === 'prop' ? props.top(target.prop) : null);
+    // One thing in hand: with the rifle a click fires (but on the rack and the button); with a loose thing, the rifle and
+    // other loose things wait.
+    const prompted = range.armed ? (target?.kind === 'rack' || target?.kind === 'range-button' ? target : null)
+      : holding.holding && (target?.kind === 'prop' || target?.kind === 'rack') ? null : target;
+    const handPrompt = started ? holding.prompt(verb, touch, prompted !== null) : null;
+    const aimed = prompted ? promptFor(prompted, world.lights, verb) : null;
+    ui.setPrompt(boardPanel.isOpen || tvPanel.isOpen ? null : handPrompt ?? aimed ?? (player.seat && started ? COPY.stand : null));
+    ui.setHolding(touch && holding.holding);
     ui.setSitting(player.seat !== null);
     ui.setRoomLight(currentRoom && world.lights.has(currentRoom) ? world.lights.isOn(currentRoom) : null);
     ui.setScenes(activeScene(world.lights, sceneGroups(currentRoom)));

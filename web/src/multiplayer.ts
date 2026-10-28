@@ -3,14 +3,15 @@ import type { Avatars } from './avatars';
 import { CONFIG } from './config';
 import { type DrawMessage, isDrawMessage } from './draw-game';
 import { type GameMessage, isGameMessage } from './games';
+import { isPropMessage, type PropMessage } from './props';
 import { isRangeMessage, type RangeMessage } from './range-game';
 import {
   applyState, cleanName, collectState, colourFor, encodePose, isPose, isStateMap, Peers, type PoseMessage, poseMoved,
   type Seating, shouldSend, type StateMap, type StateWorld, hostOf,
 } from './presence';
 
-export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'draw' | 'range';
-const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'draw', 'range'];
+export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'prop' | 'draw' | 'range';
+const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'prop', 'draw', 'range'];
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 /** What the walkthrough needs from a network: Trystero today, a WebSocket server another day. */
@@ -67,6 +68,11 @@ export interface MultiplayerHooks {
   onGame?: (game: GameMessage) => void;
   /** The table's games, sent to a newcomer with the flat's state. */
   games?: () => GameMessage[];
+  /** A loose thing another visitor moved (well-formed; whether to take it is the props' call). */
+  onProp?: (m: PropMessage) => void;
+  /** Every loose thing moved since the flat loaded, sent to a newcomer with the flat's state (and to a peer back from a
+   * timeout). */
+  props?: () => PropMessage[];
   /** Draw and guess: a message from another visitor (well-formed; what to do with it is the game's call). */
   onDraw?: (msg: DrawMessage, from: string) => void;
   /** A visitor new here (or back after timing out), to greet with this visitor's part of draw and guess. */
@@ -131,7 +137,7 @@ export class Multiplayer {
       if ('want' in data) {
         room.send('state', { ...collectState(world), full: 1 }, id);
         for (const game of hooks.games?.() ?? []) room.send('game', game, id);
-        return;
+        return; // the loose things went to it in arrive
       }
       if ('full' in data) this.settled = true;
       const changed = applyState(world, data, hooks.now());
@@ -141,6 +147,11 @@ export class Multiplayer {
       if (!isGameMessage(data)) return;
       if (this.arrive(id)) this.greet(id, true);
       hooks.onGame?.(data);
+    });
+    room.onMessage('prop', (data, id) => {
+      if (!isPropMessage(data)) return;
+      if (this.arrive(id)) this.greet(id, true);
+      hooks.onProp?.(data);
     });
     room.onMessage('draw', (data, id) => {
       if (!isDrawMessage(data)) return;
@@ -186,13 +197,15 @@ export class Multiplayer {
     this.room.addStream(mic);
   }
 
-  /** Notes a sign of life from a peer; true when the peer is new (or back after a timeout), with its animal and voice. */
+  /** Notes a sign of life from a peer; true when the peer is new (or back after a timeout), with its animal and voice.
+   * It's sent the loose things too: one back from a timeout may still hold what was dropped for it here. */
   private arrive(id: string): boolean {
     if (!this.peers.seen(id, this.hooks.now())) return false;
     this.avatars.add(id, colourFor(id), CONFIG.multiplayer.defaultName);
     const stream = this.streams.get(id);
     if (stream) this.voice?.add(id, stream);
     this.hooks.onPeers(this.peers.names());
+    for (const m of this.hooks.props?.() ?? []) this.room.send('prop', m as unknown as Json, id);
     this.hooks.onArrive?.(id);
     return true;
   }
@@ -240,6 +253,11 @@ export class Multiplayer {
   /** Tells the others about a game this visitor opened or moved in. */
   sendGame(game: GameMessage): void {
     this.room.send('game', game);
+  }
+
+  /** Tells the others what happened to a loose thing. */
+  sendProp(m: PropMessage): void {
+    this.room.send('prop', m as unknown as Json);
   }
 
   /** Draw and guess: to everyone, or (a guess, a "close!", a newcomer's state) to one visitor. */

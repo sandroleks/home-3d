@@ -350,6 +350,14 @@ body.touch #touch-bar {
   width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round;
 }
+/* While holding something on a touch screen: Throw (hold and let go) and Drop, above the stick's side of the screen. */
+#hold-bar { display: none; }
+body.touch #hold-bar:not([hidden]) {
+  position: fixed; right: calc(16px + env(safe-area-inset-right)); bottom: calc(24px + env(safe-area-inset-bottom));
+  display: flex; gap: 10px; touch-action: none;
+}
+#hold-bar button { min-width: 72px; height: 48px; background: rgba(30, 28, 25, 0.78); color: var(--ink); }
+#hold-bar button:active { background: var(--accent); color: #121110; }
 #touch-sound[aria-pressed='true'] .sound-on, #touch-sound[aria-pressed='false'] .sound-off { display: none; }
 body.touch:not(.sun-open) #sun-panel { display: none; }
 body.touch #sun-panel {

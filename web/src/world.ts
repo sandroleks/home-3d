@@ -23,6 +23,8 @@ export interface World {
   targets: Map<Object3D, Target>;
   switches: Map<string, Object3D>;
   pickables: Object3D[];
+  /** What flights hit and things are put on: the rooms, the doors and the drawers and cupboard doors. */
+  solids: Object3D[];
   rooms: RoomLocator;
   collision: Collision;
   lightmapped: MeshStandardMaterial[];
@@ -72,6 +74,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
   const lights = new LightGroups(manifest.groups.map((g) => g.id));
   const lightmapped: MeshStandardMaterial[] = [];
   const pickables: Object3D[] = [];
+  const solids: Object3D[] = [];
   const allPacks: PackBinding[] = [];
   /** Lightmaps still loading: file -> what to bind it to. */
   const pending = new Map<string, ((t: { texture: Texture; range: number }) => void)[]>();
@@ -114,12 +117,17 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
     return mats;
   };
 
-  for (const chunk of manifest.chunks) lightmap(node(root, chunk.node), chunk.day, chunk.packs, chunk.room, chunk.light);
+  for (const chunk of manifest.chunks) {
+    const n = node(root, chunk.node);
+    lightmap(n, chunk.day, chunk.packs, chunk.room, chunk.light);
+    solids.push(n);
+  }
 
   const targets = new Map<Object3D, Target>();
   const doors: DoorRuntime[] = manifest.doors.map((info) => {
     const n = node(root, info.node);
     lightmap(n, info.lightmap, info.packs, null, null);
+    solids.push(n);
     const state = new DoorState(info);
     targets.set(n, { kind: 'door', door: state, node: n });
     return { state, node: n, base: n.quaternion.clone(), position: n.position.clone() };
@@ -128,6 +136,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
   const movables: MovableRuntime[] = manifest.movables.map((info) => {
     const n = node(root, info.node);
     lightmap(n, info.lightmap, info.packs, null, null);
+    solids.push(n);
     const state = new MovableState(info);
     targets.set(n, { kind: 'movable', movable: state, node: n });
     return movableRuntime(state, n);
@@ -210,7 +219,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
     return s ? [{ tint: p.tints.value[i], screen: s }] : [];
   }));
   return {
-    root, lights, doors, movables, screens, targets, switches, pickables, rooms: new RoomLocator(manifest.rooms), collision,
+    root, lights, doors, movables, screens, targets, switches, pickables, solids, rooms: new RoomLocator(manifest.rooms), collision,
     lightmapped, sky, fills, glows, packs: allPacks, layerLevel, screenTints, occluders,
   };
 }

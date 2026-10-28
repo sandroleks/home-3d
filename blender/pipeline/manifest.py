@@ -56,6 +56,7 @@ def build_manifest(state, baked, eye_height, proxies=None):
         "rooms": rooms, "groups": groups, "chunks": chunks, "doors": doors, "movables": movables,
         "screens": [{k: v for k, v in s.items() if k != "blender"} for s in state.get("screens", [])],
         "glows": state.get("glows", []), "viewpoints": state["viewpoints"],
+        "props": [{k: p[k] for k in ("node", "name", "room", "size", "tips")} for p in state.get("props", [])],
         "site": dict(config.SITE),
         "sky": {"irradiance": round(state["sky_irradiance"], 5), "wattsToScene": config.WATTS_TO_SCENE},
         "windows": state["windows"],
@@ -116,6 +117,15 @@ def validate_manifest(m):
     for i, g in enumerate(m["glows"]):
         if g["group"] not in group_ids:
             errors.append(f"glows[{i}] ({g['node']}): unknown group {g['group']}")
+    for i, p in enumerate(m["props"]):
+        label = f"props[{i}] ({p['node']})"
+        if p["room"] is not None and p["room"] not in room_ids:
+            errors.append(f"{label}: unknown room {p['room']}")
+        size = p["size"]
+        if not (len(size) == 3 and all(isinstance(v, (int, float)) and v > 0 for v in size)):
+            errors.append(f"{label}: size must be three positive numbers")
+        if not p["name"]:
+            errors.append(f"{label}: no name")
     chunk_rooms = {c["room"] for c in m["chunks"]}
     lit_rooms = {c["room"] for c in m["chunks"] if c["light"]}
     for r in m["rooms"]:

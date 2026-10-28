@@ -47,5 +47,6 @@ export function sampleManifest(): unknown {
     site: { lat: 41.117327, lon: -8.653914, timeZone: 'Europe/Lisbon', yBearing: 142.1 },
     sky: { irradiance: 0.6467, wattsToScene: 0.0044444 },
     windows: [{ room: 'alpha', center: [1.5, 1.5, 0.1], normal: [0, 0, 1], width: 1, height: 1 }],
+    props: [{ node: 'Prop_test-mug', name: 'mug', room: 'alpha', size: [0.08, 0.09, 0.08], tips: false }],
   };
 }

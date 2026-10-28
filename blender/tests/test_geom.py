@@ -1,6 +1,8 @@
 import math
 import unittest
 
+import numpy as np
+
 from pipeline import geom
 
 
@@ -150,6 +152,37 @@ class CameraTests(unittest.TestCase):
         self.assertAlmostEqual(yaw, math.pi / 2)
         yaw, pitch = geom.yaw_pitch_from_forward((0.0, 1.0, 0.0))
         self.assertAlmostEqual(pitch, math.pi / 2)
+
+
+class PropBoxTests(unittest.TestCase):
+    def test_base_centre_is_the_middle_of_the_bottom(self):
+        self.assertEqual(geom.base_centre((1.0, 2.0, 0.5), (1.2, 2.6, 0.9)), (1.1, 2.3, 0.5))
+
+    def test_box_size_three_is_x_up_depth(self):
+        # Blender x 0.2, y 0.6, z 0.4: three.js width x, height (Blender z), length (Blender y).
+        self.assertEqual(geom.box_size_three((1.0, 2.0, 0.5), (1.2, 2.6, 0.9)), [0.2, 0.4, 0.6])
+
+    def test_tips(self):
+        self.assertTrue(geom.tips([0.07, 0.3, 0.07]))  # a bottle
+        self.assertFalse(geom.tips([0.26, 0.012, 0.26]))  # a plate
+        self.assertFalse(geom.tips([0.04, 0.1, 0.04]))  # a slim jar, but under the height floor
+        self.assertFalse(geom.tips([0.3, 0.3, 0.3]))  # a box: tall enough, but not slim
+
+    def test_tips_value(self):
+        bottle = [0.07, 0.3, 0.07]
+        self.assertIs(geom.tips_value(None, bottle), True)  # not set: the shape decides
+        self.assertIs(geom.tips_value(False, bottle), False)
+        self.assertIs(geom.tips_value(0, bottle), False)
+        self.assertIs(geom.tips_value(1, [0.3, 0.3, 0.3]), True)
+        for bad in ("false", 2, 0.5, [1]):
+            with self.assertRaisesRegex(RuntimeError, "Test mug"):
+                geom.tips_value(bad, bottle, "Test mug")
+
+    def test_numpy_corners_give_plain_floats_and_bools(self):  # the state is saved as JSON
+        lo, hi = np.array([0.0, 0.0, 0.02]), np.array([0.07, 0.07, 0.32])
+        size = geom.box_size_three(lo, hi)
+        self.assertEqual([type(v) for v in geom.base_centre(lo, hi) + tuple(size)], [float] * 6)
+        self.assertIs(geom.tips(size), True)
 
 
 if __name__ == "__main__":

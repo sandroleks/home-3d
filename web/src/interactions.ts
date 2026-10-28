@@ -3,6 +3,7 @@ import { CONFIG } from './config';
 import type { DoorState } from './doors';
 import type { LightGroups } from './lightmaps';
 import { movableNoun, type MovableState } from './movables';
+import type { Prop } from './props';
 import type { Screen } from './screens';
 import type { Seat, Spot } from './seats';
 
@@ -12,6 +13,8 @@ export type Target =
   | { kind: 'movable'; movable: MovableState; node: Object3D }
   | { kind: 'lamp'; group: string; name: string; node: Object3D }
   | { kind: 'screen'; screen: Screen; node: Object3D }
+  /** A loose thing: picking it up is main.ts's. */
+  | { kind: 'prop'; prop: Prop; node: Object3D }
   /** Somewhere to sit or lie, part of the room's mesh: `spot` is the free place nearest the crosshair, null if all are
    * taken; `node` is a stand-in with nothing to highlight. */
   | { kind: 'seat'; seat: Seat; spot: Spot | null; node: Object3D }
@@ -45,6 +48,7 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
       return `${verb}: ${t.movable.isOpen ? 'close' : 'open'} ${movableNoun(t.movable.info)}`;
     case 'lamp': return `${verb}: turn ${lampName(t.name)} ${lights.isOn(t.group) ? 'off' : 'on'}`;
     case 'seat': return t.spot ? `${verb}: ${t.seat.pose === 'lie' ? 'lie down' : 'sit down'}` : 'Someone is here';
+    case 'prop': return `${verb}: pick up ${t.prop.info.name}`;
     case 'wine': return `${verb}: drink some wine`;
     case 'rack':
       if (!t.range.armed && !t.range.canArm) return 'Step onto the balcony to pick up the rifle'; // seen through the glass door, or sitting
@@ -61,8 +65,7 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
 /** `now`: seconds, for the screens' pictures. Sitting down, drinking, the rifle and the TV's panel are the player's (main.ts). */
 export function activate(t: Target, lights: LightGroups, now = 0): void {
   switch (t.kind) {
-    case 'seat': return;
-    case 'wine': return;
+    case 'seat': case 'prop': case 'wine': return; // sitting, picking up and drinking are main.ts's
     case 'rack':
     case 'range-button': return; // the rifle and the round are the player's (main.ts)
     case 'door': return t.door.toggle();

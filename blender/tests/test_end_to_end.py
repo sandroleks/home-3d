@@ -4,8 +4,9 @@ import tempfile
 import unittest
 
 import bpy
+import numpy as np
 
-from pipeline import checks, run
+from pipeline import bpyutil, checks, manifest, raster, run
 from tests import fixture_scene
 
 
@@ -64,6 +65,30 @@ class EndToEndTests(unittest.TestCase):
             self.assertTrue(prims, name)
             for p in prims:
                 self.assertIn("TEXCOORD_1", p["attributes"], name)
+
+    def test_props(self):
+        with open(os.path.join(self.out, "manifest.json")) as f:
+            m = json.load(f)
+        self.assertEqual(manifest.validate_manifest(m), [])
+        self.assertEqual([(p["node"], p["name"], p["room"], p["tips"]) for p in m["props"]],
+                         [("Prop_test-bottle", "bottle", "alpha", False), ("Prop_test-mug", "mug", "alpha", False)])
+        gltf = checks.read_glb_json(os.path.join(self.out, "apartment.glb"))
+        names = {n["name"] for n in gltf["nodes"]}
+        self.assertTrue({"Prop_test-mug", "Prop_test-bottle"} <= names)
+        # Its own node, so in no chunk: no room has a vertex where the mug stands, above the floor's top.
+        for c in [n for n in names if n.startswith("Room_")]:
+            co = bpyutil.world_coords(bpy.data.objects[c])
+            inside = ((co[:, 0] > 0.65) & (co[:, 0] < 0.75) & (co[:, 1] > 1.45) & (co[:, 1] < 1.55)
+                      & (co[:, 2] > 0.03) & (co[:, 2] < 0.12))
+            self.assertFalse(inside.any(), c)
+
+    def test_props_never_block_the_way(self):
+        with open(os.path.join(self.out, "collision.json")) as f:
+            g = json.load(f)
+        blocked = raster.rle_decode(g["runs"], g["width"] * g["height"]).reshape(g["height"], g["width"])
+        for x, z in ((0.7, -1.5), (0.7, -2.0)):  # under the mug and the bottle (three.js x, z)
+            i, j = int(np.floor((x - g["x0"]) / g["cell"])), int(np.floor((z - g["z0"]) / g["cell"]))
+            self.assertFalse(blocked[j, i], (x, z))
 
 
 if __name__ == "__main__":

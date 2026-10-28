@@ -1,0 +1,785 @@
+{
+ "places": [
+  {
+   "source": "Front S3 prep drawers 0",
+   "fill": "cutlery",
+   "node": "Move_front-s3-prep-drawers-0",
+   "front": "Move_front-s3-prep-drawers-0",
+   "out": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -3.182,
+      0.5155,
+      4.0875
+     ],
+     "max": [
+      -2.682,
+      0.8125,
+      4.6125
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Island front 00",
+   "fill": "cutlery",
+   "node": "Move_island-front-00",
+   "front": "Move_island-front-00",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.578,
+      0.5955,
+      3.9247
+     ],
+     "max": [
+      -0.998,
+      0.794,
+      4.422
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Sala storage drawer 00",
+   "fill": "cutlery",
+   "node": "Move_sala-storage-drawer-00",
+   "front": "Move_sala-storage-drawer-00",
+   "out": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "levels": [
+    {
+     "min": [
+      0.9375,
+      0.4855,
+      1.2155
+     ],
+     "max": [
+      1.4975,
+      0.7025,
+      1.4855
+     ]
+    }
+   ]
+  },
+  {
+   "source": "East front 1",
+   "fill": "cutlery",
+   "node": "Move_east-front-1",
+   "front": "Move_east-front-1",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.658,
+      0.6555,
+      2.9375
+     ],
+     "max": [
+      -1.158,
+      0.8125,
+      3.4625
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Island front 10",
+   "fill": "plates",
+   "node": "Move_island-front-10",
+   "front": "Move_island-front-10",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.578,
+      0.4755,
+      3.3513
+     ],
+     "max": [
+      -0.998,
+      0.794,
+      3.8487
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Sala storage drawer 11",
+   "fill": "plates",
+   "node": "Move_sala-storage-drawer-11",
+   "front": "Move_sala-storage-drawer-11",
+   "out": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "levels": [
+    {
+     "min": [
+      1.5725,
+      0.1155,
+      1.2155
+     ],
+     "max": [
+      2.1325,
+      0.4025,
+      1.4855
+     ]
+    }
+   ]
+  },
+  {
+   "source": "East front 4",
+   "fill": "plates",
+   "node": "Move_east-front-4",
+   "front": "Move_east-front-4",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.658,
+      0.5155,
+      3.5375
+     ],
+     "max": [
+      -1.158,
+      0.8125,
+      4.0625
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Island front 30",
+   "fill": "spices",
+   "node": "Move_island-front-30",
+   "front": "Move_island-front-30",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.578,
+      0.5155,
+      2.778
+     ],
+     "max": [
+      -0.998,
+      0.794,
+      3.2753
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Island front 01",
+   "fill": "containers",
+   "node": "Move_island-front-01",
+   "front": "Move_island-front-01",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.578,
+      0.3155,
+      3.9247
+     ],
+     "max": [
+      -0.998,
+      0.5125,
+      4.422
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Island front 31",
+   "fill": "containers",
+   "node": "Move_island-front-31",
+   "front": "Move_island-front-31",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.578,
+      0.1355,
+      2.778
+     ],
+     "max": [
+      -0.998,
+      0.4325,
+      3.2753
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Sala storage drawer 10",
+   "fill": "containers",
+   "node": "Move_sala-storage-drawer-10",
+   "front": "Move_sala-storage-drawer-10",
+   "out": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "levels": [
+    {
+     "min": [
+      1.5725,
+      0.4855,
+      1.2155
+     ],
+     "max": [
+      2.1325,
+      0.7025,
+      1.4855
+     ]
+    }
+   ]
+  },
+  {
+   "source": "East front 3",
+   "fill": "containers",
+   "node": "Move_east-front-3",
+   "front": "Move_east-front-3",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.658,
+      0.1355,
+      2.9375
+     ],
+     "max": [
+      -1.158,
+      0.3225,
+      3.4625
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Front S1 pull-out",
+   "fill": "oils",
+   "node": "Move_front-s1-pull-out",
+   "front": "Move_front-s1-pull-out",
+   "out": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -3.189,
+      0.1355,
+      5.2805
+     ],
+     "max": [
+      -2.675,
+      0.475,
+      5.5195
+     ]
+    },
+    {
+     "min": [
+      -3.189,
+      0.493,
+      5.2805
+     ],
+     "max": [
+      -2.675,
+      0.8325,
+      5.5195
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Nightstand drawer 0",
+   "fill": "nightstand",
+   "node": "Move_nightstand-drawer-0",
+   "front": "Move_nightstand-drawer-0",
+   "out": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -2.902,
+      0.364,
+      -5.774
+     ],
+     "max": [
+      -2.562,
+      0.424,
+      -5.486
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Nightstand drawer 1",
+   "fill": "nightstand",
+   "node": "Move_nightstand-drawer-1",
+   "front": "Move_nightstand-drawer-1",
+   "out": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -2.902,
+      0.364,
+      -8.214
+     ],
+     "max": [
+      -2.562,
+      0.424,
+      -7.926
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Bench drawer front 0",
+   "fill": "tools",
+   "node": "Move_bench-drawer-front-0",
+   "front": "Move_bench-drawer-front-0",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      2.492,
+      0.2355,
+      0.573
+     ],
+     "max": [
+      3.012,
+      0.3575,
+      0.947
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Bench drawer front 2",
+   "fill": "spools",
+   "node": "Move_bench-drawer-front-2",
+   "front": "Move_bench-drawer-front-2",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      2.492,
+      0.6455,
+      0.573
+     ],
+     "max": [
+      3.012,
+      0.7725,
+      0.947
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Coffee station upper door 0",
+   "fill": "glasses",
+   "node": null,
+   "front": "Move_coffee-station-upper-door-0",
+   "out": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.9275,
+      1.4635,
+      1.201
+     ],
+     "max": [
+      -1.1725,
+      1.692,
+      1.545
+     ]
+    },
+    {
+     "min": [
+      -1.9275,
+      1.71,
+      1.201
+     ],
+     "max": [
+      -1.1725,
+      1.929,
+      1.545
+     ]
+    },
+    {
+     "min": [
+      -1.9275,
+      1.947,
+      1.201
+     ],
+     "max": [
+      -1.1725,
+      2.1825,
+      1.545
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Coffee station lower door 0",
+   "fill": "coffee-low",
+   "node": null,
+   "front": "Move_coffee-station-lower-door-0",
+   "out": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.9275,
+      0.1135,
+      1.201
+     ],
+     "max": [
+      -1.1725,
+      0.469,
+      1.545
+     ]
+    },
+    {
+     "min": [
+      -1.9275,
+      0.487,
+      1.201
+     ],
+     "max": [
+      -1.1725,
+      0.8425,
+      1.545
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Sala storage left door 0",
+   "fill": "glasses",
+   "node": null,
+   "front": "Move_sala-storage-left-door-0",
+   "out": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "levels": [
+    {
+     "min": [
+      0.1425,
+      0.0935,
+      1.1885
+     ],
+     "max": [
+      0.8775,
+      0.915,
+      1.4925
+     ]
+    },
+    {
+     "min": [
+      0.1425,
+      0.933,
+      1.1885
+     ],
+     "max": [
+      0.8775,
+      1.746,
+      1.4925
+     ]
+    },
+    {
+     "min": [
+      0.1425,
+      1.764,
+      1.1885
+     ],
+     "max": [
+      0.8775,
+      2.6105,
+      1.4925
+     ]
+    }
+   ]
+  },
+  {
+   "source": "East wall front 0",
+   "fill": "glasses",
+   "node": null,
+   "front": "Move_east-wall-front-0",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.435,
+      1.5135,
+      2.3225
+     ],
+     "max": [
+      -1.131,
+      1.725,
+      3.5775
+     ]
+    },
+    {
+     "min": [
+      -1.435,
+      1.743,
+      2.3225
+     ],
+     "max": [
+      -1.131,
+      1.946,
+      3.5775
+     ]
+    },
+    {
+     "min": [
+      -1.435,
+      1.964,
+      2.3225
+     ],
+     "max": [
+      -1.131,
+      2.1825,
+      3.5775
+     ]
+    }
+   ]
+  },
+  {
+   "source": "East wall front 2",
+   "fill": "coffee-low",
+   "node": null,
+   "front": "Move_east-wall-front-2",
+   "out": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -1.435,
+      1.5135,
+      3.6225
+     ],
+     "max": [
+      -1.131,
+      1.839,
+      4.8775
+     ]
+    },
+    {
+     "min": [
+      -1.435,
+      1.857,
+      3.6225
+     ],
+     "max": [
+      -1.131,
+      2.1825,
+      4.8775
+     ]
+    }
+   ]
+  },
+  {
+   "source": "West wall front 0",
+   "fill": "glasses",
+   "node": null,
+   "front": "Move_west-wall-front-0",
+   "out": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -3.209,
+      1.5135,
+      2.8525
+     ],
+     "max": [
+      -2.905,
+      1.725,
+      4.0075
+     ]
+    },
+    {
+     "min": [
+      -3.209,
+      1.743,
+      2.8525
+     ],
+     "max": [
+      -2.905,
+      1.946,
+      4.0075
+     ]
+    },
+    {
+     "min": [
+      -3.209,
+      1.964,
+      2.8525
+     ],
+     "max": [
+      -2.905,
+      2.1825,
+      4.0075
+     ]
+    }
+   ]
+  },
+  {
+   "source": "West wall front 2",
+   "fill": "coffee-low",
+   "node": null,
+   "front": "Move_west-wall-front-2",
+   "out": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -3.209,
+      1.5135,
+      4.0525
+     ],
+     "max": [
+      -2.905,
+      1.839,
+      4.6075
+     ]
+    },
+    {
+     "min": [
+      -3.209,
+      1.857,
+      4.0525
+     ],
+     "max": [
+      -2.905,
+      2.1825,
+      4.6075
+     ]
+    }
+   ]
+  },
+  {
+   "source": "Bar cabinet door 0",
+   "fill": "bar",
+   "node": null,
+   "front": "Move_bar-cabinet-door-0",
+   "out": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "levels": [
+    {
+     "min": [
+      -0.923,
+      0.092,
+      5.696
+     ],
+     "max": [
+      -0.619,
+      0.484,
+      6.394
+     ]
+    },
+    {
+     "min": [
+      -0.923,
+      0.502,
+      5.696
+     ],
+     "max": [
+      -0.619,
+      0.894,
+      6.394
+     ]
+    }
+   ]
+  }
+ ]
+}

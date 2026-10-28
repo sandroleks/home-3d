@@ -225,6 +225,68 @@ export const CONFIG = {
       wood: '#d8b077', lines: '#3b2c1e', white: '#f2eee4', black: '#2b2a28',
     },
   },
+  /** The things in the drawers and cupboards that visitors pick up, put down and throw (props.ts). */
+  props: {
+    /** Height (m) a leaving visitor's held thing is dropped from, straight down onto whatever is under where they were. */
+    leaveHeight: 1,
+    /** Light inside a drawer or cupboard, as a share of the room's. */
+    insideLight: 0.6,
+    /** The object under the crosshair, this much brighter. */
+    highlight: 1.35,
+    /** Where the held object is: right, down and forward (m) from the eye. */
+    hand: [0.2, -0.24, -0.45] as [number, number, number],
+    /** Another visitor's: forward and down (m) from their animal's mouth. */
+    otherHand: [0.18, 0.08] as [number, number],
+    /** A throw's speed (m/s) at a tap and at full strength, reached after `chargeTime` s held. */
+    throwSpeed: [2, 7] as [number, number],
+    chargeTime: 1,
+    /** Spin (rad/s) a throw gives, about the axis across its flight. */
+    throwSpin: 6,
+    /** A received throw faster than this many times full strength is slowed to it. */
+    maxSpeedFactor: 1.5,
+    /** A drop lets go this far (m) in front of the eye and below it. */
+    dropAhead: 0.3,
+    dropBelow: 0.6,
+    ghostOpacity: 0.35,
+    /** Seconds the "someone else took it" note stays up. */
+    noticeTime: 1.5,
+    /** A received change counted more than this far ahead of the one known is refused (a forged count would lock it). */
+    maxJump: 1000,
+    physics: {
+      gravity: 9.81,
+      /** Longest step (s): a fast throw mustn't pass through a thin shelf. */
+      step: 1 / 120,
+      /** Share of the speed into a surface that comes back from a floor, and from a wall. */
+      restitution: 0.3,
+      wallRestitution: 0.4,
+      /** Share of the speed along a surface kept through a bounce. */
+      friction: 0.6,
+      /** Slowing (m/s²) while sliding, and the speed it stops at. */
+      slideFriction: 3,
+      stopSpeed: 0.05,
+      /** A rebound slower than this (m/s) and it slides instead. */
+      restSpeed: 0.5,
+      maxBounces: 4,
+      /** Landing faster than this (m/s), a tall thing tips over. A drop from the hand lands slower. */
+      tipSpeed: 5,
+      /** Seconds before a flight is set down where it is. */
+      maxFlight: 6,
+      /** Below this height (m) a thing has fallen out of the flat: it goes home. */
+      floorCatch: -1,
+      /** A surface whose normal points up at least this much (its y) is one to land on. */
+      upNormal: 0.7,
+      /** How far below a sliding thing its surface may be (m) before it falls off the edge. */
+      support: 0.03,
+      /** The flying ball's radius at most (m). */
+      radiusCap: 0.06,
+    },
+    place: {
+      /** A surface to put things on faces up at least this much (cos 45°). */
+      upNormal: 0.707,
+      /** How far the surface under each corner may be from the one aimed at (m). */
+      support: 0.015,
+    },
+  },
   /** Draw and guess on the Sala TV (draw-rules.ts, draw-game.ts): the phases' times, the points, the hints, sharing. */
   draw: {
     /** Seconds to choose a word, to draw it, to see it revealed, and to see the final scores. */

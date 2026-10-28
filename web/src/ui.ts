@@ -16,6 +16,10 @@ export const COPY = {
   whiteScenes: 'White',
   colourScenes: 'Colour',
   stand: 'Move to stand up',
+  holdHint: 'Right-click or F to throw, Q to drop',
+  holdHintTouch: 'Throw or drop it with the buttons',
+  noRoom: 'No room here',
+  taken: 'Someone else took it',
 };
 
 /** Where a Hue scene goes: the room the visitor is in, or every room. */
@@ -51,6 +55,11 @@ export interface TouchBarHandlers {
   sit(): void;
   pause(): void;
 }
+export interface HoldBarHandlers {
+  throwStart(): void;
+  throwEnd(): void;
+  drop(): void;
+}
 export interface SunPanelState {
   dayOfYear: number;
   daysInYear: number;
@@ -65,6 +74,7 @@ export interface SunPanelState {
 export class UI {
   private lastRoom = '';
   private lastSitting = false;
+  private lastHolding = false;
   private lastRoomLight: boolean | null | undefined;
   private touch = false;
   private lastGuests = '';
@@ -298,6 +308,21 @@ export class UI {
         this.el('touch-guests').setAttribute('aria-expanded', 'false');
       }
     });
+  }
+
+  /** The touch Throw button throws on letting go, harder the longer it's held; Drop lets go. */
+  bindHoldBar(h: HoldBarHandlers): void {
+    const t = this.el('hold-throw');
+    t.addEventListener('pointerdown', (e) => { e.preventDefault(); h.throwStart(); });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave'] as const) t.addEventListener(ev, () => h.throwEnd());
+    this.el('hold-drop').addEventListener('click', () => h.drop());
+  }
+
+  /** Holding something: the touch screen's Throw and Drop buttons show. */
+  setHolding(on: boolean): void {
+    if (on === this.lastHolding) return;
+    this.lastHolding = on;
+    this.el('hold-bar').hidden = !on;
   }
 
   /** The current room's light on the touch bar: null when the room has none. */
