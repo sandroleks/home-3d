@@ -300,6 +300,9 @@ export const CONFIG = {
      * railing and out of sight. */
     gravity: 8,
     drop: -4,
+    /** A drone's zig-zag: how far it bobs up and down (m) and how fast (rad/s), and how far it swings toward and away
+     * (m) and how fast; the phase offset between the two. */
+    zigzag: { rise: 1.2, riseRate: 2.6, swing: 2, swingRate: 1.1, skew: 0.7 },
     /** Each kind: its points, its size, its hit zone's radius (larger than it looks, for iron sights), how long it
      * flies, and the height it starts at (a drone's, give or take 3 m). */
     kinds: {

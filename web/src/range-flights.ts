@@ -2,6 +2,7 @@ import { CONFIG } from './config';
 
 /** A point or a direction (x, y, z), as plain numbers so it travels as JSON. */
 export type Vec3 = [number, number, number];
+/** The kinds of target: a clay, a gold clay (worth more, smaller and faster), and a drone (a slow, zig-zagging one). */
 export type TargetKind = 'clay' | 'gold' | 'drone';
 type RangeConfig = typeof CONFIG.range;
 
@@ -33,7 +34,7 @@ function flight(kind: TargetKind, at: number, rand: () => number, cfg: RangeConf
   const side = rand() < 0.5 ? -1 : 1;
   const phase = rand() * Math.PI * 2;
   if (kind === 'drone') {
-    const z = cfg.rail - between(cfg.near + 2, cfg.far - 2); // room for its zig-zag toward and away
+    const z = cfg.rail - between(cfg.near + cfg.zigzag.swing, cfg.far - cfg.zigzag.swing); // room for its zig-zag toward and away
     const y = k.launch + between(-3, 3);
     return { kind, at, dur, from: [cfg.middle + side * cfg.across, y, z], to: [cfg.middle - side * cfg.across, y, z], vy: 0, phase };
   }
@@ -60,12 +61,15 @@ export function schedule(seed: number, cfg: RangeConfig = CONFIG.range): Flight[
 }
 
 /** Where a target is at round time `t`, or null before it launches and after it lands. */
-export function flightAt(f: Flight, t: number, gravity = CONFIG.range.gravity): Vec3 | null {
+export function flightAt(f: Flight, t: number, cfg: RangeConfig = CONFIG.range): Vec3 | null {
   const u = t - f.at;
   if (u < 0 || u > f.dur) return null;
   const s = u / f.dur;
   const x = f.from[0] + (f.to[0] - f.from[0]) * s;
   const z = f.from[2] + (f.to[2] - f.from[2]) * s;
-  if (f.kind === 'drone') return [x, f.from[1] + 1.2 * Math.sin(2.6 * u + f.phase), z + 2 * Math.sin(1.1 * u + 0.7 * f.phase)];
-  return [x, f.from[1] + f.vy * u - (gravity * u * u) / 2, z];
+  const zz = cfg.zigzag;
+  if (f.kind === 'drone') {
+    return [x, f.from[1] + zz.rise * Math.sin(zz.riseRate * u + f.phase), z + zz.swing * Math.sin(zz.swingRate * u + zz.skew * f.phase)];
+  }
+  return [x, f.from[1] + f.vy * u - (cfg.gravity * u * u) / 2, z];
 }
