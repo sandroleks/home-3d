@@ -33,6 +33,11 @@ export class TableMaterials {
     return material;
   }
 
+  /** Every material made so far, for the shader warm-up. */
+  get all(): MeshMatcapMaterial[] {
+    return this.tints.map((t) => t.material);
+  }
+
   /** How lit the table is, 0..1 (`figureLight`). */
   setLight(level: number): void {
     if (Math.abs(level - this.level) < 1e-3) return;

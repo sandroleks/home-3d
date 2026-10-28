@@ -70,6 +70,33 @@ describe('interactions', () => {
     expect(() => activate(t, lights)).not.toThrow();
   });
 
+  it('prompts the rifle rack and the Start button, which change nothing shared', () => {
+    const lights = new LightGroups([]);
+    const range = { armed: false, busy: false, canArm: true };
+    const rack: Target = { kind: 'rack', range, node: new Object3D() };
+    const button: Target = { kind: 'range-button', range, node: new Object3D() };
+    expect(promptFor(rack, lights)).toBe('Click: pick up the rifle');
+    expect(promptFor(button, lights, 'Tap')).toBe('Pick up a rifle to play');
+    range.armed = true;
+    expect(promptFor(rack, lights, 'Tap')).toBe('Tap: put the rifle back');
+    expect(promptFor(button, lights)).toBe('Click: start a round');
+    range.busy = true;
+    expect(promptFor(button, lights)).toBe('A round is on');
+    activate(rack, lights);
+    activate(button, lights);
+    expect(range).toEqual({ armed: true, busy: true, canArm: true });
+  });
+
+  it('asks a visitor who cannot pick up the rifle where they stand to step onto the balcony', () => {
+    const lights = new LightGroups([]);
+    const range = { armed: false, busy: false, canArm: false };
+    const rack: Target = { kind: 'rack', range, node: new Object3D() };
+    expect(promptFor(rack, lights)).toBe('Step onto the balcony to pick up the rifle');
+    expect(promptFor(rack, lights, 'Tap')).toBe('Step onto the balcony to pick up the rifle');
+    range.canArm = true;
+    expect(promptFor(rack, lights)).toBe('Click: pick up the rifle');
+  });
+
   it('prompts and activates switches', () => {
     const lights = new LightGroups(['sala']);
     const t: Target = { kind: 'switch', room: 'sala', node: new Object3D() };

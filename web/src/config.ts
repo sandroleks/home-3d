@@ -333,6 +333,62 @@ export const CONFIG = {
     sway: { roll: 0.22, pitch: 0.1 },
     colours: { glass: '#1f3a26', label: '#efe4cc', capsule: '#6e1424', wine: '#5a0d1c', stemware: '#dfe8ea' },
   },
+  /** The shooting range on the Varanda, the office's balcony (range-*.ts): the rack and the Start button, the round,
+   * the targets and how they fly. Metres and seconds; the targets fly beyond the railing, toward −z. */
+  range: {
+    /** The room the rifle stays in: stepping out of it puts the rifle back. */
+    room: 'varanda',
+    /** Where the rack and the button stand on the balcony floor (x, z), at the railing's east end, clear of the
+     * balcony door; and the floor's height. */
+    rack: [2.85, -8.85] as [number, number],
+    button: [2.85, -8.35] as [number, number],
+    floor: 0,
+    /** The countdown, the round, and how long its final scores show. */
+    countdown: 3,
+    length: 60,
+    end: 10,
+    /** How close two starts are (ms) to count as pressed at once: the lower round id then wins; further apart, the
+     * earlier start does. */
+    crossing: 2000,
+    /** Hits kept for a round not heard of yet, oldest dropped first. */
+    pending: 64,
+    /** The bolt cycle between shots; the kick's ease back (s); where the rifle is held in view (camera space, m). */
+    cycle: 0.6,
+    kickTime: 0.18,
+    hold: [0.2, -0.24, -0.4] as [number, number, number],
+    /** The railing's line (z) and the balcony's middle across (x). Targets fly `near`..`far` beyond the railing and
+     * up to `across` to either side of the middle. */
+    rail: -9.09,
+    middle: 1.73,
+    near: 12,
+    far: 30,
+    across: 14,
+    /** Gravity on the clays, lighter than real so they hang a little, and the height they fall away to, below the
+     * railing and out of sight. */
+    gravity: 8,
+    drop: -4,
+    /** A drone's zig-zag: how far it bobs up and down (m) and how fast (rad/s), and how far it swings toward and away
+     * (m) and how fast; and a multiplier on the drone's phase for the swing, so the two don't move in step. */
+    zigzag: { rise: 1.2, riseRate: 2.6, swing: 2, swingRate: 1.1, skew: 0.7 },
+    /** Each kind: its points, its size, its hit zone's radius (larger than it looks, for iron sights), how long it
+     * flies, and the height it starts at (a drone's, give or take 3 m). */
+    kinds: {
+      clay: { points: 10, size: 0.55, hit: 0.85, time: [2.5, 4] as [number, number], launch: -3 },
+      gold: { points: 30, size: 0.4, hit: 0.65, time: [1.8, 2.4] as [number, number], launch: 1 },
+      drone: { points: 50, size: 0.75, hit: 1.0, time: [5, 7] as [number, number], launch: 7 },
+    },
+    /** The round's targets: one every `gap` s or so (±20 %) from `first` s until `last` s before the end, in pairs
+     * from `pairsFrom` of the way through, `gold` of them gold; and `drones` drones spread across the round. */
+    schedule: { first: 0.5, last: 4.5, gap: 1.6, pairsFrom: 0.5, gold: 0.125, drones: 3 },
+    /** How long another's tracer shows, a hit's shards fall, and its points float up. */
+    tracer: 0.12,
+    shards: 1.6,
+    float: 1.2,
+    colours: {
+      wood: '#6b4a2e', metal: '#2c2e31', clay: '#f06a1d', gold: '#f2c335', drone: '#3a3f46', rotor: '#9aa1a8',
+      button: '#c8161d', lit: '#ff4a3d', housing: '#f2c335', flash: '#ffd88a', tracer: '#fff2c4',
+    },
+  },
   /** The office's Nanoleaf panels (nanoleaf.ts): a gradient between two hues (0..1: teal to magenta, through blue)
    * drifting across the panels, `speed` radians a second, `spread` radians a metre along the wall. `glow` scales the
    * panels' baked glow so the colours stay deep instead of clipping to white. */
@@ -395,5 +451,8 @@ export const CONFIG = {
     stride: 0.7,
     runStride: 0.9,
     firstStep: 0.25,
+    /** The rifle's shot, made in code (sound.ts): a burst of noise this long (s), decaying with this time constant,
+     * low-passed at `cutoff` Hz; its level, and the distance (m) it is heard at full level from another shooter. */
+    shot: { length: 0.45, decay: 0.07, cutoff: 2400, level: 0.9, reach: 4 },
   },
 };

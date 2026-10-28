@@ -5,6 +5,7 @@ import { DoorState } from '../src/doors';
 import { LightGroups } from '../src/lightmaps';
 import type { DrawMessage } from '../src/draw-game';
 import type { GameMessage } from '../src/games';
+import type { RangeMessage } from '../src/range-game';
 import type { DoorInfo } from '../src/manifest';
 import type { PropMessage } from '../src/props';
 import { type MessageKind, Multiplayer, type Room } from '../src/multiplayer';
@@ -52,18 +53,20 @@ function setup(joinedAt = 1000, arrived = joinedAt) {
   const games: GameMessage[] = [];
   let running: GameMessage[] = [];
   const propsIn: PropMessage[] = [];
-  const leftIds: string[] = [];
   let away: PropMessage[] = [];
   const draws: [DrawMessage, string][] = [];
+  const ranges: [RangeMessage, string][] = [];
   const arrivals: string[] = [];
+  const leavers: string[] = [];
   const mp = new Multiplayer(fake.room, world, avatars, 'Ana', {
     now: () => now, onChanged: (k) => void changed.push(k), onPeers: (n) => void peers.push(n), onHost: (h) => void hosts.push(h),
     onGame: (g) => void games.push(g), games: () => running,
-    onProp: (m) => void propsIn.push(m), props: () => away, onLeave: (id) => void leftIds.push(id),
-    onDraw: (m, from) => void draws.push([m, from]), onArrive: (id) => void arrivals.push(id),
+    onProp: (m) => void propsIn.push(m), props: () => away,
+    onDraw: (m, from) => void draws.push([m, from]), onRange: (m, from) => void ranges.push([m, from]),
+    onArrive: (id) => void arrivals.push(id), onLeave: (id) => void leavers.push(id),
   }, joinedAt, arrived);
   return {
-    fake, world, avatars, mp, changed, peers, hosts, games, propsIn, leftIds, draws, arrivals,
+    fake, world, avatars, mp, changed, peers, hosts, games, propsIn, draws, ranges, arrivals, leavers,
     setNow: (t: number) => { now = t; }, setGames: (g: GameMessage[]) => { running = g; }, setAway: (m: PropMessage[]) => { away = m; },
     node: new Object3D(),
   };
@@ -263,6 +266,17 @@ describe('Multiplayer', () => {
     mp.sendDraw({ k: 'guess', g: 'g1', t: 1, text: 'cat' }, 'p1');
     expect(fake.sent.at(-1)).toEqual({ kind: 'draw', data: { k: 'guess', g: 'g1', t: 1, text: 'cat' }, to: 'p1' });
   });
+  it('passes on well-formed range messages with their sender, and sends its own to everyone or to one', () => {
+    const { fake, mp, ranges } = setup();
+    fake.receive('range', { k: 'arm', on: true, name: 'Bo' }, 'p1');
+    fake.receive('range', { k: 'arm', on: 'yes', name: 'Bo' }, 'p1');
+    fake.receive('range', { k: 'shot', r: '', t: 0, o: [0, 0, 0], d: [0, 0, -3], hit: -1 }, 'p2');
+    expect(ranges).toEqual([[{ k: 'arm', on: true, name: 'Bo' }, 'p1']]);
+    mp.sendRange({ k: 'arm', on: true, name: 'Ana' });
+    expect(fake.sent.at(-1)).toEqual({ kind: 'range', data: { k: 'arm', on: true, name: 'Ana' } });
+    mp.sendRange({ k: 'arm', on: false, name: 'Ana' }, 'p1');
+    expect(fake.sent.at(-1)).toEqual({ kind: 'range', data: { k: 'arm', on: false, name: 'Ana' }, to: 'p1' });
+  });
   it('tells of each visitor who arrives, once, and again when one comes back after timing out', () => {
     const { fake, mp, arrivals, setNow } = setup();
     fake.join('p1');
@@ -336,6 +350,16 @@ describe('Multiplayer', () => {
     mp.sendPose(1.1, 2, 0.5, 0); // heartbeat
     expect(fake.sent).toHaveLength(3);
   });
+  it('tells the hook when a peer leaves or times out', () => {
+    const { fake, mp, leavers, setNow } = setup();
+    fake.receive('pose', [0, 0, 0, 0], 'p1');
+    fake.receive('pose', [0, 0, 0, 0], 'p2');
+    fake.leave('p1');
+    expect(leavers).toEqual(['p1']);
+    setNow(20);
+    mp.tick();
+    expect(leavers).toEqual(['p1', 'p2']);
+  });
   it('removes the departed and the silent, and leaves the room', () => {
     const { fake, avatars, mp, peers, setNow } = setup();
     fake.receive('pose', [0, 0, 0, 0], 'p1');
@@ -367,11 +391,11 @@ describe('Multiplayer', () => {
   });
 
   it('sends a peer back from a timeout the loose things, so it learns its held thing was dropped', () => {
-    const { fake, mp, setNow, setAway, leftIds } = setup();
+    const { fake, mp, setNow, setAway, leavers } = setup();
     fake.receive('hello', { name: 'Rui', since: 500 }, 'p1');
     setNow(20);
     mp.tick(); // p1's tab was hidden: it timed out here, and what it held was dropped
-    expect(leftIds).toEqual(['p1']);
+    expect(leavers).toEqual(['p1']);
     const dropped: PropMessage = { id: 'a/tumbler/0', n: 5, by: '', s: 'rest', parent: null, p: [1, 0, 1], q: [0, 0, 0, 1] };
     setAway([dropped]);
     const n = fake.sent.length;
@@ -389,13 +413,13 @@ describe('Multiplayer', () => {
   });
 
   it('says who left, while their animal is still there', () => {
-    const { fake, leftIds, avatars } = setup();
+    const { fake, leavers, avatars } = setup();
     fake.receive('hello', { name: 'Bo', since: 500 }, 'p1');
     let seen = false;
     const before = avatars.remove.bind(avatars);
-    avatars.remove = (id: string) => { seen = leftIds.includes(id); before(id); };
+    avatars.remove = (id: string) => { seen = leavers.includes(id); before(id); };
     fake.leave('p1');
-    expect(leftIds).toEqual(['p1']);
+    expect(leavers).toEqual(['p1']);
     expect(seen).toBe(true);
   });
 });
