@@ -136,9 +136,13 @@ export function smoothPose(current: Pose, target: Pose, dt: number, tau = CONFIG
   ];
 }
 
-/** What a click changes in the flat: everything but a seat (where a visitor sits travels with their pose) and the wine
- * (each visitor drinks alone; how drunk they are travels with their pose too). */
-export type SharedTarget = Exclude<Target, { kind: 'seat' | 'wine' }>;
+/** What a click changes in the flat: everything but a seat (where a visitor sits travels with their pose), the wine
+ * (each visitor drinks alone; how drunk they are travels with their pose too), and the rifle rack and the Start
+ * button (each visitor's own; the range's messages carry what others need). */
+export type SharedTarget = Exclude<Target, { kind: 'seat' | 'wine' | 'rack' | 'range-button' }>;
+/** The targets that are each visitor's own: nothing about them is shared. */
+const PERSONAL: readonly Target['kind'][] = ['seat', 'wine', 'rack', 'range-button'];
+export const isShared = (t: Target): t is SharedTarget => !PERSONAL.includes(t.kind);
 
 /** The shared-state key a click on a target changes. A room's switch is the light group with the room's id. */
 export function stateKey(t: SharedTarget): string {
@@ -168,7 +172,7 @@ export function lightValue(lights: LightGroups, id: string): number {
 }
 
 export function stateDelta(t: Target, lights: LightGroups): StateMap {
-  return t.kind === 'seat' || t.kind === 'wine' ? {} : { [stateKey(t)]: stateValue(t, lights) };
+  return isShared(t) ? { [stateKey(t)]: stateValue(t, lights) } : {};
 }
 
 /** Everything shared, for a newcomer. */

@@ -2,7 +2,7 @@ import { CONFIG } from './config';
 import { type Flight, flightAt, type Vec3 } from './range-flights';
 
 /** A hit someone claims: which target (its place in the round's schedule), when in the round (s), and by whom. */
-export interface Claim { target: number; t: number; by: string }
+export type Claim = { target: number; t: number; by: string };
 /** A shooter on the board: their place (ties share one), name and points. */
 export interface Standing { id: string; name: string; score: number; place: number }
 

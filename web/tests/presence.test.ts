@@ -6,7 +6,7 @@ import { LightGroups } from '../src/lightmaps';
 import type { DoorInfo, MovableInfo, ScreenInfo } from '../src/manifest';
 import { MovableState } from '../src/movables';
 import {
-  applyState, byArrival, cleanName, collectState, colourFor, encodePose, hashId, hostOf, isPose, isStateMap, loadArrived, loadName, Peers, poseMoved, saveName, splitPose,
+  applyState, byArrival, cleanName, collectState, colourFor, encodePose, hashId, hostOf, isPose, isShared, isStateMap, loadArrived, loadName, Peers, poseMoved, saveName, splitPose,
   shortestTurn, shouldSend, smoothPose, stateDelta, stateKey, stateValue,
 } from '../src/presence';
 import { Screen } from '../src/screens';
@@ -291,5 +291,16 @@ describe('the host', () => {
     expect(loadArrived(storage, 'other', 6000)).toBe(6000); // another room starts afresh
     const broken = () => { throw new Error('no storage'); };
     expect(loadArrived(broken, 'party', 7000)).toBe(7000);
+  });
+});
+
+describe('personal targets', () => {
+  it('shares nothing for a seat, the wine, the rifle rack or the Start button', () => {
+    const lights = new LightGroups([]);
+    const range = { armed: false, busy: false };
+    for (const t of [{ kind: 'wine', node: new Object3D() }, { kind: 'rack', range, node: new Object3D() }, { kind: 'range-button', range, node: new Object3D() }] as const) {
+      expect(isShared(t)).toBe(false);
+      expect(stateDelta(t, lights)).toEqual({});
+    }
   });
 });

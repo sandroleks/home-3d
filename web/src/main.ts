@@ -30,7 +30,7 @@ import { Drunk, viewFilter, wobbleAt } from './drunk';
 import { WineBottle } from './wine';
 import { fetchIceServers } from './turn';
 import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
-import { applyState, cleanName, collectState, colourFor, lightValue, loadArrived, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
+import { applyState, cleanName, collectState, colourFor, isShared, lightValue, loadArrived, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
 import { activeScene, colourAt, groupsIn, HUE_SCENES, levelFor, nextScene, NO_HUE_LINK, packColour, sceneById } from './hue';
 import { Player, screenFov, vfovFromHfov } from './player';
 import { freeSpot, seatAt, seatedOn, seatingCode } from './seats';
@@ -279,7 +279,7 @@ async function run(): Promise<void> {
   ui.onGuests(() => {
     if (started && !autostart) toggleGuests();
   });
-  const byKey = new Map([...world.targets.values()].flatMap((t) => (t.kind === 'seat' || t.kind === 'wine' ? [] : [[stateKey(t), t] as const])));
+  const byKey = new Map([...world.targets.values()].flatMap((t) => (isShared(t) ? [[stateKey(t), t] as const] : [])));
   const share = (t: Target | null) => {
     if (t) others?.broadcast(stateDelta(t, world.lights));
   };

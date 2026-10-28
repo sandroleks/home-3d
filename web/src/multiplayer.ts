@@ -3,13 +3,14 @@ import type { Avatars } from './avatars';
 import { CONFIG } from './config';
 import { type DrawMessage, isDrawMessage } from './draw-game';
 import { type GameMessage, isGameMessage } from './games';
+import { isRangeMessage, type RangeMessage } from './range-game';
 import {
   applyState, cleanName, collectState, colourFor, encodePose, isPose, isStateMap, Peers, type PoseMessage, poseMoved,
   type Seating, shouldSend, type StateMap, type StateWorld, hostOf,
 } from './presence';
 
-export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'draw';
-const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'draw'];
+export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'draw' | 'range';
+const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'draw', 'range'];
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 /** What the walkthrough needs from a network: Trystero today, a WebSocket server another day. */
@@ -70,6 +71,8 @@ export interface MultiplayerHooks {
   onDraw?: (msg: DrawMessage, from: string) => void;
   /** A visitor new here (or back after timing out), to greet with this visitor's part of draw and guess. */
   onArrive?: (id: string) => void;
+  /** The shooting range: a message from another visitor (well-formed; what to do with it is the range's call). */
+  onRange?: (msg: RangeMessage, from: string) => void;
 }
 
 /**
@@ -141,6 +144,11 @@ export class Multiplayer {
       if (!isDrawMessage(data)) return;
       if (this.arrive(id)) this.greet(id, true);
       hooks.onDraw?.(data, id);
+    });
+    room.onMessage('range', (data, id) => {
+      if (!isRangeMessage(data)) return;
+      if (this.arrive(id)) this.greet(id, true);
+      hooks.onRange?.(data, id);
     });
   }
 
@@ -234,6 +242,11 @@ export class Multiplayer {
   /** Draw and guess: to everyone, or (a guess, a "close!", a newcomer's state) to one visitor. */
   sendDraw(msg: DrawMessage, to?: string): void {
     this.room.send('draw', msg, to);
+  }
+
+  /** The shooting range: to everyone, or (a newcomer's catch-up) to one visitor. */
+  sendRange(msg: RangeMessage, to?: string): void {
+    this.room.send('range', msg, to);
   }
 
   /** Every frame: drop the silent. */

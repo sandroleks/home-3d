@@ -4,7 +4,7 @@ import { type Flight, flightAt, schedule, type Vec3 } from './range-flights';
 import { type Claim, rayHit, type Standing, standings } from './range-rules';
 
 /** A shooter on a round's board: their id and the name they had. */
-export interface Shooter { id: string; name: string }
+export type Shooter = { id: string; name: string };
 
 /**
  * What a `range` message carries: a visitor picking up a rifle or putting it back; a round starting (or, to a
