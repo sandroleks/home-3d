@@ -225,6 +225,27 @@ export const CONFIG = {
       wood: '#d8b077', lines: '#3b2c1e', white: '#f2eee4', black: '#2b2a28',
     },
   },
+  /** Draw and guess on the Sala TV (draw-rules.ts, draw-game.ts): the phases' times, the points, the hints, sharing. */
+  draw: {
+    /** Seconds to choose a word, to draw it, to see it revealed, and to see the final scores. */
+    choose: 15,
+    drawing: 80,
+    reveal: 5,
+    end: 15,
+    /** A right guess scores `most` at the start of the drawing time, falling to `least` at its end, rounded to
+     * `step`; the drawer scores `drawer` for each. */
+    most: 300,
+    least: 100,
+    step: 10,
+    drawer: 50,
+    /** Shares of the drawing time at which a letter of the word shows (never more than half its letters). */
+    hints: [0.5, 0.75] as number[],
+    /** Words to choose from, and the lines the feed keeps. */
+    choices: 3,
+    feed: 8,
+    /** Seconds between the drawer's batches of stroke points. */
+    strokeEvery: 0.05,
+  },
   /** The wine on the kitchen's back counter (wine.ts) and getting drunk on it (drunk.ts). */
   wine: {
     /** Where the bottle stands (x, z): on the back counter between the sink and the hob, the same in both kitchens;

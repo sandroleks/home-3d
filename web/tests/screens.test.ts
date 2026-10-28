@@ -1,6 +1,7 @@
 import { Mesh, MeshBasicMaterial, Object3D, PlaneGeometry } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { ScreenInfo } from '../src/manifest';
+import type { DrawTv } from '../src/draw-tv';
 import { TV_CHANNELS } from '../src/screen-content';
 import { Screen } from '../src/screens';
 
@@ -43,6 +44,79 @@ describe('Screen', () => {
     s.update(1, 1, world, true);
     expect(s.level).toBe(0);
     expect(mesh.material).toBe(off);
+  });
+
+  it('turns the TV on and off from the remote, and steps its channels round', () => {
+    const { s } = screen('tv');
+    s.nextChannel(); // off: nothing
+    expect(s.on).toBe(false);
+    s.power(0);
+    expect([s.on, s.channel]).toEqual([true, 0]);
+    for (let i = 1; i < TV_CHANNELS.length; i++) s.nextChannel();
+    expect(s.channel).toBe(TV_CHANNELS.length - 1);
+    s.nextChannel();
+    expect([s.on, s.channel]).toEqual([true, 0]); // round to the first, still on
+    s.power(1);
+    expect(s.on).toBe(false);
+  });
+
+  it('keeps the last picture while a game fades off a dark TV, rather than drawing the channel', () => {
+    const calls: string[] = [];
+    const returned = { addColorStop() {}, width: 5 };
+    const ctx = new Proxy({} as Record<string, unknown>, {
+      get(target, prop) {
+        if (typeof prop !== 'string') return undefined;
+        if (prop in target) return target[prop];
+        return () => {
+          calls.push(prop);
+          return returned;
+        };
+      },
+      set(target, prop, value) {
+        target[prop as string] = value;
+        return true;
+      },
+    });
+    const node = new Object3D();
+    node.add(new Mesh(new PlaneGeometry(), new MeshBasicMaterial()));
+    const s = new Screen(info('tv'), node, (w, h) => ({ width: w, height: h, getContext: () => ctx as unknown as CanvasRenderingContext2D }));
+    const game: DrawTv = { phase: 'choosing', drawer: 'Ana', hint: '', word: '', seconds: 15, strokes: [], rows: [], gains: [] };
+    s.setGame(game, 0);
+    s.update(0, 1, world, false);
+    const picture = s.brightness;
+    expect(picture).toBeGreaterThan(0);
+    s.setGame(null, 1);
+    calls.length = 0;
+    let t = 1;
+    let steps = 0;
+    for (; steps < 40 && s.level > 0; steps++) {
+      t += 0.05;
+      s.update(t, 0.05, world, false);
+      expect(calls).toEqual([]);
+      expect(s.brightness).toBe(picture);
+    }
+    expect(steps).toBeGreaterThan(2);
+    expect(s.level).toBe(0);
+    s.update(t + 0.05, 0.05, world, false);
+    expect(calls.length).toBe(0);
+  });
+
+  it('shows a game on the TV even while it is off, and goes dark again after', () => {
+    const { s, mesh } = screen('tv');
+    const off = mesh.material;
+    const game: DrawTv = { phase: 'choosing', drawer: 'Ana', hint: '', word: '', seconds: 15, strokes: [], rows: [], gains: [] };
+    s.setGame(game, 0);
+    expect([s.on, s.lit]).toEqual([false, true]);
+    s.update(0, 1, world, false);
+    expect(s.level).toBe(1);
+    expect(mesh.material).not.toBe(off);
+    s.setGame(null, 1);
+    s.update(1, 1, world, false);
+    expect(s.lit).toBe(false);
+    expect(mesh.material).toBe(off);
+    const monitor = screen('monitor').s;
+    monitor.setGame(game, 0);
+    expect(monitor.lit).toBe(false); // games are the TV's
   });
 
   it('starts dark and white-tinted, for its baked light', () => {

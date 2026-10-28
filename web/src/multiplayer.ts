@@ -1,14 +1,15 @@
 import type { Room as TrysteroRoom } from 'trystero';
 import type { Avatars } from './avatars';
 import { CONFIG } from './config';
+import { type DrawMessage, isDrawMessage } from './draw-game';
 import { type GameMessage, isGameMessage } from './games';
 import {
   applyState, cleanName, collectState, colourFor, encodePose, isPose, isStateMap, Peers, type PoseMessage, poseMoved,
   type Seating, shouldSend, type StateMap, type StateWorld, hostOf,
 } from './presence';
 
-export type MessageKind = 'hello' | 'pose' | 'state' | 'game';
-const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game'];
+export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'draw';
+const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'draw'];
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 /** What the walkthrough needs from a network: Trystero today, a WebSocket server another day. */
@@ -65,6 +66,10 @@ export interface MultiplayerHooks {
   onGame?: (game: GameMessage) => void;
   /** The table's games, sent to a newcomer with the flat's state. */
   games?: () => GameMessage[];
+  /** Draw and guess: a message from another visitor (well-formed; what to do with it is the game's call). */
+  onDraw?: (msg: DrawMessage, from: string) => void;
+  /** A visitor new here (or back after timing out), to greet with this visitor's part of draw and guess. */
+  onArrive?: (id: string) => void;
 }
 
 /**
@@ -132,6 +137,11 @@ export class Multiplayer {
       if (this.arrive(id)) this.greet(id, true);
       hooks.onGame?.(data);
     });
+    room.onMessage('draw', (data, id) => {
+      if (!isDrawMessage(data)) return;
+      if (this.arrive(id)) this.greet(id, true);
+      hooks.onDraw?.(data, id);
+    });
   }
 
   get names(): string[] {
@@ -173,6 +183,7 @@ export class Multiplayer {
     const stream = this.streams.get(id);
     if (stream) this.voice?.add(id, stream);
     this.hooks.onPeers(this.peers.names());
+    this.hooks.onArrive?.(id);
     return true;
   }
 
@@ -218,6 +229,11 @@ export class Multiplayer {
   /** Tells the others about a game this visitor opened or moved in. */
   sendGame(game: GameMessage): void {
     this.room.send('game', game);
+  }
+
+  /** Draw and guess: to everyone, or (a guess, a "close!", a newcomer's state) to one visitor. */
+  sendDraw(msg: DrawMessage, to?: string): void {
+    this.room.send('draw', msg, to);
   }
 
   /** Every frame: drop the silent. */
