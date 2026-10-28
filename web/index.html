@@ -109,6 +109,52 @@
           <button type="button" id="board-confirm-no">Keep playing</button>
         </div>
       </section>
+      <section id="tv-panel" aria-labelledby="tv-title" hidden>
+        <div class="tv-head">
+          <h2 id="tv-title">TV</h2>
+          <button type="button" id="tv-leave" hidden>Leave</button>
+          <button type="button" id="tv-close">Close</button>
+        </div>
+        <div id="tv-lobby">
+          <div class="tv-row">
+            <button type="button" id="tv-power">Turn on</button>
+            <button type="button" id="tv-next">Next channel</button>
+            <span id="tv-remote-note"></span>
+          </div>
+          <h3>Draw and guess</h3>
+          <ul id="tv-players"></ul>
+          <p id="tv-lobby-note"></p>
+          <div class="tv-row">
+            <button type="button" id="tv-join">Join</button>
+            <button type="button" id="tv-start" disabled>Start</button>
+          </div>
+        </div>
+        <div id="draw-game" hidden>
+          <p id="draw-head"><span id="draw-word"></span><span id="draw-time"></span></p>
+          <div id="draw-board">
+            <canvas id="draw-canvas"></canvas>
+            <div id="draw-choices" hidden></div>
+          </div>
+          <div id="draw-tools" hidden>
+            <span id="draw-colours"></span>
+            <button type="button" id="draw-eraser">Eraser</button>
+            <button type="button" id="draw-fine">Fine</button>
+            <button type="button" id="draw-broad">Broad</button>
+            <button type="button" id="draw-undo">Undo</button>
+            <button type="button" id="draw-clear">Clear</button>
+          </div>
+          <p id="draw-status" aria-live="polite"></p>
+          <div id="draw-lists">
+            <ol id="draw-scores" aria-label="Scores"></ol>
+            <ul id="draw-feed" aria-label="Guesses"></ul>
+          </div>
+          <form id="draw-guess" hidden>
+            <input id="draw-guess-text" type="text" maxlength="40" autocomplete="off" autocapitalize="off" enterkeyhint="send" placeholder="Type your guess" aria-label="Your guess" />
+            <button type="submit">Guess</button>
+          </form>
+          <p id="draw-close" aria-live="polite" hidden></p>
+        </div>
+      </section>
       <div id="stick" hidden><i id="stick-knob"></i></div>
       <div id="touch-bar">
         <button type="button" id="touch-sun" aria-label="Date and time" aria-expanded="false" aria-controls="sun-panel">
