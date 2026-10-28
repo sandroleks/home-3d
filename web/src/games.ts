@@ -134,10 +134,13 @@ export function leftEnd(whiteHere: boolean, blackHere: boolean): GameEnd | null 
 
 /**
  * The table's games as this browser sees them. Every frame `update` takes who sits where: a running game whose player
- * left their chair ends; the white player's browser opens a new game when both chairs are taken and none is running.
- * A game from another visitor is taken (`receive`) when it is this slot's game and its entries extend ours and replay
- * legally, when it is a new game for the two visitors in the chairs now, or, ended, to show in a slot with no game yet
- * (a newcomer's). One that names players not seen in the chairs yet waits a few seconds for their poses.
+ * left their chair ends (and a player's browser sends it once, so one that timed out on the others' side learns it);
+ * coming back from a gap longer than the others wait for a pose ends this visitor's own game, as they saw it; the white
+ * player's browser opens a new game when both chairs are taken and none is running. A game from another visitor is
+ * taken (`receive`) when it is this slot's game and its entries extend ours and replay legally (or, with the same
+ * entries, tell of a leave this browser hasn't seen), when it is a new game for the two visitors in the chairs now, or,
+ * ended, to show in a slot with no game yet (a newcomer's); never one this browser has shown in the slot before. One
+ * that names players not seen in the chairs yet waits a few seconds for their poses.
  */
 export class Games {
   /** Goes up on every change, for the overlay to redraw. */
@@ -146,8 +149,11 @@ export class Games {
   private pending: ({ message: GameMessage; at: number } | null)[] = SLOTS.map(() => null);
   /** A new game may open: the slot has had an empty chair since its last game opened here. */
   private armed: boolean[] = SLOTS.map(() => true);
+  /** The game ids each slot has shown, so a late copy of an older game never replaces a newer one. */
+  private shown: Set<string>[] = SLOTS.map(() => new Set());
   private seats: SlotSeats[] = SLOTS.map(() => ({ white: null, black: null }));
   private now = 0;
+  private ticked = false;
 
   constructor(private selfId: () => string, private newId: () => string, private rules = RULES) {}
 
@@ -176,43 +182,49 @@ export class Games {
     return null;
   }
 
-  /** Every frame, with who sits where and the time (s). Returns the games this browser opened, to send. */
+  /** Every frame, with who sits where and the time (s). Returns the games to send: the ones this browser opened, and
+   * its own game once a player left it. */
   update(seats: SlotSeats[], now: number): GameMessage[] {
+    const me = this.selfId();
+    const away = this.ticked && now - this.now > CONFIG.multiplayer.staleAfter; // the others have dropped this visitor
     this.seats = seats;
     this.now = now;
-    const opened: GameMessage[] = [];
+    this.ticked = true;
+    const out: GameMessage[] = [];
     seats.forEach((s, slot) => {
       const make = this.rules[SLOTS[slot].kind];
       if (!make) return;
       const g = this.games[slot];
       if (g && !endOf(g)) {
-        const left = leftEnd(s.white === g.white, s.black === g.black);
+        const mine = g.white === me || g.black === me;
+        const left = away && mine ? leftEnd(g.white !== me, g.black !== me) : leftEnd(s.white === g.white, s.black === g.black);
         if (left) {
           g.left = left;
+          if (away && mine) this.armed[slot] = true; // their chair was empty for the others
           this.version++;
+          if (mine) out.push(this.message(slot)!);
         }
       }
       const p = this.pending[slot];
-      if (p && (now - p.at > CONFIG.games.pendingFor || this.adopt(p.message))) this.pending[slot] = null;
+      if (p && (this.adopt(p.message) || now - p.at > CONFIG.games.pendingFor)) this.pending[slot] = null;
       if (!s.white || !s.black) this.armed[slot] = true;
-      else if (this.armed[slot] && s.white === this.selfId() && !this.running(slot)) {
-        this.games[slot] = { id: this.newId(), white: s.white, black: s.black, rules: make(), left: null };
+      else if (this.armed[slot] && s.white === me && !this.running(slot)) {
+        this.show(slot, { id: this.newId(), white: s.white, black: s.black, rules: make(), left: null });
         this.armed[slot] = false;
-        this.version++;
-        opened.push(this.message(slot)!);
+        out.push(this.message(slot)!);
       }
     });
-    return opened;
+    return out;
   }
 
   /** A game from another visitor; returns whether it was taken. */
   receive(m: GameMessage): boolean {
     if (!this.playable(m.slot)) return false;
     const g = this.games[m.slot];
-    if (g?.id === m.id) return this.extend(g, m);
-    if (this.adopt(m)) return true;
-    this.pending[m.slot] = { message: m, at: this.now };
-    return false;
+    const taken = g?.id === m.id ? this.extend(g, m) : this.adopt(m);
+    if (taken) this.pending[m.slot] = null;
+    else if (g?.id !== m.id && !this.shown[m.slot].has(m.id)) this.pending[m.slot] = { message: m, at: this.now };
+    return taken;
   }
 
   /** An entry by this visitor, who must be the slot's player to move. Returns the game to send, or null. */
@@ -244,10 +256,17 @@ export class Games {
     return !!g && !endOf(g);
   }
 
-  /** More entries for this slot's game. A game that has ended here takes no more. */
+  /** More entries for this slot's game; a game its rules ended takes no more, but one a player left still takes a
+   * move that was on its way. The same entries can only tell of a leave, taken when this browser has no end yet. */
   private extend(g: SlotGame, m: GameMessage): boolean {
     const have = g.rules.moves;
-    if (endOf(g) || m.moves.length <= have.length || have.some((e, i) => m.moves[i] !== e)) return false;
+    if (g.rules.end() || m.moves.length < have.length || have.some((e, i) => m.moves[i] !== e)) return false;
+    if (m.moves.length === have.length) {
+      if (m.end?.reason !== 'left' || g.left) return false;
+      g.left = m.end;
+      this.version++;
+      return true;
+    }
     const rules = replay(g.rules.kind, m.moves, this.rules);
     if (!rules) return false;
     g.rules = rules;
@@ -256,16 +275,24 @@ export class Games {
   }
 
   /** Another game in this slot: a new one for the two in its chairs now (unless one is running), or a finished one
-   * where there's no game yet. */
+   * where there's no game yet; never one shown here before. Of its `end` only a leave is kept: the rest come from the
+   * entries. */
   private adopt(m: GameMessage): boolean {
     const g = this.games[m.slot];
     const s = this.seats[m.slot];
     const forSeated = s.white === m.white && s.black === m.black && !this.running(m.slot);
-    if (!forSeated && !(!g && m.end)) return false;
+    if ((!forSeated && !(!g && m.end)) || this.shown[m.slot].has(m.id)) return false;
     const rules = replay(SLOTS[m.slot].kind, m.moves, this.rules);
     if (!rules) return false;
-    this.games[m.slot] = { id: m.id, white: m.white, black: m.black, rules, left: rules.end() ? null : m.end ?? null };
-    this.version++;
+    const left = !rules.end() && m.end?.reason === 'left' ? m.end : null;
+    this.show(m.slot, { id: m.id, white: m.white, black: m.black, rules, left });
     return true;
+  }
+
+  /** Puts a game in its slot. */
+  private show(slot: number, g: SlotGame): void {
+    this.games[slot] = g;
+    this.shown[slot].add(g.id);
+    this.version++;
   }
 }

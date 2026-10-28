@@ -178,11 +178,145 @@ describe('Games', () => {
     expect(endOf(ze.at(0)!)).toEqual({ winner: 'white', reason: 'left' });
     expect(ze.messages()).toEqual([{ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: ['e2e4'], end: { winner: 'white', reason: 'left' } }]);
   });
-  it('takes no more moves for a game that ended here', () => {
+  it('takes no more moves for a game that ended by its rules', () => {
+    const ze = setup('ze');
+    ze.update(at0('ana', 'rui'), 0);
+    ze.receive({ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: ['resign'] });
+    expect(ze.receive({ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: ['resign', 'e2e4'] })).toBe(false);
+  });
+  it('takes a move that was on its way when a player left, and its checkmate', () => {
+    const mate = ['f2f3', 'e7e5', 'g2g4', 'd8h4'];
+    const ana = setup('ana');
+    const rui = setup('rui');
+    const ze = setup('ze');
+    const g1 = ana.update(at0('ana', 'rui'), 0)[0];
+    for (const b of [rui, ze]) {
+      b.update(at0('ana', 'rui'), 0);
+      b.receive(g1);
+    }
+    for (const e of mate.slice(0, 3)) {
+      const m = (e === 'e7e5' ? rui : ana).play(0, e)!;
+      for (const b of [ana, rui, ze]) b.receive(m);
+    }
+    const last = rui.play(0, 'd8h4')!; // rui mates and stands up before it arrives
+    rui.update(at0('ana', null), 1);
+    for (const b of [ana, ze]) {
+      b.update(at0('ana', null), 1);
+      expect(endOf(b.at(0)!)).toEqual({ winner: 'white', reason: 'left' });
+      expect(b.receive(last)).toBe(true);
+    }
+    for (const b of [ana, rui, ze]) {
+      expect(b.at(0)?.rules.moves).toEqual(mate);
+      expect(endOf(b.at(0)!)).toEqual({ winner: 'black', reason: 'checkmate' });
+    }
+  });
+});
+
+describe('Games: a player who timed out', () => {
+  it("sends its own game once when a player leaves it, but not someone else's", () => {
+    const ana = setup('ana');
+    ana.update(at0('ana', 'rui'), 0);
+    ana.play(0, 'e2e4');
+    expect(ana.update(at0('ana', null), 1)).toEqual([
+      { slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: ['e2e4'], end: { winner: 'white', reason: 'left' } },
+    ]);
+    expect(ana.update(at0('ana', null), 2)).toEqual([]); // once
     const ze = setup('ze');
     ze.update(at0('ana', 'rui'), 0);
     ze.receive({ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: [] });
-    ze.update(at0(null, 'rui'), 1);
-    expect(ze.receive({ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: ['e2e4'] })).toBe(false);
+    expect(ze.update(at0('ana', null), 1)).toEqual([]);
+    expect(endOf(ze.at(0)!)).toEqual({ winner: 'white', reason: 'left' });
+  });
+  it('learns its game ended by a leave from a copy with the same moves', () => {
+    const rui = setup('rui');
+    rui.update(at0('ana', 'rui'), 0);
+    rui.receive({ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: ['e2e4'] });
+    const g1 = { slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: ['e2e4'] };
+    expect(rui.receive({ ...g1, end: { winner: 'white', reason: 'resigned' } })).toBe(false); // rules' ends come from the moves
+    expect(endOf(rui.at(0)!)).toBeNull();
+    expect(rui.receive({ ...g1, end: { winner: 'white', reason: 'left' } })).toBe(true);
+    expect(endOf(rui.at(0)!)).toEqual({ winner: 'white', reason: 'left' });
+    expect(rui.receive({ ...g1, end: { winner: 'black', reason: 'left' } })).toBe(false); // it has its end
+    expect(rui.play(0, 'e7e5')).toBeNull();
+  });
+  it('ends its own game when it comes back after the others dropped it, then takes the new one', () => {
+    const ana = setup('ana');
+    const rui = setup('rui');
+    const g1 = ana.update(at0('ana', 'rui'), 0)[0];
+    rui.update(at0('ana', 'rui'), 0);
+    rui.receive(g1);
+    // rui's phone is locked: ana's browser drops rui, ends g1, and opens g2 when rui is back in the chair
+    ana.update(at0('ana', null), 20);
+    const [g2] = ana.update(at0('ana', 'rui'), 30);
+    expect(g2.id).toBe('g2');
+    expect(rui.update(at0('ana', 'rui'), 30)).toEqual([{ ...g1, end: { winner: 'white', reason: 'left' } }]);
+    expect(rui.receive(g2)).toBe(true);
+    expect(rui.at(0)?.id).toBe('g2');
+    expect(rui.play(0, 'e7e5')).toBeNull(); // white's move
+    expect(rui.receive({ ...g2, moves: ['e2e4'] })).toBe(true);
+  });
+  it('takes the new game held from before its first frame back', () => {
+    const ana = setup('ana');
+    const rui = setup('rui');
+    const g1 = ana.update(at0('ana', 'rui'), 0)[0];
+    rui.update(at0('ana', 'rui'), 0);
+    rui.receive(g1);
+    ana.update(at0('ana', null), 20);
+    const [g2] = ana.update(at0('ana', 'rui'), 30);
+    expect(rui.receive(g2)).toBe(false); // g1 still runs here: held
+    rui.update(at0('ana', 'rui'), 30);
+    expect(rui.at(0)?.id).toBe('g2');
+  });
+  it('opens the next game itself when it was the white player who timed out', () => {
+    const ana = setup('ana');
+    ana.update(at0('ana', 'rui'), 0);
+    const sent = ana.update(at0('ana', 'rui'), 20);
+    expect(sent.map((m) => [m.id, m.end])).toEqual([['g1', { winner: 'black', reason: 'left' }], ['g2', undefined]]);
+  });
+});
+
+describe('Games: held games', () => {
+  /** rui's browser: g0 played out (resigned), then g1 running. */
+  function afterTwo() {
+    const rui = setup('rui');
+    rui.update(at0('ana', 'rui'), 0);
+    rui.receive({ slot: 0, id: 'g0', white: 'ana', black: 'rui', moves: [] });
+    rui.receive({ slot: 0, id: 'g0', white: 'ana', black: 'rui', moves: ['resign'] });
+    rui.receive({ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: [] });
+    return rui;
+  }
+  it('never goes back to a game it has shown in the slot', () => {
+    const rui = afterTwo();
+    expect(rui.at(0)?.id).toBe('g1');
+    expect(rui.receive({ slot: 0, id: 'g0', white: 'ana', black: 'rui', moves: [] })).toBe(false); // a late copy
+    rui.receive({ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: ['e2e4'] });
+    rui.play(0, 'resign');
+    rui.update(at0('ana', 'rui'), 1);
+    expect(rui.at(0)?.id).toBe('g1');
+  });
+  it('drops a held game once a game for the slot is taken', () => {
+    const rui = setup('rui');
+    rui.update(at0('ana', 'rui'), 0);
+    rui.receive({ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: [] });
+    expect(rui.receive({ slot: 0, id: 'gx', white: 'ana', black: 'rui', moves: [] })).toBe(false); // held
+    rui.receive({ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: ['e2e4'] });
+    rui.play(0, 'resign');
+    rui.update(at0('ana', 'rui'), 1);
+    expect(rui.at(0)?.id).toBe('g1');
+  });
+  it('takes a held game when it can, even on a frame after it would have lapsed', () => {
+    const ze = setup('ze');
+    ze.update(at0('ana', null), 0);
+    ze.receive({ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: [] });
+    ze.update(at0('ana', 'rui'), 6);
+    expect(ze.at(0)?.id).toBe('g1');
+  });
+  it("keeps only a leave from an adopted game's end", () => {
+    const ze = setup('ze');
+    ze.update(at0(null, null), 0);
+    ze.receive({ slot: 0, id: 'g1', white: 'ana', black: 'rui', moves: ['e2e4'], end: { winner: 'white', reason: 'agreement' } });
+    expect(ze.at(0)?.left).toBeNull();
+    ze.update(at0('ana', 'rui'), 1); // not ended: the seated players' game runs on
+    expect(endOf(ze.at(0)!)).toBeNull();
   });
 });
