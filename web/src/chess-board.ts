@@ -1,7 +1,7 @@
 import type { PieceSymbol, Square } from 'chess.js';
-import type { PanelBoard } from './board-panel';
+import { type BoardView, GAME_COPY, type PanelAction, type PanelBoard } from './board-panel';
 import { ChessGame } from './chess-game';
-import type { GameRules, Side } from './games';
+import { type GameRules, otherSide, type Side } from './games';
 
 const SVG = 'http://www.w3.org/2000/svg';
 /** The filled glyphs for both sides (the fill tells them apart); U+FE0E keeps phones from drawing emoji. */
@@ -15,6 +15,15 @@ const COLOURS = {
   light: '#e8d5b0', dark: '#9c6b4a', last: 'rgba(232, 194, 122, 0.55)', selected: 'rgba(232, 194, 122, 0.85)',
   check: 'rgba(226, 92, 80, 0.75)', target: 'rgba(18, 17, 15, 0.35)', white: '#f8f4ea', black: '#2a2622',
 };
+
+/** Chess's draw button: Offer draw, Accept draw when the other side's offer stands, or Draw offered (disabled) while
+ * your own does; it works only on your move. */
+export function drawAction({ game, you, live, end }: BoardView): { label: string; enabled: boolean; entry: 'draw?' | 'draw!' } {
+  const offer = game && !end ? game.drawOffer?.() ?? null : null;
+  if (offer === otherSide(you)) return { label: GAME_COPY.acceptDraw, enabled: live, entry: 'draw!' };
+  if (offer === you) return { label: GAME_COPY.drawOffered, enabled: false, entry: 'draw?' };
+  return { label: GAME_COPY.offerDraw, enabled: live, entry: 'draw?' };
+}
 
 /** A square's column and row on screen (0..7 from the top left), your own side at the bottom. */
 export function squareCell(square: string, you: Side): [number, number] {
@@ -44,7 +53,8 @@ export class ChessBoard implements PanelBoard {
   private selected: Square | null = null;
   private promoting: string | null = null;
 
-  constructor(private doc: Document, private onMove: (uci: string) => void) {
+  /** `onMove` takes the entries this board makes: moves in UCI, `draw?` and `draw!`. */
+  constructor(private doc: Document, private onMove: (entry: string) => void) {
     this.element = doc.createElement('div');
     this.element.className = 'chess-board';
     this.svg = doc.createElementNS(SVG, 'svg') as SVGSVGElement;
@@ -68,6 +78,11 @@ export class ChessBoard implements PanelBoard {
       this.picker.append(b);
     }
     this.element.append(this.svg, this.picker);
+  }
+
+  actions(view: BoardView): PanelAction[] {
+    const { label, enabled, entry } = drawAction(view);
+    return [{ label, enabled, run: () => this.onMove(entry) }];
   }
 
   draw(game: GameRules | null, you: Side, live: boolean): void {

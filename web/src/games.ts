@@ -37,11 +37,14 @@ export interface GameRules {
 }
 
 /** The table's three places, by slot number: the chairs `Dining chair N<slot>` and `S<slot>`. */
-export const SLOTS: readonly { kind: GameKind; title: string; draws: boolean }[] = [
-  { kind: 'chess', title: 'Chess', draws: true },
-  { kind: 'backgammon', title: 'Backgammon', draws: false },
-  { kind: 'go', title: 'Go', draws: false },
+export const SLOTS: readonly { kind: GameKind; title: string }[] = [
+  { kind: 'chess', title: 'Chess' },
+  { kind: 'backgammon', title: 'Backgammon' },
+  { kind: 'go', title: 'Go' },
 ];
+
+/** The slot a game is played at. */
+export const slotOf = (kind: GameKind): number => SLOTS.findIndex((s) => s.kind === kind);
 
 const SIDE_NAME: Record<Side, string> = { white: 'White', black: 'Black' };
 const DRAWN: Partial<Record<EndReason, string>> = {

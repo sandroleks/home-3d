@@ -19,7 +19,7 @@ import { Multiplayer, trysteroRoom } from './multiplayer';
 import { guestList } from './guests';
 import { BoardPanel, GAME_COPY, type PanelBoard } from './board-panel';
 import { ChessBoard } from './chess-board';
-import { endOf, gameChairs, type GameKind, Games, otherSide, seatedAt, type Side, SLOTS } from './games';
+import { endOf, gameChairs, type GameKind, Games, otherSide, seatedAt, type Side, slotOf, SLOTS } from './games';
 import { TableGames } from './table-pieces';
 import { fetchIceServers } from './turn';
 import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
@@ -263,11 +263,15 @@ async function run(): Promise<void> {
   const selfId = () => others?.selfId ?? 'self';
   const chairs = gameChairs(assets.seats);
   const games = new Games(selfId, () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`);
-  const boards: Partial<Record<GameKind, PanelBoard>> = { chess: new ChessBoard(document, (uci) => playEntry(uci)) };
+  /** Each game's board in the panel; each plays its entries at its own slot. */
+  const boards: Partial<Record<GameKind, PanelBoard>> = {
+    chess: new ChessBoard(document, (entry) => playEntry(slotOf('chess'), entry)),
+  };
   /** Where this visitor plays while the panel is open: the slot and the side. */
   let atBoard: { slot: number; side: Side } | null = null;
-  const playEntry = (entry: string) => {
-    const m = atBoard && games.play(atBoard.slot, entry);
+  /** An entry by this visitor at a slot (the games check it is their move there), sent when taken. */
+  const playEntry = (slot: number, entry: string) => {
+    const m = games.play(slot, entry);
     if (m) others?.sendGame(m);
   };
   /** This visitor's running game at the board: its slot, side and id; null when none runs. */
@@ -279,7 +283,7 @@ async function run(): Promise<void> {
    * and a rematch can open meanwhile). */
   const resignIfDue = ({ slot, side, id }: { slot: number; side: Side; id: string }) => {
     const g = games.at(slot);
-    if (g && g.id === id && g[side] === selfId() && !endOf(g) && g.rules.turn() === side) playEntry('resign');
+    if (g && g.id === id && g[side] === selfId() && !endOf(g) && g.rules.turn() === side) playEntry(slot, 'resign');
   };
   /** Gets up from the board; the frame loop closes the panel, and the view looks around again. */
   const standUp = () => {
@@ -304,10 +308,6 @@ async function run(): Promise<void> {
     resign: () => {
       const mine = myGame();
       if (mine) boardPanel.confirm(GAME_COPY.resignGame, GAME_COPY.resign, () => resignIfDue(mine));
-    },
-    draw: () => {
-      const g = atBoard && games.at(atBoard.slot);
-      playEntry(g?.rules.drawOffer?.() ? 'draw!' : 'draw?');
     },
     stand: () => standFromBoard(),
   });
@@ -344,7 +344,6 @@ async function run(): Promise<void> {
     const theirs = games.seatsAt(seat.slot)[otherSide(seat.side)];
     boardPanel.render({
       you: seat.side,
-      draws: SLOTS[seat.slot].draws,
       me: { name: nameOf(selfId()), colour: colourFor(selfId()) },
       them: theirs ? { name: nameOf(theirs), colour: colourFor(theirs) } : null,
       game: mine?.rules ?? null,

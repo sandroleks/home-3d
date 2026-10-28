@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  endOf, endText, gameChairs, type GameMessage, Games, isGameMessage, leftEnd, replay, seatedAt, type SlotSeats, SLOTS,
+  endOf, endText, gameChairs, type GameMessage, Games, isGameMessage, leftEnd, replay, seatedAt, slotOf, type SlotSeats, SLOTS,
 } from '../src/games';
 import type { Seat } from '../src/seats';
 
@@ -35,6 +35,9 @@ const SEATS: Seat[] = [
 ];
 
 describe('the chairs', () => {
+  it('knows which slot plays which game', () => {
+    expect([slotOf('chess'), slotOf('backgammon'), slotOf('go')]).toEqual([0, 1, 2]);
+  });
   it('finds the game chairs: S plays white, N black', () => {
     expect(gameChairs(SEATS)).toEqual([
       { slot: 0, side: 'black', x: 1.2517, z: 2.5143 }, { slot: 0, side: 'white', x: 1.2483, z: 3.8857 },
