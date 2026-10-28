@@ -1,7 +1,7 @@
 # Balcony Shooting Range — Design
 
 **Date:** 2026-10-28
-**Status:** Design
+**Status:** Implemented
 
 ## Goal
 
@@ -28,13 +28,13 @@ Not in this: a scope or zoom, bullet drop, your animal holding a rifle, ammo lim
 
 ## Targets
 
-- They fly beyond the railing, 15–35 m away and from balcony height up to about 15 m above it, in open air: nothing in the neighbourhood blocks a shot or hides a target.
+- They fly beyond the railing, 12–30 m away and from balcony height up to about 15 m above it, in open air: nothing in the neighbourhood blocks a shot or hides a target.
 - Three kinds:
   - **Clay pigeon:** an orange disc, spinning, 10 points. Most of the targets.
   - **Gold clay:** smaller and faster, on a flatter arc, 30 points. About one in eight.
   - **Drone:** a little quadcopter that zig-zags across rather than arcing, slower but erratic, 50 points. Two or three a round.
 - Clays launch from below the railing line or from the sides and fly a gravity arc for 2.5–4 s, then fall away out of sight. Drones cross from one side to the other in 5–7 s.
-- **Bigger than real:** a clay is about 35 cm (a real one is 11 cm, a few pixels at 30 m), and its hit zone is a sphere a little larger than it looks (radius about 0.6 m) so iron sights are fair. Sizes, hit zones, speeds, points and the mix are all in `CONFIG.range`.
+- **Bigger than real:** a clay is about 55 cm (a real one is 11 cm, a few pixels at 30 m), and its hit zone is a sphere a little larger than it looks (radius about 0.85 m) so iron sights are fair. Sizes, hit zones, speeds, points and the mix are all in `CONFIG.range`.
 - **The schedule** comes from the round's seed, through a small seeded random generator: single targets about every 1.6 s at first, and from the halfway point pairs launched together; about 45 clays, 6 gold and 3 drones in all. Every browser generates the same flights, so target positions are never sent.
 - A target's position is a pure function of the round time: `flightAt(target, t)`.
 
@@ -85,3 +85,4 @@ Small pure modules, testable without a scene, and the 3D parts apart from them:
 - `range-game.test.ts`: crossing starts settle on the lower id; a start during a round is ignored; a newcomer's catch-up rebuilds the same scores; malformed messages are rejected.
 - `interactions.test.ts`: the rack and button prompts, with and without a rifle, and while a round runs.
 - In the browser: the rack and button on the Varanda in both kitchen variants; picking up and putting back (and stepping off the balcony); a full round with the countdown, hits, shatters and the final scores; two tabs competing for the same targets.
+- The browser check was done in the preview: the rack and button are placed at the railing's east end; the prompts are right; a full round ran with its countdown, hits (10 and 30 points) and final scores; stepping off the balcony puts the rifle back; and the targets were enlarged after it.

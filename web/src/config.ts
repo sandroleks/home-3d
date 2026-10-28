@@ -293,13 +293,13 @@ export const CONFIG = {
     /** The bolt cycle between shots; the kick's ease back (s); where the rifle is held in view (camera space, m). */
     cycle: 0.6,
     kickTime: 0.18,
-    hold: [0.17, -0.2, -0.32] as [number, number, number],
+    hold: [0.2, -0.24, -0.4] as [number, number, number],
     /** The railing's line (z) and the balcony's middle across (x). Targets fly `near`..`far` beyond the railing and
      * up to `across` to either side of the middle. */
     rail: -9.09,
     middle: 1.73,
-    near: 15,
-    far: 35,
+    near: 12,
+    far: 30,
     across: 14,
     /** Gravity on the clays, lighter than real so they hang a little, and the height they fall away to, below the
      * railing and out of sight. */
@@ -311,9 +311,9 @@ export const CONFIG = {
     /** Each kind: its points, its size, its hit zone's radius (larger than it looks, for iron sights), how long it
      * flies, and the height it starts at (a drone's, give or take 3 m). */
     kinds: {
-      clay: { points: 10, size: 0.35, hit: 0.6, time: [2.5, 4] as [number, number], launch: -3 },
-      gold: { points: 30, size: 0.25, hit: 0.45, time: [1.8, 2.4] as [number, number], launch: 1 },
-      drone: { points: 50, size: 0.5, hit: 0.7, time: [5, 7] as [number, number], launch: 7 },
+      clay: { points: 10, size: 0.55, hit: 0.85, time: [2.5, 4] as [number, number], launch: -3 },
+      gold: { points: 30, size: 0.4, hit: 0.65, time: [1.8, 2.4] as [number, number], launch: 1 },
+      drone: { points: 50, size: 0.75, hit: 1.0, time: [5, 7] as [number, number], launch: 7 },
     },
     /** The round's targets: one every `gap` s or so (±20 %) from `first` s until `last` s before the end, in pairs
      * from `pairsFrom` of the way through, `gold` of them gold; and `drones` drones spread across the round. */
