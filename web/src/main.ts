@@ -20,6 +20,7 @@ import { Avatars, figureLight } from './avatars';
 import { Multiplayer, trysteroRoom } from './multiplayer';
 import { meshRaycast } from './prop-physics';
 import { drawerHeights, placesFor } from './prop-places';
+import { surfacePlaces } from './surface-props';
 import { CARRIED_LAYER, type PropMessage, Props } from './props';
 import { domCanvas } from './screens';
 import { guestList } from './guests';
@@ -119,6 +120,14 @@ async function run(): Promise<void> {
   }
 
   const world = buildWorld(assets, scene);
+  // The model's loose things leave the scene now, before anything renders or collects casters; buildWorld already
+  // counted their meshes as occluders, so those go too (anything no longer under the world's root).
+  const surfaceProps = surfacePlaces(assets.manifest.props, world.root);
+  world.occluders = world.occluders.filter((m) => {
+    let o: Object3D | null = m;
+    while (o && o !== world.root) o = o.parent;
+    return o === world.root;
+  });
   const mirrors = addMirrors(world.root, surroundings);
   const nanoleaf = new Nanoleaf(world.glows);
   const halos = new Halos(world.glows.filter((g) => !nanoleaf.has(g)));
@@ -153,7 +162,7 @@ async function run(): Promise<void> {
   const fronts = new Set(assets.manifest.movables.map((m) => m.node));
   const heights = drawerHeights(fronts);
   const handAt = new Vector3();
-  const props = new Props(placesFor(fronts), {
+  const props = new Props([...placesFor(fronts), ...surfaceProps], {
     root: world.root,
     node: (name) => world.root.getObjectByName(name) ?? null,
     drawerOf,
