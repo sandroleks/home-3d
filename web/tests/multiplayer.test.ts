@@ -38,17 +38,18 @@ function fakeRoom() {
   };
 }
 
-function setup(joinedAt = 1000) {
+function setup(joinedAt = 1000, arrived = joinedAt) {
   const fake = fakeRoom();
   const world = { doors: [{ state: new DoorState(door) }], movables: [], lights: new LightGroups(['sala']), screens: [] };
   const avatars = new Avatars(null);
   let now = 0;
   const changed: string[][] = [];
   const peers: string[][] = [];
+  const hosts: string[] = [];
   const mp = new Multiplayer(fake.room, world, avatars, 'Ana', {
-    now: () => now, onChanged: (k) => void changed.push(k), onPeers: (n) => void peers.push(n),
-  }, joinedAt);
-  return { fake, world, avatars, mp, changed, peers, setNow: (t: number) => { now = t; }, node: new Object3D() };
+    now: () => now, onChanged: (k) => void changed.push(k), onPeers: (n) => void peers.push(n), onHost: (h) => void hosts.push(h),
+  }, joinedAt, arrived);
+  return { fake, world, avatars, mp, changed, peers, hosts, setNow: (t: number) => { now = t; }, node: new Object3D() };
 }
 
 describe('Multiplayer', () => {
@@ -127,13 +128,49 @@ describe('Multiplayer', () => {
     const { fake, mp } = setup();
     fake.join('p1');
     fake.receive('hello', { name: 'Rui', since: 2000 }, 'p1');
-    expect(mp.people).toEqual([{ id: 'p1', name: 'Rui' }]);
+    expect(mp.people).toEqual([{ id: 'p1', name: 'Rui', arrived: 2000 }]);
+  });
+
+  it('is host until someone who arrived earlier says hello, and gets it back when they leave', () => {
+    const { fake, mp, hosts } = setup(1000);
+    expect(mp.selfId).toBe('me');
+    expect(mp.host).toBe('me');
+    fake.join('early'); // no hello yet: not a candidate
+    expect(mp.host).toBe('me');
+    fake.receive('hello', { name: 'Zé', since: 1500, arrived: 1500 }, 'late');
+    expect(mp.host).toBe('me');
+    expect(hosts).toEqual([]);
+    fake.receive('hello', { name: 'Rui', since: 2000, arrived: 500 }, 'early');
+    expect(mp.host).toBe('early');
+    expect(hosts).toEqual(['early']);
+    fake.leave('early');
+    expect(mp.host).toBe('me');
+    expect(hosts).toEqual(['early', 'me']);
+  });
+  it("takes an older visitor's join time as its arrival", () => {
+    const { fake, mp } = setup(1000);
+    fake.receive('hello', { name: 'Rui', since: 500 }, 'old');
+    expect(mp.host).toBe('old');
+  });
+  it('hands the host on when the host times out', () => {
+    const { fake, mp, hosts, setNow } = setup(1000);
+    fake.receive('hello', { name: 'Rui', since: 500, arrived: 500 }, 'old');
+    setNow(20);
+    mp.tick();
+    expect(mp.host).toBe('me');
+    expect(hosts).toEqual(['old', 'me']);
+  });
+  it('a host back from a reload keeps the crown and still asks for the state', () => {
+    const { fake, mp } = setup(3000, 500); // joined this page at 3000, first arrived at 500
+    fake.receive('hello', { name: 'Rui', since: 1000, arrived: 1000 }, 'p1');
+    expect(mp.host).toBe('me');
+    expect(fake.sent.at(-1)).toEqual({ kind: 'state', data: { want: 1 }, to: 'p1' });
   });
 
   it('greets a joining peer, shows it as Guest until its hello, then by name', () => {
     const { fake, avatars, mp, peers } = setup();
     fake.join('p1');
-    expect(fake.sent).toEqual([{ kind: 'hello', data: { name: 'Ana', since: 1000 }, to: 'p1' }]);
+    expect(fake.sent).toEqual([{ kind: 'hello', data: { name: 'Ana', since: 1000, arrived: 1000 }, to: 'p1' }]);
     expect(avatars.has('p1')).toBe(true);
     expect(peers.at(-1)).toEqual(['Guest']);
     fake.receive('hello', { name: '  Rui ', since: 2000 }, 'p1');
@@ -179,12 +216,12 @@ describe('Multiplayer', () => {
     mp.tick(); // p1's tab was hidden: no poses for 20 s
     expect(mp.names).toEqual([]);
     fake.receive('pose', [0, 0, 0, 0], 'p1');
-    expect(fake.sent.at(-1)).toEqual({ kind: 'hello', data: { name: 'Ana', since: 1000, ask: 1 }, to: 'p1' });
+    expect(fake.sent.at(-1)).toEqual({ kind: 'hello', data: { name: 'Ana', since: 1000, arrived: 1000, ask: 1 }, to: 'p1' });
     fake.receive('hello', { name: 'Rui', since: 500 }, 'p1');
     expect(mp.names).toEqual(['Rui']);
     const n = fake.sent.length;
     fake.receive('hello', { name: 'Rui', since: 500, ask: 1 }, 'p1');
-    expect(fake.sent.slice(n).filter((s) => s.kind === 'hello')).toEqual([{ kind: 'hello', data: { name: 'Ana', since: 1000 }, to: 'p1' }]);
+    expect(fake.sent.slice(n).filter((s) => s.kind === 'hello')).toEqual([{ kind: 'hello', data: { name: 'Ana', since: 1000, arrived: 1000 }, to: 'p1' }]);
   });
   it('applies deltas and reports what changed, ignoring junk', () => {
     const { fake, world, changed } = setup();
