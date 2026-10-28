@@ -6,7 +6,7 @@ import { LightGroups } from '../src/lightmaps';
 import type { DoorInfo, MovableInfo, ScreenInfo } from '../src/manifest';
 import { MovableState } from '../src/movables';
 import {
-  applyState, cleanName, collectState, colourFor, encodePose, hashId, isPose, isStateMap, loadName, Peers, poseMoved, saveName, splitPose,
+  applyState, byArrival, cleanName, collectState, colourFor, encodePose, hashId, hostOf, isPose, isStateMap, loadArrived, loadName, Peers, poseMoved, saveName, splitPose,
   shortestTurn, shouldSend, smoothPose, stateDelta, stateKey, stateValue,
 } from '../src/presence';
 import { Screen } from '../src/screens';
@@ -176,7 +176,7 @@ describe('Peers', () => {
     const p = new Peers(15);
     p.seen('a', 0);
     p.hello('b', 'Rui', 100, 0);
-    expect(p.list()).toEqual([{ id: 'a', name: 'Guest' }, { id: 'b', name: 'Rui' }]);
+    expect(p.list()).toEqual([{ id: 'a', name: 'Guest', arrived: null, since: null }, { id: 'b', name: 'Rui', arrived: 100, since: 100 }]);
   });
   it('tracks arrivals, hellos, names and departures', () => {
     const peers = new Peers(15);
@@ -214,5 +214,52 @@ describe('Peers', () => {
     expect(applyState(other, { 'light:sala': 0.567, 'ct:sala': 447 }, 2)).toEqual([]);
     expect(applyState(other, { 'light:sala': 0 }, 3)).toEqual(['light:sala']);
     expect(other.lights.isOn('sala')).toBe(false);
+  });
+});
+
+describe('the host', () => {
+  it('keeps an arrival time apart from the join time, the join time when none is given', () => {
+    const p = new Peers(15);
+    p.hello('a', 'Ana', 900, 0, 300);
+    p.hello('b', 'Rui', 800, 0);
+    expect(p.get('a')).toMatchObject({ since: 900, arrived: 300 });
+    expect(p.get('b')).toMatchObject({ since: 800, arrived: 800 });
+  });
+  it('orders by arrival, ties to the later join, then the lower id, those without a hello last', () => {
+    const list = [
+      { id: 'c', arrived: null, since: null }, { id: 'b', arrived: 200, since: 200 }, { id: 'a', arrived: 200, since: 200 },
+      { id: 'd', arrived: 100, since: 100 }, { id: 'e', arrived: 200, since: 900 },
+    ];
+    expect([...list].sort(byArrival).map((p) => p.id)).toEqual(['d', 'e', 'a', 'b', 'c']);
+  });
+  it('orders those without a hello by id, so every browser agrees', () => {
+    const list = [{ id: 'z', arrived: null, since: null }, { id: 'y', arrived: null, since: null }, { id: 'a', arrived: 5, since: 5 }];
+    expect([...list].sort(byArrival).map((p) => p.id)).toEqual(['a', 'y', 'z']);
+    expect([...list].reverse().sort(byArrival).map((p) => p.id)).toEqual(['a', 'y', 'z']);
+  });
+  it('is whoever arrived first, ties to the later join, then the lower id', () => {
+    const me = { id: 'me', arrived: 1000, since: 1000 };
+    expect(hostOf(me, [])).toBe('me');
+    expect(hostOf(me, [{ id: 'p1', arrived: 2000, since: 2000 }])).toBe('me');
+    expect(hostOf(me, [{ id: 'p1', arrived: 2000, since: 2000 }, { id: 'p2', arrived: 500, since: 500 }])).toBe('p2');
+    expect(hostOf(me, [{ id: 'aa', arrived: 1000, since: 1000 }])).toBe('aa');
+  });
+  it('lets a reloaded host win the tie with its old self', () => {
+    const me = { id: 'me', arrived: 1000, since: 5000 };
+    expect(hostOf(me, [{ id: 'aold', arrived: 100, since: 500 }, { id: 'znew', arrived: 100, since: 2000 }])).toBe('znew');
+    expect(hostOf(me, [{ id: 'znew', arrived: 100, since: 2000 }, { id: 'aold', arrived: 100, since: 500 }])).toBe('znew');
+  });
+  it("doesn't count a peer without a hello", () => {
+    expect(hostOf({ id: 'me', arrived: 1000, since: 1000 }, [{ id: 'p1', arrived: null, since: null }])).toBe('me');
+  });
+  it('remembers the arrival per room, and copes with broken storage', () => {
+    const store = new Map<string, string>();
+    const storage = () => ({ getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) });
+    expect(loadArrived(storage, 'party', 1000)).toBe(1000);
+    expect(store.get('walkthrough.arrived.party')).toBe('1000');
+    expect(loadArrived(storage, 'party', 5000)).toBe(1000); // a reload keeps it
+    expect(loadArrived(storage, 'other', 6000)).toBe(6000); // another room starts afresh
+    const broken = () => { throw new Error('no storage'); };
+    expect(loadArrived(broken, 'party', 7000)).toBe(7000);
   });
 });

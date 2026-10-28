@@ -134,6 +134,8 @@ export const CONFIG = {
     idleRate: 1,
     /** Seconds without a pose before a visitor's avatar is removed. */
     staleAfter: 15,
+    /** Times a second the open guest list looks again at who is in which room and who is talking. */
+    guestListRate: 4,
     /** Time constant (s) of the avatars' motion smoothing between poses. */
     smoothing: 0.1,
     maxNameLength: 24,

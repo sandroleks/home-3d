@@ -3,7 +3,7 @@ import type { Avatars } from './avatars';
 import { CONFIG } from './config';
 import {
   applyState, cleanName, collectState, colourFor, encodePose, isPose, isStateMap, Peers, type PoseMessage, poseMoved,
-  type Seating, shouldSend, type StateMap, type StateWorld,
+  type Seating, shouldSend, type StateMap, type StateWorld, hostOf,
 } from './presence';
 
 export type MessageKind = 'hello' | 'pose' | 'state';
@@ -38,8 +38,9 @@ export function trysteroRoom(room: TrysteroRoom, selfId: string): Room {
   };
 }
 
-/** `ask`: send yours back (to a peer that timed out here and came back, so its name is lost). */
-interface Hello { name: string; since: number; ask?: 1 }
+/** `arrived`: when it first came to the room, which decides the host (an older visitor sends none). `ask`: send yours
+ * back (to a peer that timed out here and came back, so its name is lost). */
+interface Hello { name: string; since: number; arrived?: number; ask?: 1 }
 const isHello = (v: unknown): v is Hello =>
   !!v && typeof v === 'object' && typeof (v as Hello).name === 'string' && typeof (v as Hello).since === 'number';
 
@@ -57,6 +58,8 @@ export interface MultiplayerHooks {
   onChanged: (keys: string[]) => void;
   /** The names of everyone else here, whenever that changes. */
   onPeers: (names: string[]) => void;
+  /** The host's peer id (this visitor's own when it is host), whenever that changes. */
+  onHost?: (hostId: string) => void;
 }
 
 /**
@@ -68,6 +71,7 @@ export interface MultiplayerHooks {
 export class Multiplayer {
   private peers = new Peers();
   private since: number;
+  private lastHost: string;
   private settled = false;
   private lastSent = -Infinity;
   private lastPose: PoseMessage | null = null;
@@ -76,8 +80,9 @@ export class Multiplayer {
   /** Each peer's voice until the peer leaves: Trystero won't send it again over a connection that stayed up. */
   private streams = new Map<string, MediaStream>();
 
-  constructor(private room: Room, world: StateWorld, private avatars: Avatars, private name: string, private hooks: MultiplayerHooks, joinedAt = Date.now()) {
+  constructor(private room: Room, world: StateWorld, private avatars: Avatars, private name: string, private hooks: MultiplayerHooks, joinedAt = Date.now(), private arrived = joinedAt) {
     this.since = joinedAt;
+    this.lastHost = room.selfId;
     room.onPeerJoin((id) => {
       this.arrive(id);
       this.greet(id);
@@ -92,11 +97,13 @@ export class Multiplayer {
       if (!isHello(data)) return;
       this.arrive(id);
       const peerName = cleanName(data.name);
-      this.peers.hello(id, peerName, data.since, hooks.now());
+      const arrived = typeof data.arrived === 'number' && Number.isFinite(data.arrived) ? data.arrived : data.since;
+      this.peers.hello(id, peerName, data.since, hooks.now(), arrived);
       avatars.setName(id, peerName);
       if (data.ask) this.greet(id);
       if (!this.settled && data.since < this.since) room.send('state', { want: 1 }, id);
       hooks.onPeers(this.peers.names());
+      this.checkHost();
     });
     room.onMessage('pose', (data, id) => {
       if (!isPose(data)) return;
@@ -117,9 +124,18 @@ export class Multiplayer {
     return this.peers.names();
   }
 
-  /** Ids and names of the others here, for marking who is talking. */
-  get people(): { id: string; name: string }[] {
+  /** Ids, names, arrival and join times of the others here. */
+  get people(): { id: string; name: string; arrived: number | null; since: number | null }[] {
     return this.peers.list();
+  }
+
+  get selfId(): string {
+    return this.room.selfId;
+  }
+
+  /** Whoever arrived first: their peer id, or this visitor's own. */
+  get host(): string {
+    return hostOf({ id: this.room.selfId, arrived: this.arrived, since: this.since }, this.peers.list());
   }
 
   /** The voices: incoming streams go to them, and their mic goes to everyone. */
@@ -147,7 +163,16 @@ export class Multiplayer {
   }
 
   private greet(id: string, ask = false): void {
-    this.room.send('hello', ask ? { name: this.name, since: this.since, ask: 1 } : { name: this.name, since: this.since }, id);
+    const hello = { name: this.name, since: this.since, arrived: this.arrived };
+    this.room.send('hello', ask ? { ...hello, ask: 1 } : hello, id);
+  }
+
+  /** Tells the hook when someone else is host now (after a hello, a leave or a timeout). */
+  private checkHost(): void {
+    const host = this.host;
+    if (host === this.lastHost) return;
+    this.lastHost = host;
+    this.hooks.onHost?.(host);
   }
 
   private depart(id: string): void {
@@ -156,6 +181,7 @@ export class Multiplayer {
     this.avatars.remove(id);
     this.voice?.remove(id);
     this.hooks.onPeers(this.peers.names());
+    this.checkHost();
   }
 
   /** Call every frame with the local pose (and seating, sitting or lying); it sends at the pose rate while moving and as
@@ -182,7 +208,10 @@ export class Multiplayer {
       this.avatars.remove(id);
       this.voice?.remove(id);
     }
-    if (gone.length) this.hooks.onPeers(this.peers.names());
+    if (gone.length) {
+      this.hooks.onPeers(this.peers.names());
+      this.checkHost();
+    }
   }
 
   leave(): void {

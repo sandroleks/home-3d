@@ -16,9 +16,10 @@ import { lightmapTextures, UploadQueue, warmUpShaders } from './warmup';
 import { applyMovable } from './movables';
 import { Avatars, figureLight } from './avatars';
 import { Multiplayer, trysteroRoom } from './multiplayer';
+import { guestList } from './guests';
 import { fetchIceServers } from './turn';
 import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
-import { applyState, cleanName, collectState, lightValue, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
+import { applyState, cleanName, collectState, lightValue, loadArrived, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
 import { activeScene, groupsIn, HUE_SCENES, levelFor, nextScene, NO_HUE_LINK, sceneById } from './hue';
 import { Player, screenFov, vfovFromHfov } from './player';
 import { freeSpot, seatAt, seatedOn, seatingCode } from './seats';
@@ -211,6 +212,40 @@ async function run(): Promise<void> {
   /** The others' voices and the local mic, once started (not with ?solo). */
   let voices: Voices | null = null;
   const showPeople = () => ui.setPeople((others?.people ?? []).map((p) => ({ name: p.name, talking: voices?.talking(p.id) ?? false })));
+  /** Set on joining. `arrived`: when this visitor first came to the room, kept through a reload, so a host who reloads
+   * stays host. `joinedAt`: when this page joined; it picks whom to ask for the flat's state, and breaks a tie against
+   * this visitor's own old page. */
+  let arrived = Date.now();
+  let joinedAt = arrived;
+  /** Each visitor's last room for the guest list: outside every room, `locate` keeps the last one, as with your own. */
+  const guestRooms = new Map<string, string | null>();
+  let guestsDue = 0;
+  /** From the frame loop: the open guest list, a few times a second, and at once after it opens or the host changes. */
+  const showGuests = (now: number) => {
+    if (!ui.guestsOpen || now < guestsDue) return;
+    guestsDue = now + 1000 / CONFIG.multiplayer.guestListRate;
+    const self = { id: others?.selfId ?? 'self', name: cleanName(ui.getName()), arrived, since: joinedAt };
+    ui.setGuests(guestList({
+      self,
+      people: others?.people ?? [],
+      host: others?.host ?? self.id,
+      roomOf: (id) => {
+        const figure = id === self.id ? null : avatars.get(id);
+        if (id !== self.id && !figure?.root.visible) return null; // not placed yet: it sits at the origin
+        const pose = figure ? figure.pose : [player.x, player.z];
+        const room = world.rooms.locate(pose[0], pose[1], guestRooms.get(id) ?? null);
+        guestRooms.set(id, room);
+        return room ? names.get(room) ?? null : null;
+      },
+      talking: (id) => voices?.talking(id) ?? false,
+    }));
+  };
+  const toggleGuests = () => {
+    if (ui.toggleGuests()) guestsDue = 0;
+  };
+  ui.onGuests(() => {
+    if (started && !autostart) toggleGuests();
+  });
   const byKey = new Map([...world.targets.values()].flatMap((t) => (t.kind === 'seat' ? [] : [[stateKey(t), t] as const])));
   const share = (t: Target | null) => {
     if (t) others?.broadcast(stateDelta(t, world.lights));
@@ -226,16 +261,20 @@ async function run(): Promise<void> {
     saveName(() => localStorage, typed);
     try {
       const [{ joinRoom, selfId }, turnConfig] = await Promise.all([import('trystero'), iceServers]);
+      const roomName = params.get('room') || CONFIG.multiplayer.room;
+      joinedAt = Date.now();
+      arrived = loadArrived(() => sessionStorage, roomName, joinedAt);
       const room = joinRoom(
         { appId: CONFIG.multiplayer.appId, ...(turnConfig.length ? { turnConfig } : {}) },
-        params.get('room') || CONFIG.multiplayer.room,
+        roomName,
         { onJoinError: ({ peerId, error }) => console.warn(`Could not connect to visitor ${peerId}: ${error}`) },
       );
       others = new Multiplayer(trysteroRoom(room, selfId), world, avatars, cleanName(typed), {
         now: () => performance.now() / 1000,
         onChanged: (keys) => keys.forEach((k) => used(byKey.get(k) ?? null)), // the sounds a local click would make
         onPeers: () => showPeople(),
-      });
+        onHost: () => { guestsDue = 0; },
+      }, joinedAt, arrived);
       if (voices) others.setVoice(voices);
       window.addEventListener('pagehide', () => others?.leave(), { once: true });
     } catch (err) {
@@ -461,6 +500,7 @@ async function run(): Promise<void> {
       setPausedState(true);
       return;
     }
+    if (e.code === 'KeyG' && started && !autostart && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) return toggleGuests(); // paused too
     if (!started || paused) return;
     const sunKey = sunKeyAction(e.code, e.shiftKey, e.metaKey || e.ctrlKey || e.altKey);
     if (sunKey) {
@@ -519,6 +559,7 @@ async function run(): Promise<void> {
       for (const id of voices.ids) avatars.setTalk(id, voices.talk(id));
     }
     if (others) showPeople();
+    showGuests(now);
     currentRoom = world.rooms.locate(player.x, player.z, currentRoom);
     sound?.setRoom(currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');

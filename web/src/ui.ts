@@ -1,4 +1,5 @@
 import { blackBody, type HueScene, levelFor } from './hue';
+import type { GuestRow } from './guests';
 import type { MicState } from './voice';
 
 export const COPY = {
@@ -53,6 +54,7 @@ export class UI {
   private lastSitting = false;
   private lastRoomLight: boolean | null | undefined;
   private touch = false;
+  private lastGuests = '';
 
   constructor(private doc: Document) {}
 
@@ -124,6 +126,49 @@ export class UI {
     if (p.textContent !== text) p.textContent = text;
   }
 
+  /** The guest list's rows, redrawn only when something in them changed. Names come from other visitors: text only. */
+  setGuests(rows: GuestRow[]): void {
+    const key = JSON.stringify(rows);
+    if (key === this.lastGuests) return;
+    this.lastGuests = key;
+    this.el('guest-rows').replaceChildren(...rows.map((r) => {
+      const li = this.doc.createElement('li');
+      const dot = this.doc.createElement('i');
+      dot.style.background = r.colour;
+      const name = this.doc.createElement('span');
+      name.textContent = `${r.name}${r.you ? ' (you)' : ''}${r.host ? ' 👑' : ''}${r.talking ? ' 🔊' : ''}`;
+      const room = this.doc.createElement('span');
+      room.className = 'room';
+      room.textContent = r.room ?? '';
+      li.append(dot, name, room);
+      return li;
+    }));
+    this.el('guests-alone').hidden = rows.length > 1;
+  }
+
+  get guestsOpen(): boolean {
+    return !this.el('guests').hidden;
+  }
+
+  /** Shows or hides the guest list; returns whether it is open now. */
+  toggleGuests(): boolean {
+    const panel = this.el('guests');
+    panel.hidden = !panel.hidden;
+    this.el('touch-guests').setAttribute('aria-expanded', String(!panel.hidden));
+    this.doc.body.classList.toggle('guests-open', !panel.hidden); // the panel shows the people the "With …" line names
+    if (!panel.hidden && this.touch) { // on a phone the sun panel and the guest list would overlap: one at a time
+      this.doc.body.classList.remove('sun-open');
+      this.el('touch-sun').setAttribute('aria-expanded', 'false');
+    }
+    return !panel.hidden;
+  }
+
+  /** A click on the "With …" line (with the mouse free) or the touch bar's people button. */
+  onGuests(cb: () => void): void {
+    this.el('people').addEventListener('click', cb);
+    this.el('touch-guests').addEventListener('click', cb);
+  }
+
   hideStart(): void {
     this.el('start').hidden = true;
   }
@@ -187,6 +232,11 @@ export class UI {
     sun.addEventListener('click', () => {
       const open = this.doc.body.classList.toggle('sun-open');
       sun.setAttribute('aria-expanded', String(open));
+      if (open && this.touch) { // on a phone the sun panel and the guest list would overlap: one at a time
+        this.el('guests').hidden = true;
+        this.doc.body.classList.remove('guests-open');
+        this.el('touch-guests').setAttribute('aria-expanded', 'false');
+      }
     });
   }
 
