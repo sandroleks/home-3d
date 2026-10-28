@@ -23,6 +23,9 @@ import { ChessBoard } from './chess-board';
 import { endOf, gameChairs, type GameKind, Games, otherSide, seatedAt, type Side, slotOf, SLOTS } from './games';
 import { GoBoard } from './go-board';
 import { TableGames } from './table-pieces';
+import { DrawGame, type DrawOut, type Visitor } from './draw-game';
+import { TvPanel, tvPanelView } from './draw-panel';
+import { tvView } from './draw-tv';
 import { fetchIceServers } from './turn';
 import { loadVoice, openMic, saveVoice, Voices, wallCounter } from './voice';
 import { applyState, cleanName, collectState, colourFor, lightValue, loadArrived, loadName, saveName, type StateMap, stateDelta, stateKey } from './presence';
@@ -161,7 +164,7 @@ async function run(): Promise<void> {
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
   player.attach(window, () => document.pointerLockElement);
-  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; } } }); // tuning from the console
+  if (params.has('debug')) Object.assign(window, { walkthrough: { renderer, scene, camera, player, world, daylight, clock, surroundings, halos, avatars, CONFIG, LIGHT_SPILL, get voices() { return voices; }, get others() { return others; }, get games() { return games; }, get draw() { return draw; } } }); // tuning from the console
 
   const view = params.get('view');
   const vp = view ? assets.manifest.viewpoints.find((v) => v.name === view) : undefined;
@@ -204,7 +207,7 @@ async function run(): Promise<void> {
   /** C, or the touch bar's button: sit down on the floor where you are, or get up. */
   const toggleSit = () => {
     if (player.frozen) return;
-    if (player.held) return standFromBoard(); // at a game board: asks first while a game runs
+    if (atBoard) return standFromBoard(); // at a game board: asks first while a game runs
     if (player.seat) player.stand();
     else player.sit({ posture: 'sit', x: player.x, y: 0, z: player.z, yaw: player.yaw }, false);
   };
@@ -264,7 +267,9 @@ async function run(): Promise<void> {
   /** The dining table's games (games.ts): who sits in the game chairs, the games, and the panel a player gets. */
   const selfId = () => others?.selfId ?? 'self';
   const chairs = gameChairs(assets.seats);
-  const games = new Games(selfId, () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`);
+  /** Ids for new games: not `crypto.randomUUID`, which phones on a LAN address don't have. */
+  const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const games = new Games(selfId, newId);
   /** Each game's board in the panel; each plays its entries at its own slot. */
   const boards: Partial<Record<GameKind, PanelBoard>> = {
     chess: new ChessBoard(document, (entry) => playEntry(slotOf('chess'), entry)),
@@ -334,10 +339,11 @@ async function run(): Promise<void> {
     if (!seat || !board) {
       if (boardPanel.isOpen) boardPanel.close();
       atBoard = null;
-      player.held = false;
+      player.held = tvPanel.isOpen;
       return;
     }
     if (!boardPanel.isOpen || atBoard?.slot !== seat.slot) {
+      closeTv(false); // one panel at a time: the board's
       boardPanel.open(SLOTS[seat.slot].title, board);
       freeMouse();
     }
@@ -353,6 +359,62 @@ async function run(): Promise<void> {
       game: mine?.rules ?? null,
       end: mine ? endOf(mine) : null,
     }, games.version);
+  };
+  /** Draw and guess on the Sala TV (draw-game.ts): the game, the TV showing it, and the TV's panel. */
+  const tv = world.screens.find((s) => s.isTv) ?? null;
+  const draw = new DrawGame(selfId, newId);
+  const sendDraw = (out: DrawOut[]) => {
+    for (const o of out) others?.sendDraw(o.msg, o.to);
+  };
+  /** Everyone here, this visitor first, with when they arrived: the players' order and the game's leader come from it. */
+  const visitors = (): Visitor[] => [{ id: selfId(), name: cleanName(ui.getName()), arrived, since: joinedAt }, ...(others?.people ?? [])];
+  /** The remote's buttons do what a click on the TV did, shared the same way; not while a game shows. */
+  const remote = (press: () => void) => {
+    if (!tv || draw.state) return;
+    press();
+    const t: Target = { kind: 'screen', screen: tv, node: tv.node };
+    used(t);
+    share(t);
+  };
+  const tvPanel = new TvPanel(document, {
+    power: () => remote(() => tv?.power(performance.now() / 1000)),
+    next: () => remote(() => tv?.nextChannel()),
+    join: () => sendDraw(draw.setJoined(!draw.joined)),
+    start: () => sendDraw(draw.start(visitors(), performance.now())),
+    close: () => closeTv(true),
+    choose: (word) => sendDraw(draw.choose(word, performance.now())),
+    guess: (text) => sendDraw(draw.guess(text)),
+    penDown: (colour, width, x, y) => draw.penDown(colour, width, x, y),
+    penMove: (x, y) => draw.penMove(x, y),
+    undo: () => sendDraw(draw.undo()),
+    clear: () => sendDraw(draw.clear()),
+  });
+  /** A click or tap on the TV, or T: the mouse is freed for the panel, and the movement keys don't move you. */
+  const openTv = () => {
+    if (!started || autostart || atBoard || tvPanel.isOpen) return;
+    tvPanel.open();
+    freeMouse();
+    player.held = true;
+  };
+  /** Close, Esc or T; `look`: the view looks around again (not after Esc, which only frees the mouse). */
+  const closeTv = (look: boolean) => {
+    if (!tvPanel.isOpen) return;
+    tvPanel.close();
+    player.held = atBoard !== null;
+    if (look && cursor && !touch) lockPointer();
+  };
+  /** From the frame loop (`now` in ms): the game's step, the TV showing it, and the panel while it's open. */
+  const updateDraw = (now: number) => {
+    sendDraw(draw.update(now, visitors()));
+    const s = draw.state;
+    tv?.setGame(s ? tvView(s, draw.sketch.strokes, draw.timeLeft()) : null, now / 1000);
+    if (!tvPanel.isOpen) return;
+    const me = selfId();
+    tvPanel.render(tvPanelView({
+      me, tvOn: tv?.on ?? false, game: s, leftMs: draw.timeLeft(),
+      joined: draw.playing(visitors()).map((v) => ({ name: v.name, colour: colourFor(v.id), you: v.id === me })),
+      youJoined: draw.joined, secret: draw.secret, choices: draw.choices, close: draw.close,
+    }), draw.sketch.strokes, draw.sketch.version);
   };
   ui.setName(loadName(() => localStorage));
   ui.setVoice(loadVoice(() => localStorage));
@@ -380,6 +442,8 @@ async function run(): Promise<void> {
         onHost: () => { guestsDue = 0; },
         onGame: (g) => { games.receive(g); },
         games: () => games.messages(),
+        onDraw: (m, from) => sendDraw(draw.receive(m, from, performance.now())),
+        onArrive: (id) => sendDraw(draw.greet(id)),
       }, joinedAt, arrived);
       if (voices) others.setVoice(voices);
       window.addEventListener('pagehide', () => others?.leave(), { once: true });
@@ -487,7 +551,7 @@ async function run(): Promise<void> {
     if (touch) {
       setPausedState(false); // no pointer lock to wait for
       fullscreen();
-    } else if (boardPanel.isOpen) { // at a game board the mouse stays free for the panel
+    } else if (boardPanel.isOpen || tvPanel.isOpen) { // with a panel open the mouse stays free for it
       cursor = true;
       ui.setCursor(true);
       setPausedState(false);
@@ -551,9 +615,10 @@ async function run(): Promise<void> {
       if (started && !paused && !player.frozen) player.look(dx, dy, CONFIG.touch.lookSensitivity);
     },
     tap: (x, y) => {
-      if (!started || paused) return;
+      if (!started || paused || tvPanel.isOpen) return;
       const r = canvas.getBoundingClientRect();
       const t = interactions.tap(new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2));
+      if (t?.kind === 'screen' && t.screen.isTv) return openTv();
       sitOn(t);
       used(t);
       share(t);
@@ -591,12 +656,13 @@ async function run(): Promise<void> {
   });
   window.addEventListener('mousedown', (e) => {
     if (touch) return; // taps are handled by the touch controls
-    if (cursor && e.button === 0 && e.target === canvas) { // a click on the view looks around again, but not at a board
-      if (!boardPanel.isOpen) lockPointer();
+    if (cursor && e.button === 0 && e.target === canvas) { // a click on the view looks around again, but not in a panel
+      if (!boardPanel.isOpen && !tvPanel.isOpen) lockPointer();
       return;
     }
     if (e.button !== 0 || !(autostart || document.pointerLockElement === canvas)) return;
     const t = interactions.click();
+    if (t?.kind === 'screen' && t.screen.isTv) return openTv();
     sitOn(t);
     used(t);
     share(t);
@@ -604,7 +670,7 @@ async function run(): Promise<void> {
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') {
       e.preventDefault(); // Tab toggles the free mouse, never focus cycling
-      if (touch || !started || paused || autostart || e.repeat || boardPanel.isOpen) return;
+      if (touch || !started || paused || autostart || e.repeat || boardPanel.isOpen || tvPanel.isOpen) return;
       if (cursor) lockPointer();
       else {
         freeing = true;
@@ -612,6 +678,7 @@ async function run(): Promise<void> {
       }
       return;
     }
+    if (e.code === 'Escape' && tvPanel.isOpen) return closeTv(false); // the panel first; Esc again pauses
     if (touch && e.code === 'Escape' && started && !autostart) return setPausedState(true); // a tablet's keyboard
     if (cursor && e.code === 'Escape') {
       cursor = false;
@@ -620,6 +687,7 @@ async function run(): Promise<void> {
       return;
     }
     if (e.code === 'KeyG' && started && !autostart && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) return toggleGuests(); // paused too
+    if (e.code === 'KeyT' && started && !paused && !autostart && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) return tvPanel.isOpen ? closeTv(true) : openTv();
     if (!started || paused) return;
     const sunKey = sunKeyAction(e.code, e.shiftKey, e.metaKey || e.ctrlKey || e.altKey);
     if (sunKey) {
@@ -674,6 +742,7 @@ async function run(): Promise<void> {
     }
     avatars.update(dt, avatarLight);
     updateGames(dt, now / 1000);
+    updateDraw(now);
     if (voices) {
       voices.update(dt, camera.getWorldPosition(ear), (id, out) => avatars.mouth(id, out), wallsBetween);
       for (const id of voices.ids) avatars.setTalk(id, voices.talk(id));
@@ -684,7 +753,7 @@ async function run(): Promise<void> {
     sound?.setRoom(currentRoom);
     ui.setRoom(currentRoom ? names.get(currentRoom) ?? '' : '');
     const target = started ? interactions.update() : null;
-    ui.setPrompt(boardPanel.isOpen ? null : target ? promptFor(target, world.lights, touch ? 'Tap' : 'Click') : player.seat && started ? COPY.stand : null);
+    ui.setPrompt(boardPanel.isOpen || tvPanel.isOpen ? null : target ? promptFor(target, world.lights, touch ? 'Tap' : 'Click') : player.seat && started ? COPY.stand : null);
     ui.setSitting(player.seat !== null);
     ui.setRoomLight(currentRoom && world.lights.has(currentRoom) ? world.lights.isOn(currentRoom) : null);
     ui.setScenes(currentRoom ? names.get(currentRoom) ?? null : null, activeScene(world.lights, sceneGroups(currentRoom)));
@@ -698,7 +767,7 @@ async function run(): Promise<void> {
     for (const s of world.screens) {
       const near = camera.position.distanceTo(screenCentre.fromArray(s.info.center)) < CONFIG.screens.maxDistance;
       s.update(now / 1000, dt, local, near);
-      if (s.info.group) world.lights.set(s.info.group, s.on); // the TV's bias light
+      if (s.info.group) world.lights.set(s.info.group, s.lit); // the TV's bias light, on with a game too
     }
     world.lights.update(dt);
     applyGlows(world.glows, world.lights);
