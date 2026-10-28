@@ -192,16 +192,17 @@ export const CONFIG = {
   /** The games on the dining table (games.ts): chess at N0/S0, backgammon at N1/S1, Go at N2/S2; the S chair plays white. */
   games: {
     /** Each slot's middle (x, z): halfway between its two chairs' spots in seats.json (z 3.2), and level with them,
-     * except slot 0, 10 cm toward the table's end to clear the fruit bowl, and slot 1, 4.5 cm toward it to sit
-     * between the bowl (to x 1.58) and the mug and books (from x 1.93). */
-    slots: [[1.15, 3.2], [1.755, 3.2], [2.35, 3.2]] as [number, number][],
+     * except slot 0, 10 cm toward the table's end to clear the fruit bowl, slot 1, 4.5 cm toward it to sit between
+     * the bowl (to x 1.58) and the mug and books (from x 1.93), and slot 2, 6 cm toward it to clear the table runner
+     * under the mug and books (x 1.85 to 2.25). */
+    slots: [[1.15, 3.2], [1.755, 3.2], [2.41, 3.2]] as [number, number][],
     /** The table top's height (m): the model's dining table. */
     tableTop: 0.76,
     /** A visitor is in a game chair when seated within this many metres of its spot (poses are sent to the mm). */
     chairRadius: 0.05,
     /** Seconds a game sent by another visitor waits for its two players to show in their chairs here. */
     pendingFor: 5,
-    /** Seconds a piece takes to slide to its square. */
+    /** Seconds a piece takes to slide to its square (and a Go stone to drop onto its point, or lift off). */
     slide: 0.3,
     /** The chessboard: its size, the wooden border and its thickness (m), and the colours. */
     chess: {
@@ -215,6 +216,13 @@ export const CONFIG = {
       width: 0.3, depth: 0.28, rim: 0.012, bar: 0.018, tray: 0.03, base: 0.01, wall: 0.018,
       checker: 0.0085, thickness: 0.005, die: 0.012, tumble: 0.6,
       wood: '#6b4630', felt: '#33493b', light: '#e8d5b0', dark: '#9c6b4a', white: '#efe6d2', black: '#4a3b33', pips: '#2a2622',
+    },
+    /** The Go board (m): its size, the margin outside the outer lines, its thickness; the stones' radius and height,
+     * how far a new stone drops onto its point, and the colours. 28 cm: the runner and the table's rounded end leave
+     * x 2.25 to about 2.72 at slot 2. */
+    go: {
+      size: 0.28, margin: 0.02, thickness: 0.025, stone: 0.014, height: 0.009, drop: 0.03,
+      wood: '#d8b077', lines: '#3b2c1e', white: '#f2eee4', black: '#2b2a28',
     },
   },
   /** The office's Nanoleaf panels (nanoleaf.ts): a gradient between two hues (0..1: teal to magenta, through blue)
