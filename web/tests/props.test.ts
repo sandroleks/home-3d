@@ -1,0 +1,201 @@
+import { Box3, Object3D, Quaternion, Vector3 } from 'three';
+import { describe, expect, it } from 'vitest';
+import type { PlacedProp } from '../src/prop-places';
+import { CARRIED_LAYER, isPropMessage, type PropMessage, Props, type PropWorld } from '../src/props';
+import { floor, planesRaycast } from './planes';
+
+const matcaps = { matte: null, gloss: null };
+const placed = (id: string, extra: Partial<PlacedProp> = {}): PlacedProp => ({
+  id, kind: 'tumbler', variant: 0, node: null, position: new Vector3(0, 0.9, 0), quaternion: new Quaternion(), on: null, place: 'Test', ...extra,
+});
+
+function setup(places: PlacedProp[] = [placed('a/tumbler/0'), placed('a/tumbler/1', { position: new Vector3(0.2, 0.9, 0) })]) {
+  const root = new Object3D();
+  const drawer = new Object3D();
+  drawer.name = 'Move_drawer';
+  drawer.position.set(1, 0, 0);
+  root.add(drawer);
+  const floorMesh = new Object3D();
+  root.add(floorMesh);
+  const hands = new Map<string, Vector3>([['me', new Vector3(0, 1.4, 0)], ['ana', new Vector3(2, 1.4, 0)]]);
+  const world: PropWorld = {
+    root,
+    node: (n) => (n === drawer.name ? drawer : null),
+    drawerOf: (o) => (o === drawer ? drawer : null),
+    raycast: planesRaycast([floor(0, undefined, floorMesh)]),
+    light: () => 1,
+    selfId: () => 'me',
+    hand: (id, p, q) => {
+      const h = hands.get(id);
+      if (!h) return false;
+      p.copy(h);
+      q.identity();
+      return true;
+    },
+  };
+  const props = new Props(places, world, matcaps);
+  return { props, world, root, drawer };
+}
+const world = (o: Object3D) => o.getWorldPosition(new Vector3());
+
+describe('Props', () => {
+  it('builds every object at home, in the room or its drawer', () => {
+    const { props, drawer } = setup([placed('a/tumbler/0'), placed('d/fork/0', { kind: 'fork', node: 'Move_drawer', position: new Vector3(1.1, 0.8, 0) })]);
+    expect(props.list).toHaveLength(2);
+    expect(props.list[1].root.parent).toBe(drawer);
+    expect(world(props.list[1].root).x).toBeCloseTo(1.1);
+    drawer.position.x += 0.4; // the drawer opens: its things go with it
+    expect(world(props.list[1].root).x).toBeCloseTo(1.5);
+  });
+
+  it('picks up one thing at a time and shows it in the hand', () => {
+    const { props } = setup();
+    const [a, b] = props.list;
+    expect(props.pickUp(a)).toEqual({ id: 'a/tumbler/0', n: 1, by: 'me', s: 'held' });
+    expect(props.held).toBe(a);
+    expect(props.pickUp(b)).toBeNull();
+    props.update(1 / 60);
+    expect(world(a.root).y).toBeCloseTo(1.4);
+    a.root.traverse((o) => expect(o.layers.isEnabled(CARRIED_LAYER)).toBe(true));
+  });
+
+  it('takes the top of a stack', () => {
+    const { props } = setup([placed('p/plate/0', { kind: 'plate' }), placed('p/plate/1', { kind: 'plate', position: new Vector3(0, 0.92, 0), on: 'p/plate/0' })]);
+    const [bottom, top] = props.list;
+    expect(props.top(bottom)).toBe(top);
+    expect(props.pickUp(bottom)?.id).toBe('p/plate/1');
+    expect(props.top(bottom)).toBe(bottom);
+  });
+
+  it('puts a thing down in the room or in a drawer, relative to it', () => {
+    const { props, drawer } = setup();
+    const [a, b] = props.list;
+    props.pickUp(a);
+    const m = props.place({ point: new Vector3(0.5, 0.9, -0.5), yaw: 0, node: null }) as Extract<PropMessage, { s: 'rest' }>;
+    expect(m).toMatchObject({ id: a.id, n: 2, s: 'rest', parent: null });
+    expect(m.p.map((v) => +v.toFixed(4))).toEqual([0.5, 0.9, -0.5]);
+    expect(props.held).toBeNull();
+    expect(a.atHome).toBe(false);
+    props.pickUp(b);
+    const inDrawer = props.place({ point: new Vector3(1.1, 0.8, 0), yaw: 0, node: drawer }) as Extract<PropMessage, { s: 'rest' }>;
+    expect(inDrawer.parent).toBe('Move_drawer');
+    expect(inDrawer.p[0]).toBeCloseTo(0.1);
+    expect(b.root.parent).toBe(drawer);
+  });
+
+  it('throws a thing, and tells the others where it came to rest', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    props.pickUp(a);
+    const m = props.throw(new Vector3(0, 1.2, 0), new Vector3(2, 0, 0)); // soft enough to land upright
+    expect(m).toMatchObject({ id: a.id, n: 2, s: 'fly', v: [2, 0, 0] });
+    let rest: PropMessage[] = [];
+    for (let i = 0; i < 600 && !rest.length; i++) rest = props.update(1 / 60);
+    expect(rest).toHaveLength(1);
+    expect(rest[0]).toMatchObject({ id: a.id, n: 3, by: 'me', s: 'rest', parent: null });
+    expect(world(a.root).y).toBeCloseTo(0, 2);
+    expect(world(a.root).x).toBeGreaterThan(0.5);
+  });
+
+  it('drops a thing at its feet, upright', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    props.pickUp(a);
+    props.drop(new Vector3(0, 1, -0.3));
+    for (let i = 0; i < 300; i++) props.update(1 / 60);
+    expect(world(a.root).y).toBeCloseTo(0, 2);
+    expect(new Vector3(0, 1, 0).applyQuaternion(a.root.getWorldQuaternion(new Quaternion())).y).toBeCloseTo(1);
+  });
+
+  it('takes the newer change, and on a tie the lower id', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    expect(props.receive({ id: a.id, n: 1, by: 'zed', s: 'held' })).toBe(true);
+    expect(a.holder).toBe('zed');
+    expect(props.receive({ id: a.id, n: 1, by: 'ana', s: 'held' })).toBe(true); // same count, lower id
+    expect(a.holder).toBe('ana');
+    expect(props.receive({ id: a.id, n: 1, by: 'zed', s: 'held' })).toBe(false);
+    expect(props.receive({ id: a.id, n: 0, by: 'ana', s: 'home' })).toBe(false);
+    expect(props.receive({ id: 'nope', n: 9, by: 'ana', s: 'home' })).toBe(false);
+  });
+
+  it('loses a thing to someone who took it at the same moment', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    props.pickUp(a); // n 1 by me
+    props.receive({ id: a.id, n: 1, by: 'ana', s: 'held' }); // 'ana' < 'me'
+    expect(props.held).toBeNull();
+    expect(a.holder).toBe('ana');
+  });
+
+  it('runs a flight another visitor threw, and moves it where they say it landed', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    props.receive({ id: a.id, n: 1, by: 'ana', s: 'fly', p: [0, 1.2, 0], v: [1, 0, 0], w: [0, 0, 0] });
+    let sent: PropMessage[] = [];
+    for (let i = 0; i < 600; i++) sent = sent.concat(props.update(1 / 60));
+    expect(sent).toEqual([]); // ana tells where it landed, not this visitor
+    expect(world(a.root).y).toBeCloseTo(0, 2);
+    props.receive({ id: a.id, n: 2, by: 'ana', s: 'rest', parent: null, p: [0.7, 0, 0.1], q: [0, 0, 0, 1] });
+    expect(world(a.root).toArray().map((v) => +v.toFixed(3))).toEqual([0.7, 0, 0.1]);
+  });
+
+  it('shows a thing at home when its resting place is not in this layout', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    props.receive({ id: a.id, n: 1, by: 'ana', s: 'rest', parent: 'Move_island', p: [0, 0, 0], q: [0, 0, 0, 1] });
+    expect(a.atHome).toBe(true);
+    props.receive({ id: a.id, n: 2, by: 'ana', s: 'rest', parent: null, p: [3, 0.9, 0], q: [0, 0, 0, 1] }); // nothing under it here
+    expect(a.atHome).toBe(true);
+    expect(a.n).toBe(2);
+  });
+
+  it('drops what a leaving visitor held where they were', () => {
+    const { props } = setup();
+    const [a, b] = props.list;
+    props.receive({ id: a.id, n: 4, by: 'ana', s: 'held' });
+    props.leave('ana', new Vector3(2, 1, 0));
+    expect(a.state).toBe('rest');
+    expect(a.n).toBe(5);
+    expect(world(a.root).toArray().map((v) => +v.toFixed(3))).toEqual([2, 0, 0]);
+    props.receive({ id: b.id, n: 1, by: 'bo', s: 'held' });
+    props.leave('bo', null);
+    expect(b.atHome).toBe(true);
+  });
+
+  it('sends a newcomer everything away from home', () => {
+    const { props } = setup();
+    const [a, b] = props.list;
+    expect(props.messages()).toEqual([]);
+    props.pickUp(a);
+    props.receive({ id: b.id, n: 1, by: 'ana', s: 'rest', parent: null, p: [0.5, 0, 0], q: [0, 0, 0, 1] });
+    expect(props.messages().map((m) => [m.id, m.s])).toEqual([[a.id, 'held'], [b.id, 'rest']]);
+  });
+
+  it('sends home what falls out of the flat', () => {
+    const { props, world: w } = setup();
+    w.raycast = () => null;
+    const [a] = props.list;
+    props.pickUp(a);
+    props.throw(new Vector3(0, 1.5, 0), new Vector3(1, 0, 0));
+    let sent: PropMessage[] = [];
+    for (let i = 0; i < 600 && !sent.length; i++) sent = props.update(1 / 60);
+    expect(sent[0]).toMatchObject({ id: a.id, s: 'home', n: 3 });
+    expect(a.atHome).toBe(true);
+  });
+
+  it('finds what is in the way of a new place', () => {
+    const { props } = setup();
+    expect(props.overlaps(new Box3(new Vector3(-0.05, 0.9, -0.05), new Vector3(0.05, 1, 0.05)))).toBe(true);
+    expect(props.overlaps(new Box3(new Vector3(-0.05, 2, -0.05), new Vector3(0.05, 2.1, 0.05)))).toBe(false);
+  });
+
+  it('checks messages from the network', () => {
+    expect(isPropMessage({ id: 'a', n: 1, by: 'x', s: 'held' })).toBe(true);
+    expect(isPropMessage({ id: 'a', n: 1, by: 'x', s: 'rest', parent: null, p: [0, 0, 0], q: [0, 0, 0, 1] })).toBe(true);
+    expect(isPropMessage({ id: 'a', n: 1, by: 'x', s: 'fly', p: [0, 0, 0], v: [0, 0], w: [0, 0, 0] })).toBe(false);
+    expect(isPropMessage({ id: 'a', n: -1, by: 'x', s: 'home' })).toBe(false);
+    expect(isPropMessage({ id: 'a', n: 1, by: 'x', s: 'rest', parent: 3, p: [0, 0, 0], q: [0, 0, 0, 1] })).toBe(false);
+    expect(isPropMessage({ id: 'a', n: 1, by: 'x', s: 'fly', p: [0, NaN, 0], v: [0, 0, 0], w: [0, 0, 0] })).toBe(false);
+  });
+});
