@@ -1,7 +1,7 @@
 # Loose Objects — Design
 
 **Date:** 2026-10-28
-**Status:** Approved, not yet implemented.
+**Status:** Implemented (preview export; final export pending).
 
 ## Goal
 

@@ -22,6 +22,7 @@ Good to know:
 
 - `blender/tools/model_details.py` added the drawers and cupboards that open (with insides), the French door leaves, lamp colour temperatures, bulbs, LED strips and sockets. It has run once on `Untitled.blend` and refuses to run again; edit those things by hand from now on, following the conventions below.
 - `blender/tools/sliding_doors.py` then rebuilt the glazed doors as the real ones are, sliding: a fixed panel and a leaf that slides over it. It also tagged the turntable's platter to spin. It too has run once and refuses to run again.
+- `blender/tools/loose_contents.py` removed the baked glasses, plates and cutlery from the drawers and cupboards and wrote where their insides are to `web/src/prop-frames.json` (see Loose objects below). It has run once and refuses to run again.
 - The pipeline never writes to either .blend file. It runs Blender on a staged copy in `/private/tmp` with factory settings, so your add-ons don't load.
 - External image textures must be packed: File > External Data > Pack Resources.
 
@@ -68,6 +69,13 @@ Custom properties (Object Properties > Custom Properties):
 - A mesh that casts no shadow (Object Properties > Visibility > Shadow off) and only uses glowing materials is a bulb or LED strip: it is exported unlit and glows with its lamp, and it never blocks the lamp inside it.
 - The build-up animation is fine: the export uses the final frame.
 - The view through the windows is everything in `Exterior - neighbourhood` (and its sub-collections). It is too big to lightmap, so it goes to `surroundings.glb`. The viewer lights it live with the same sun and sky as the flat (no shadows between buildings). When only the neighbourhood changed, `make export-surroundings` is enough.
+
+## Loose objects
+
+The glasses, mugs, plates, bowls, cutlery, spice jars, food containers, oil and wine bottles, books, glasses cases, screwdrivers and filament spools in the drawers and cupboards are made in the browser (`web/src/prop-models.ts`), not in Blender: visitors pick them up (click), put them down on any surface facing up (click where the ghost shows; the held thing's ghost shows where it'll go), throw them (hold the right button or F, longer is harder) and drop them (Q); on touch, tap to pick up and put down, and Throw and Drop buttons show while holding. Everyone in the flat sees it, and things stay where they're left until the flat empties.
+
+- Where each drawer's or cupboard's insides are is in `web/src/prop-frames.json`, written once by `blender/tools/loose_contents.py` (which also removed the baked stand-ins there, and has run once and refuses to run again). Moving or resizing one of those drawers or cupboards in Blender means updating its entry by hand, or the objects will float or sink.
+- What goes where: `LAYOUTS` in `web/src/prop-places.ts`, one per fill. Throws, light, the hand: `CONFIG.props` (`web/src/config.ts`).
 
 ## Overrides
 
