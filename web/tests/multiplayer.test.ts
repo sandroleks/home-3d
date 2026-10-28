@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Avatars } from '../src/avatars';
 import { DoorState } from '../src/doors';
 import { LightGroups } from '../src/lightmaps';
+import type { GameMessage } from '../src/games';
 import type { DoorInfo } from '../src/manifest';
 import { type MessageKind, Multiplayer, type Room } from '../src/multiplayer';
 
@@ -46,10 +47,16 @@ function setup(joinedAt = 1000, arrived = joinedAt) {
   const changed: string[][] = [];
   const peers: string[][] = [];
   const hosts: string[] = [];
+  const games: GameMessage[] = [];
+  let running: GameMessage[] = [];
   const mp = new Multiplayer(fake.room, world, avatars, 'Ana', {
     now: () => now, onChanged: (k) => void changed.push(k), onPeers: (n) => void peers.push(n), onHost: (h) => void hosts.push(h),
+    onGame: (g) => void games.push(g), games: () => running,
   }, joinedAt, arrived);
-  return { fake, world, avatars, mp, changed, peers, hosts, setNow: (t: number) => { now = t; }, node: new Object3D() };
+  return {
+    fake, world, avatars, mp, changed, peers, hosts, games, setNow: (t: number) => { now = t; }, setGames: (g: GameMessage[]) => { running = g; },
+    node: new Object3D(),
+  };
 }
 
 describe('Multiplayer', () => {
@@ -214,6 +221,24 @@ describe('Multiplayer', () => {
     world.lights.set('sala', true);
     fake.receive('state', { want: 1 }, 'p1');
     expect(fake.sent.at(-1)).toEqual({ kind: 'state', data: { 'door:Door_1': 0, 'light:sala': 1, full: 1 }, to: 'p1' });
+  });
+  it("sends the table's games after the flat's state to a newcomer who asks", () => {
+    const { fake, setGames } = setup();
+    const chess: GameMessage = { slot: 0, id: 'g1', white: 'me', black: 'p2', moves: ['e2e4'] };
+    setGames([chess]);
+    fake.receive('state', { want: 1 }, 'p1');
+    expect(fake.sent.slice(-2).map((s) => [s.kind, s.to])).toEqual([['state', 'p1'], ['game', 'p1']]);
+    expect(fake.sent.at(-1)?.data).toEqual(chess);
+  });
+  it('passes on well-formed games and broadcasts its own', () => {
+    const { fake, mp, games, avatars } = setup();
+    const chess: GameMessage = { slot: 0, id: 'g1', white: 'p1', black: 'me', moves: [] };
+    fake.receive('game', chess, 'p1');
+    fake.receive('game', { slot: 7 }, 'p1');
+    expect(games).toEqual([chess]);
+    expect(avatars.has('p1')).toBe(true); // a sign of life, like any message
+    mp.sendGame({ ...chess, moves: ['e2e4'] });
+    expect(fake.sent.at(-1)).toEqual({ kind: 'game', data: { ...chess, moves: ['e2e4'] } });
   });
   it('asks a peer that comes back after timing out who it is, and answers when asked', () => {
     const { fake, mp, setNow } = setup();
