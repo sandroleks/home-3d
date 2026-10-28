@@ -6,7 +6,8 @@ import { DoorState } from '../src/doors';
 import { activate, findTarget, Interactions, promptFor, setHighlight, type Target } from '../src/interactions';
 import { LightGroups } from '../src/lightmaps';
 import { MovableState } from '../src/movables';
-import type { MovableInfo } from '../src/manifest';
+import type { MovableInfo, ScreenInfo } from '../src/manifest';
+import { Screen } from '../src/screens';
 
 const doorInfo = { node: 'Door_1', hinge: [0, 0] as [number, number], dir: [1, 0] as [number, number], width: 0.8, openAngle: 1.5, opening: 1, lightmap: { file: 'x', range: 1 }, packs: [] };
 const drawer: MovableInfo = { node: 'Move_front-s3-prep-drawers-0', room: 'cozinha', kind: 'slide', dir: [1, 0, 0], distance: 0.4, lightmap: { file: 'x', range: 1 }, packs: [] };
@@ -42,6 +43,31 @@ describe('interactions', () => {
     const camera = new PerspectiveCamera();
     expect(new Interactions(camera, [glass, node], new Map([[node as Object3D, t]]), lights).update()).toBe(t);
     expect(new Interactions(camera, [wall, node], new Map([[node as Object3D, t]]), lights).update()).toBeNull();
+  });
+
+  it('prompts the TV for its panel and leaves it as it is; a monitor still switches on and off', () => {
+    const lights = new LightGroups([]);
+    const stub = (width: number, height: number) => ({ width, height, getContext: () => null });
+    const info = (kind: ScreenInfo['kind']): ScreenInfo => ({ node: `Screen_${kind}`, room: 'sala', kind, group: null, center: [0, 1, 0], normal: [0, 0, 1], width: 1, height: 0.5 });
+    const tv = new Screen(info('tv'), new Object3D(), stub);
+    const t: Target = { kind: 'screen', screen: tv, node: new Object3D() };
+    expect(promptFor(t, lights)).toBe('Click: TV');
+    expect(promptFor(t, lights, 'Tap')).toBe('Tap: TV');
+    activate(t, lights);
+    expect(tv.on).toBe(false);
+    const monitor = new Screen(info('monitor'), new Object3D(), stub);
+    const m: Target = { kind: 'screen', screen: monitor, node: new Object3D() };
+    expect(promptFor(m, lights)).toBe('Click: turn screen on');
+    activate(m, lights);
+    expect(promptFor(m, lights)).toBe('Click: turn screen off');
+  });
+
+  it('prompts the wine, which changes nothing shared', () => {
+    const lights = new LightGroups([]);
+    const t: Target = { kind: 'wine', node: new Object3D() };
+    expect(promptFor(t, lights)).toBe('Click: drink some wine');
+    expect(promptFor(t, lights, 'Tap')).toBe('Tap: drink some wine');
+    expect(() => activate(t, lights)).not.toThrow();
   });
 
   it('prompts and activates switches', () => {

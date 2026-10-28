@@ -17,7 +17,9 @@ export type Target =
   | { kind: 'prop'; prop: Prop; node: Object3D }
   /** Somewhere to sit or lie, part of the room's mesh: `spot` is the free place nearest the crosshair, null if all are
    * taken; `node` is a stand-in with nothing to highlight. */
-  | { kind: 'seat'; seat: Seat; spot: Spot | null; node: Object3D };
+  | { kind: 'seat'; seat: Seat; spot: Spot | null; node: Object3D }
+  /** The bottle of red in the kitchen (wine.ts): a sip is the visitor's own, never shared. */
+  | { kind: 'wine'; node: Object3D };
 
 /** The seat at a point where the crosshair meets the room, if any. */
 export type SeatFinder = (point: Vector3) => Target | null;
@@ -40,23 +42,25 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
     case 'lamp': return `${verb}: turn ${lampName(t.name)} ${lights.isOn(t.group) ? 'off' : 'on'}`;
     case 'seat': return t.spot ? `${verb}: ${t.seat.pose === 'lie' ? 'lie down' : 'sit down'}` : 'Someone is here';
     case 'prop': return `${verb}: pick up ${t.prop.info.name}`;
+    case 'wine': return `${verb}: drink some wine`;
     case 'screen': {
       const s = t.screen;
-      if (!s.isTv) return `${verb}: turn screen ${s.on ? 'off' : 'on'}`;
-      return !s.on ? `${verb}: turn TV on` : s.lastChannel ? `${verb}: turn TV off` : `${verb}: next channel`;
+      return s.isTv ? `${verb}: TV` : `${verb}: turn screen ${s.on ? 'off' : 'on'}`;
     }
     default: return lights.isOn(t.room) ? `${verb}: turn light off` : `${verb}: turn light on`;
   }
 }
 
-/** `now`: seconds, for the screens' pictures. Sitting down is the player's (main.ts). */
+/** `now`: seconds, for the screens' pictures. Sitting down, drinking and the TV's panel are the player's (main.ts). */
 export function activate(t: Target, lights: LightGroups, now = 0): void {
   switch (t.kind) {
-    case 'seat': case 'prop': return; // sitting and picking up are main.ts's
+    case 'seat': case 'prop': case 'wine': return; // sitting, picking up and drinking are main.ts's
     case 'door': return t.door.toggle();
     case 'movable': return t.movable.toggle();
     case 'lamp': return lights.toggle(t.group);
-    case 'screen': return t.screen.click(now);
+    case 'screen':
+      if (!t.screen.isTv) t.screen.click(now); // a click on the TV opens its panel instead (main.ts)
+      return;
     default: return lights.toggle(t.room);
   }
 }

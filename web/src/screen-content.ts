@@ -1,3 +1,5 @@
+import { type DrawTv, drawGameTv, gameMean } from './draw-tv';
+
 /** Anything with a 2D context: an HTMLCanvasElement or OffscreenCanvas in the browser, a stub in tests. */
 export interface Surface { width: number; height: number; getContext(type: '2d'): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null }
 /** What the screens may show about the walkthrough's world: Lisbon local time of the simulated clock. */
@@ -572,6 +574,8 @@ export class TvContent {
   private noiseUntil = -1;
   private avg: Rgb = [0, 0, 0];
   private avgAt = -Infinity;
+  /** A game of draw and guess, shown instead of the channel (draw-tv.ts); null shows the channel. */
+  private game: DrawTv | null = null;
 
   constructor(private surface: Surface) {
     const ctx = surface.getContext('2d');
@@ -597,6 +601,12 @@ export class TvContent {
     this.noisy = true;
   }
 
+  /** Shows a game instead of the channel, or (null) the channel again, its badge first. */
+  setGame(view: DrawTv | null): void {
+    if (!view && this.game) this.changed = true;
+    this.game = view;
+  }
+
   /** Back to the first channel, for switching the TV on again. */
   reset(): void {
     this.channel = 0;
@@ -619,6 +629,11 @@ export class TvContent {
     ctx.setTransform(this.surface.width / TV_W, 0, 0, this.surface.height / TV_H, 0, 0);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+    if (this.game) {
+      drawGameTv(ctx, this.game);
+      this.avg = toLinear(gameMean(this.game));
+      return;
+    }
     this.scenes[index].draw(t, world);
     const since = t - this.changedAt;
     if (since < BADGE_TIME) this.badge(ctx, index, since);

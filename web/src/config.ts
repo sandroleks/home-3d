@@ -287,14 +287,62 @@ export const CONFIG = {
       support: 0.015,
     },
   },
+  /** Draw and guess on the Sala TV (draw-rules.ts, draw-game.ts): the phases' times, the points, the hints, sharing. */
+  draw: {
+    /** Seconds to choose a word, to draw it, to see it revealed, and to see the final scores. */
+    choose: 15,
+    drawing: 80,
+    reveal: 5,
+    end: 15,
+    /** A right guess scores `most` at the start of the drawing time, falling to `least` at its end, rounded to
+     * `step`; the drawer scores `drawer` for each. */
+    most: 300,
+    least: 100,
+    step: 10,
+    drawer: 50,
+    /** Shares of the drawing time at which a letter of the word shows (never more than half its letters). */
+    hints: [0.5, 0.75] as number[],
+    /** Words to choose from, and the lines the feed keeps. */
+    choices: 3,
+    feed: 8,
+    /** Seconds between the drawer's batches of stroke points. */
+    strokeEvery: 0.05,
+  },
+  /** The wine on the kitchen's back counter (wine.ts) and getting drunk on it (drunk.ts). */
+  wine: {
+    /** Where the bottle stands (x, z): on the back counter between the sink and the hob, the same in both kitchens;
+     * the worktop's height (m), and where the glass stands from the bottle (x, z). */
+    at: [-2.95, 4.3] as [number, number],
+    counterTop: 0.9,
+    glass: [0.07, -0.13] as [number, number],
+    /** Drunkenness each sip adds, the most it builds up to (effects top out at 1, so more only lasts longer), and how
+     * much wears off a second: three minutes from fully drunk to sober. */
+    sip: 0.25,
+    max: 1.5,
+    soberRate: 1 / 180,
+    /** Seconds the bottle takes to lift, tip toward you and set back down. */
+    sipTime: 1,
+    /** The view fully drunk: roll, yaw and pitch sway (radians), sideways and up-down sway (m), how fast it all
+     * wanders (one sway every 1/speed seconds or so), and the blur (CSS px). */
+    wobble: { roll: 0.09, yaw: 0.05, pitch: 0.03, side: 0.05, bob: 0.02, speed: 0.35 },
+    blur: 3,
+    /** Drinking too fast: more than `sips` sips within `window` seconds blacks you out. The view fades to black over
+     * `fade` s, stays black `hold` s (you sink to the floor meanwhile) and comes back over `wake` s, still fully drunk. */
+    blackout: { sips: 10, window: 120, fade: 1.5, hold: 4, wake: 2.5 },
+    /** A drunk visitor's animal fully drunk: how far it tilts side to side and forward and back (radians). */
+    sway: { roll: 0.22, pitch: 0.1 },
+    colours: { glass: '#1f3a26', label: '#efe4cc', capsule: '#6e1424', wine: '#5a0d1c', stemware: '#dfe8ea' },
+  },
   /** The office's Nanoleaf panels (nanoleaf.ts): a gradient between two hues (0..1: teal to magenta, through blue)
    * drifting across the panels, `speed` radians a second, `spread` radians a metre along the wall. `glow` scales the
    * panels' baked glow so the colours stay deep instead of clipping to white. */
   nanoleaf: { hues: [0.47, 0.83] as [number, number], speed: 0.45, spread: 4.5, saturation: 1, lightness: 0.5, glow: 0.22 },
-  /** Philips Hue scenes (hue.ts): S in the sun panel, H steps through them in the room you're in. */
+  /** Philips Hue scenes (hue.ts): the menu in the sun panel, H steps through them in the room you're in. */
   hue: {
     /** Colour temperature the lamps were baked at (model_details.py: 3000 K ceilings, 2700 K lamps). */
     bakedKelvin: 2850,
+    /** The most a colour scene lifts any channel of the baked light (hue.ts tintFor): more washes deep colours out. */
+    colourGain: 1.5,
     /** For linking the flat's real bridge later: its address and app key, and each room id's Hue room (group) id.
      * Until then (bridge null) scenes only change the walkthrough. */
     bridge: null as string | null,

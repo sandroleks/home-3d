@@ -1,6 +1,7 @@
 import type { Room as TrysteroRoom } from 'trystero';
 import type { Avatars } from './avatars';
 import { CONFIG } from './config';
+import { type DrawMessage, isDrawMessage } from './draw-game';
 import { type GameMessage, isGameMessage } from './games';
 import { isPropMessage, type PropMessage } from './props';
 import {
@@ -8,8 +9,8 @@ import {
   type Seating, shouldSend, type StateMap, type StateWorld, hostOf,
 } from './presence';
 
-export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'prop';
-const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'prop'];
+export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'prop' | 'draw';
+const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'prop', 'draw'];
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 /** What the walkthrough needs from a network: Trystero today, a WebSocket server another day. */
@@ -73,6 +74,10 @@ export interface MultiplayerHooks {
   props?: () => PropMessage[];
   /** A visitor left or timed out (before their animal goes). */
   onLeave?: (id: string) => void;
+  /** Draw and guess: a message from another visitor (well-formed; what to do with it is the game's call). */
+  onDraw?: (msg: DrawMessage, from: string) => void;
+  /** A visitor new here (or back after timing out), to greet with this visitor's part of draw and guess. */
+  onArrive?: (id: string) => void;
 }
 
 /**
@@ -146,6 +151,11 @@ export class Multiplayer {
       if (this.arrive(id)) this.greet(id, true);
       hooks.onProp?.(data);
     });
+    room.onMessage('draw', (data, id) => {
+      if (!isDrawMessage(data)) return;
+      if (this.arrive(id)) this.greet(id, true);
+      hooks.onDraw?.(data, id);
+    });
   }
 
   get names(): string[] {
@@ -189,6 +199,7 @@ export class Multiplayer {
     if (stream) this.voice?.add(id, stream);
     this.hooks.onPeers(this.peers.names());
     for (const m of this.hooks.props?.() ?? []) this.room.send('prop', m as unknown as Json, id);
+    this.hooks.onArrive?.(id);
     return true;
   }
 
@@ -215,10 +226,10 @@ export class Multiplayer {
     this.checkHost();
   }
 
-  /** Call every frame with the local pose (and seating, sitting or lying); it sends at the pose rate while moving and as
-   * a heartbeat while still. */
-  sendPose(x: number, z: number, yaw: number, pitch: number, seating: Seating | null = null): void {
-    const pose = encodePose(x, z, yaw, pitch, seating);
+  /** Call every frame with the local pose (and seating, sitting or lying, and how drunk, 0..1); it sends at the pose
+   * rate while moving and as a heartbeat while still. */
+  sendPose(x: number, z: number, yaw: number, pitch: number, seating: Seating | null = null, drunk = 0): void {
+    const pose = encodePose(x, z, yaw, pitch, seating, drunk);
     const now = this.hooks.now();
     if (!shouldSend(this.lastSent, now, poseMoved(this.lastPose, pose))) return;
     this.lastSent = now;
@@ -240,6 +251,11 @@ export class Multiplayer {
   /** Tells the others what happened to a loose thing. */
   sendProp(m: PropMessage): void {
     this.room.send('prop', m as unknown as Json);
+  }
+
+  /** Draw and guess: to everyone, or (a guess, a "close!", a newcomer's state) to one visitor. */
+  sendDraw(msg: DrawMessage, to?: string): void {
+    this.room.send('draw', msg, to);
   }
 
   /** Every frame: drop the silent. */

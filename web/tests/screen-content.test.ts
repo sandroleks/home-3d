@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { DrawTv } from '../src/draw-tv';
 import {
   clockText, dateText, dateTimeText, DesktopContent, type ScreenWorld, type Surface, TV_CHANNELS, TvContent,
 } from '../src/screen-content';
@@ -149,6 +150,26 @@ describe('TvContent', () => {
     expect(tv.average()).toEqual(first);
     tv.draw(40, NOON);
     expect(tv.average()).not.toEqual(first);
+  });
+
+  it('shows a game instead of the channel, lit like its white card, then the channel again with its badge', () => {
+    const r = recorder();
+    const tv = new TvContent(r.surface);
+    tv.draw(10, EVENING);
+    const game: DrawTv = {
+      phase: 'choosing', drawer: 'Ana', hint: '', word: '', seconds: 15, strokes: [], gains: [],
+      rows: [{ name: 'Ana', score: 0, place: 1, drawer: true, guessed: false, here: true }],
+    };
+    tv.setGame(game);
+    r.clear();
+    tv.draw(11, EVENING);
+    expect(r.texts()).toContain('Ana is choosing a word');
+    expect(r.texts()).not.toContain(TV_CHANNELS[0].name);
+    expect(tv.average()[0]).toBeGreaterThan(0.3);
+    tv.setGame(null);
+    r.clear();
+    tv.draw(12, EVENING);
+    expect(r.texts()).toContain(TV_CHANNELS[0].name);
   });
 
   it('is harmless without a 2D context', () => {

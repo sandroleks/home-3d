@@ -1,4 +1,4 @@
-import { blackBody, type HueScene, levelFor } from './hue';
+import { blackBody, type HueScene, hueColour, levelFor } from './hue';
 import type { GuestRow } from './guests';
 import type { MicState } from './voice';
 
@@ -11,7 +11,9 @@ export const COPY = {
   flatLighting: 'Real sun and sky off: the same even daylight at any time.',
   kitchenWall: 'Kitchen wall up, as it is now',
   noKitchenWall: "The kitchen-wall version hasn't been exported yet. Open the flat without it instead.",
-  thisRoom: 'This room',
+  chooseScene: 'Choose a scene',
+  whiteScenes: 'White',
+  colourScenes: 'Colour',
   stand: 'Move to stand up',
   holdHint: 'Right-click or F to throw, Q to drop',
   holdHintTouch: 'Throw or drop it with the buttons',
@@ -21,6 +23,16 @@ export const COPY = {
 
 /** Where a Hue scene goes: the room the visitor is in, or every room. */
 export type SceneScope = 'room' | 'home';
+
+/** The scene menu's swatch, as a CSS background: a white scene's colour, dimmed with its brightness; a colour scene's
+ * colours round a wheel; dark for off; nothing while no scene is set. */
+export function swatch(scene: HueScene | undefined): string {
+  if (!scene) return 'transparent';
+  const css = (c: { r: number; g: number; b: number }, v: number) => `rgb(${Math.round(c.r * v * 255)}, ${Math.round(c.g * v * 255)}, ${Math.round(c.b * v * 255)})`;
+  const v = scene.bri > 0 ? 0.35 + 0.65 * levelFor(scene.bri) : 0.15;
+  if (scene.colours?.length) return `conic-gradient(${[...scene.colours, scene.colours[0]].map((c) => css(hueColour(c), v)).join(', ')})`;
+  return css(blackBody(scene.ct > 0 ? 1e6 / scene.ct : 2700), v);
+}
 
 export function isTouchOnly(matchMedia: (q: string) => { matches: boolean }): boolean {
   return matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches;
@@ -65,6 +77,9 @@ export class UI {
   private lastRoomLight: boolean | null | undefined;
   private touch = false;
   private lastGuests = '';
+  private sceneList: readonly HueScene[] = [];
+  /** The scene the swatch shows ('' for none), null before the first. */
+  private swatchFor: string | null = null;
 
   constructor(private doc: Document) {}
 
@@ -305,9 +320,11 @@ export class UI {
     this.el('sun-play').addEventListener('click', () => h.play());
     const real = this.el<HTMLInputElement>('sun-real');
     real.addEventListener('change', () => h.real(real.checked));
-    // A slider left focused would also take the arrow keys the visitor walks with
+    // A slider left focused would also take the arrow keys the visitor walks with. Not a menu: it opens on the press,
+    // and losing focus on the release would close it again at once (bindScenes hands its keys back instead).
     this.el('sun-panel').addEventListener('pointerup', () => {
-      if (this.doc.body.classList.contains('cursor')) (this.doc.activeElement as HTMLElement | null)?.blur?.();
+      const active = this.doc.activeElement as HTMLElement | null;
+      if (this.doc.body.classList.contains('cursor') && active?.tagName !== 'SELECT') active?.blur?.();
     });
   }
 
@@ -350,34 +367,55 @@ export class UI {
     box.addEventListener('change', () => cb(box.checked));
   }
 
-  /** One button per Hue scene, with a dot in its light's colour and brightness. */
+  /** The Hue scene menu: the white scenes, the colour scenes, then off. Choosing one sets it in this room or the whole
+   * home, as the scope menu says. */
   bindScenes(scenes: readonly HueScene[], cb: (id: string, scope: SceneScope) => void): void {
-    const box = this.el('scene-buttons');
+    const menu = this.el<HTMLSelectElement>('scene');
     const scope = this.el<HTMLSelectElement>('scene-scope');
-    for (const s of scenes) {
-      const b = this.doc.createElement('button');
-      b.type = 'button';
-      b.dataset.scene = s.id;
-      b.setAttribute('aria-pressed', 'false');
-      const dot = this.doc.createElement('i');
-      const c = blackBody(s.ct > 0 ? 1e6 / s.ct : 2700);
-      const v = s.bri > 0 ? 0.35 + 0.65 * levelFor(s.bri) : 0.15;
-      dot.style.background = `rgb(${Math.round(c.r * v * 255)}, ${Math.round(c.g * v * 255)}, ${Math.round(c.b * v * 255)})`;
-      b.append(dot, s.name);
-      b.addEventListener('click', () => cb(s.id, scope.value === 'home' ? 'home' : 'room'));
-      box.append(b);
+    const option = (value: string, text: string) => {
+      const o = this.doc.createElement('option');
+      o.value = value;
+      o.textContent = text;
+      return o;
+    };
+    const none = option('', COPY.chooseScene);
+    none.hidden = true;
+    const group = (label: string, list: readonly HueScene[]) => {
+      const g = this.doc.createElement('optgroup');
+      g.label = label;
+      g.append(...list.map((s) => option(s.id, s.name)));
+      return g;
+    };
+    menu.append(
+      none,
+      group(COPY.whiteScenes, scenes.filter((s) => s.bri > 0 && !s.colours)),
+      group(COPY.colourScenes, scenes.filter((s) => s.bri > 0 && s.colours)),
+      ...scenes.filter((s) => s.bri === 0).map((s) => option(s.id, s.name)),
+    );
+    this.sceneList = scenes;
+    menu.addEventListener('change', () => {
+      if (menu.value) cb(menu.value, scope.value === 'home' ? 'home' : 'room');
+      menu.blur(); // the keys walk again, rather than picking scenes by their first letter
+    });
+    scope.addEventListener('change', () => scope.blur());
+    for (const m of [menu, scope]) {
+      // A menu closed without a choice keeps focus: any key but those that open it walks again instead of choosing
+      m.addEventListener('keydown', (e) => {
+        if (e.code === 'Enter' || e.code === 'Space') return;
+        e.preventDefault();
+        m.blur();
+      });
     }
   }
 
-  /** The scope menu names the room the visitor is in; a scene shows as chosen while it's still what's set. */
-  setScenes(room: string | null, active: string | null): void {
-    const here = this.el<HTMLSelectElement>('scene-scope').options[0];
-    const label = room ? `${COPY.thisRoom} (${room})` : COPY.thisRoom;
-    if (here.textContent !== label) here.textContent = label;
-    for (const b of this.el('scene-buttons').querySelectorAll<HTMLButtonElement>('button')) {
-      const on = String(b.dataset.scene === active);
-      if (b.getAttribute('aria-pressed') !== on) b.setAttribute('aria-pressed', on);
-    }
+  /** The scene menu shows the scene while it's still what's set in the room the visitor is in. */
+  setScenes(active: string | null): void {
+    const menu = this.el<HTMLSelectElement>('scene');
+    const value = active ?? '';
+    if (menu.value === value && this.swatchFor === value) return;
+    menu.value = value;
+    this.swatchFor = value;
+    this.el('scene-swatch').style.background = swatch(this.sceneList.find((s) => s.id === active));
   }
 
   showNotice(text: string): void {

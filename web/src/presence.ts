@@ -1,6 +1,7 @@
 import type { KeyValueStore } from './audio';
 import { CONFIG } from './config';
 import type { DoorState } from './doors';
+import { packColour, unpackColour } from './hue';
 import type { Target } from './interactions';
 import type { LightGroups } from './lightmaps';
 import type { MovableState } from './movables';
@@ -10,11 +11,14 @@ import type { Screen } from './screens';
 export type Pose = [number, number, number, number];
 /** Sitting or lying: 1 sitting, 2 lying, then the seat's height (m) and the way it faces (yaw). */
 export type Seating = [number, number, number];
-/** A pose as sent: standing, or with how the visitor sits or lies (x, z are then the seat's spot). Visitors from before
- * seats existed drop the longer form, so they see a seated visitor standing where they last stood. */
-export type PoseMessage = Pose | [number, number, number, number, number, number, number];
+/** A pose as sent: standing, or with how the visitor sits or lies (x, z are then the seat's spot), and then, while
+ * the visitor is drunk, how drunk (0..1; the seating is 0, 0, 0 standing). Visitors from before seats existed drop the
+ * longer forms, so they see a seated visitor standing where they last stood; visitors from before the wine drop the
+ * drunk form, so a drunk visitor's animal stands still for them until it sobers up. */
+export type PoseMessage = Pose | [number, number, number, number, number, number, number] | [number, number, number, number, number, number, number, number];
 /** The flat's shared state: "door:<node>", "movable:<node>" → 0 or 1; "light:<group>" → 0 off, else its brightness
- * (1: as baked); "ct:<group>" → its colour temperature in mireds (0: as baked); "screen:<node>" → -1 off, else the channel. */
+ * (1: as baked); "ct:<group>" → its colour temperature in mireds (0: as baked); "hs:<group>" → its Hue colour in place of
+ * that (packColour); "screen:<node>" → -1 off, else the channel. */
 export type StateMap = Record<string, number>;
 /** The parts of the world the shared state is read from and written to. */
 export interface StateWorld {
@@ -79,19 +83,24 @@ export function colourFor(id: string, palette: readonly string[] = CONFIG.multip
 
 const round = (v: number) => Math.round(v * 1000) / 1000;
 
-export function encodePose(x: number, z: number, yaw: number, pitch: number, seating: Seating | null = null): PoseMessage {
+/** `drunk` (0..1) goes to the hundredth: it wears off slowly, and every change is a pose to send. */
+export function encodePose(x: number, z: number, yaw: number, pitch: number, seating: Seating | null = null, drunk = 0): PoseMessage {
   const pose: Pose = [round(x), round(z), round(yaw), round(pitch)];
+  const d = Math.round(Math.max(0, Math.min(1, drunk)) * 100) / 100;
+  if (d > 0) return [...pose, seating?.[0] ?? 0, round(seating?.[1] ?? 0), round(seating?.[2] ?? 0), d];
   return seating ? [...pose, seating[0], round(seating[1]), round(seating[2])] : pose;
 }
 
 export function isPose(v: unknown): v is PoseMessage {
-  return Array.isArray(v) && (v.length === 4 || v.length === 7) && v.every((n) => typeof n === 'number' && Number.isFinite(n));
+  return Array.isArray(v) && (v.length === 4 || v.length === 7 || v.length === 8) && v.every((n) => typeof n === 'number' && Number.isFinite(n));
 }
 
-/** The pose and, sitting or lying, the seating; anything but 1 or 2 is standing. */
-export function splitPose(m: PoseMessage): { pose: Pose; seating: Seating | null } {
-  const pose: Pose = [m[0], m[1], m[2], m[3]];
-  return { pose, seating: m.length === 7 && (m[4] === 1 || m[4] === 2) ? [m[4], m[5], m[6]] : null };
+/** The pose, the seating sitting or lying (anything but 1 or 2 is standing), and how drunk (0 sober). */
+export function splitPose(m: PoseMessage): { pose: Pose; seating: Seating | null; drunk: number } {
+  const n: readonly number[] = m;
+  const pose: Pose = [n[0], n[1], n[2], n[3]];
+  const seating: Seating | null = n.length >= 7 && (n[4] === 1 || n[4] === 2) ? [n[4], n[5], n[6]] : null;
+  return { pose, seating, drunk: n.length === 8 ? Math.max(0, Math.min(1, n[7])) : 0 };
 }
 
 export function isStateMap(v: unknown): v is StateMap {
@@ -127,8 +136,10 @@ export function smoothPose(current: Pose, target: Pose, dt: number, tau = CONFIG
   ];
 }
 
-/** What a click changes in the flat: everything but a seat (where a visitor sits travels with their pose). */
-export type SharedTarget = Exclude<Target, { kind: 'seat' } | { kind: 'prop' }>;
+/** What a click changes in the flat: everything but a seat (where a visitor sits travels with their pose), a loose
+ * thing (it has its own message) and the wine (each visitor drinks alone; how drunk they are travels with their pose
+ * too). */
+export type SharedTarget = Exclude<Target, { kind: 'seat' | 'prop' | 'wine' }>;
 
 /** The shared-state key a click on a target changes. A room's switch is the light group with the room's id. */
 export function stateKey(t: SharedTarget): string {
@@ -158,7 +169,7 @@ export function lightValue(lights: LightGroups, id: string): number {
 }
 
 export function stateDelta(t: Target, lights: LightGroups): StateMap {
-  return t.kind === 'seat' || t.kind === 'prop' ? {} : { [stateKey(t)]: stateValue(t, lights) };
+  return t.kind === 'seat' || t.kind === 'prop' || t.kind === 'wine' ? {} : { [stateKey(t)]: stateValue(t, lights) };
 }
 
 /** Everything shared, for a newcomer. */
@@ -169,6 +180,8 @@ export function collectState(world: StateWorld): StateMap {
   for (const id of world.lights.ids()) {
     out[`light:${id}`] = lightValue(world.lights, id);
     if (world.lights.mireds(id) > 0) out[`ct:${id}`] = world.lights.mireds(id);
+    const colour = world.lights.colour(id);
+    if (colour) out[`hs:${id}`] = packColour(colour);
   }
   for (const s of world.screens) out[`screen:${s.info.node}`] = s.on ? s.channel : -1;
   return out;
@@ -194,6 +207,10 @@ export function applyState(world: StateWorld, delta: StateMap, now: number): str
     } else if (kind === 'ct') {
       if (!world.lights.has(id) || world.lights.mireds(id) === value) continue;
       world.lights.setTone(id, value);
+    } else if (kind === 'hs') {
+      const now = world.lights.colour(id);
+      if (!world.lights.has(id) || (now && packColour(now) === value)) continue;
+      world.lights.setColour(id, unpackColour(value));
     } else if (kind === 'screen') {
       const s = world.screens.find((sc) => sc.info.node === id);
       if (!s) continue;
