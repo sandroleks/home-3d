@@ -295,9 +295,11 @@ export class UI {
     this.el('sun-play').addEventListener('click', () => h.play());
     const real = this.el<HTMLInputElement>('sun-real');
     real.addEventListener('change', () => h.real(real.checked));
-    // A slider left focused would also take the arrow keys the visitor walks with
+    // A slider left focused would also take the arrow keys the visitor walks with. Not a menu: it opens on the press,
+    // and losing focus on the release would close it again at once (bindScenes hands its keys back instead).
     this.el('sun-panel').addEventListener('pointerup', () => {
-      if (this.doc.body.classList.contains('cursor')) (this.doc.activeElement as HTMLElement | null)?.blur?.();
+      const active = this.doc.activeElement as HTMLElement | null;
+      if (this.doc.body.classList.contains('cursor') && active?.tagName !== 'SELECT') active?.blur?.();
     });
   }
 
@@ -371,6 +373,14 @@ export class UI {
       menu.blur(); // the keys walk again, rather than picking scenes by their first letter
     });
     scope.addEventListener('change', () => scope.blur());
+    for (const m of [menu, scope]) {
+      // A menu closed without a choice keeps focus: any key but those that open it walks again instead of choosing
+      m.addEventListener('keydown', (e) => {
+        if (e.code === 'Enter' || e.code === 'Space') return;
+        e.preventDefault();
+        m.blur();
+      });
+    }
   }
 
   /** The scene menu shows the scene while it's still what's set in the room the visitor is in. */
