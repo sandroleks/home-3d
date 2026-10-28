@@ -68,6 +68,10 @@ const H = 288;
 /** The white card the drawing is on, 4:3 like the panel's canvas, and the column of scores right of it. */
 export const TV_CARD = { x: 12, y: 12, w: 352, h: 264 };
 const END_CARD = { x: 12, y: 12, w: 488, h: 264 };
+/** The reveal's dark band across the card, and its opacity over the card. */
+const BAND_H = 88;
+const BAND_OPACITY = 0.85;
+const BAND: Rgb = [0x1d / 255, 0x20 / 255, 0x30 / 255];
 const SIDE = 378;
 const SIDE_W = 122;
 const SANS = 'system-ui, sans-serif';
@@ -116,7 +120,7 @@ export function drawGameTv(ctx: Ctx, v: DrawTv): void {
     ctx.fillText(`${v.drawer} is choosing a word`, x + w / 2, y + h / 2);
   } else if (v.phase === 'reveal') {
     ctx.fillStyle = 'rgba(29,32,48,0.85)';
-    ctx.fillRect(x, y + h / 2 - 44, w, 88);
+    ctx.fillRect(x, y + h / 2 - BAND_H / 2, w, BAND_H);
     ctx.fillStyle = INK;
     ctx.font = `500 14px ${SANS}`;
     ctx.fillText('The word was', x + w / 2, y + h / 2 - 25);
@@ -170,10 +174,15 @@ function finalScores(ctx: Ctx, v: DrawTv): void {
   });
 }
 
-/** The picture's mean sRGB colour: the white card's share of the screen over the dark background (the strokes are
- * thin enough to leave out), so the TV's light goes bright and neutral during a game. */
+/** The picture's mean sRGB colour, by area: the white card, the reveal's dark band over it (at its opacity over
+ * white), and the dark background around (the strokes are thin enough to leave out). The light goes bright and
+ * neutral while drawing, and dimmer during the reveal. */
 export function gameMean(v: DrawTv): Rgb {
   const card = v.phase === 'end' ? END_CARD : TV_CARD;
-  const white = (card.w * card.h) / (W * H);
-  return [white + BG[0] * (1 - white), white + BG[1] * (1 - white), white + BG[2] * (1 - white)];
+  const share = (w: number, h: number) => (w * h) / (W * H);
+  const band = v.phase === 'reveal' ? share(card.w, BAND_H) : 0;
+  const white = share(card.w, card.h) - band;
+  const bandPixel = BAND.map((c) => c * BAND_OPACITY + (1 - BAND_OPACITY));
+  const rest = 1 - white - band;
+  return [0, 1, 2].map((i) => white + band * bandPixel[i] + rest * BG[i]) as Rgb;
 }

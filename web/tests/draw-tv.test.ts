@@ -86,6 +86,11 @@ describe('the game on the TV', () => {
     }));
     expect(texts).toEqual(['Final scores', '1.', '300', 'Ana', '1.', '300', 'Rui', '3.', '0', 'Zé']);
   });
+  it('lights the room less during the reveal, whose dark band covers a fifth of the card', () => {
+    const drawing = gameMean(view({}))[0];
+    const reveal = gameMean(view({ phase: 'reveal', hint: 'cat', word: 'cat', gains: [] }))[0];
+    expect(reveal).toBeLessThan(drawing - 0.1);
+  });
   it('lights the room bright and neutral: mostly the white card', () => {
     const [r, , b] = gameMean(view({}));
     expect(r).toBeGreaterThan(0.6);

@@ -136,7 +136,8 @@ export class Screen {
     this.level = fadeToward(this.level, this.lit ? 1 : 0, dt, CONFIG.screens.fade);
     const visible = this.level > 0;
     for (const m of this.meshes) m.material = visible ? this.onMaterial : this.offMaterial;
-    if (visible && (near || this.lastDraw === -Infinity) && t - this.lastDraw >= 1 / CONFIG.screens.fps) {
+    // Off and fading out: keep the last picture (a game's final scores, say) rather than draw the channel.
+    if (visible && this.lit && (near || this.lastDraw === -Infinity) && t - this.lastDraw >= 1 / CONFIG.screens.fps) {
       this.lastDraw = t;
       this.content.draw(t - this.started, world);
       if (this.texture) this.texture.needsUpdate = true;
