@@ -883,14 +883,16 @@ async function run(): Promise<void> {
   document.addEventListener('visibilitychange', () => {
     if (touch && document.hidden && started && !autostart) setPausedState(true); // with a mouse, losing the pointer lock pauses
   });
-  document.addEventListener('pointerlockchange', () => {
-    const locked = document.pointerLockElement === canvas;
+  let locked = false; // as of the last pointerlockchange
+  const lockChanged = () => {
+    locked = document.pointerLockElement === canvas;
     cursor = started && !autostart && !locked && freeing;
     freeing = false;
     ui.setWalking(locked);
     ui.setCursor(cursor);
     setPausedState(started && !autostart && !locked && !cursor);
-  });
+  };
+  document.addEventListener('pointerlockchange', lockChanged);
   document.addEventListener('pointerlockerror', () => {
     if (!started || autostart || touch) return;
     // No lock (refused, or a frame without it): not stuck on a start screen that is gone, the mouse is free as with
@@ -1022,6 +1024,10 @@ async function run(): Promise<void> {
   renderer.setAnimationLoop((now) => {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
+    // Chrome can drop the lock without a pointerlockchange that says so (seen on a first, uncached load): the page
+    // would keep walking with a mouse that neither looks nor clicks, and Tab would free a lock already gone. Lost as
+    // with Esc, then: paused, and a click looks again. Not while Tab or a panel is freeing it: that event is coming.
+    if (locked && !freeing && document.pointerLockElement !== canvas) lockChanged();
     stats?.begin(now);
     if (bench && stats) {
       const pose = bench.step(dt, stats.latest);
