@@ -68,6 +68,9 @@ const shader = {
  * pass, so a mirror seen in another shows its bare slab rather than the target being drawn.
  */
 export class Mirror extends Mesh {
+  /** Draws the reflection with what the mirror's room sees (room culling); unset, with whatever is visible. */
+  seenFrom: ((draw: () => void) => void) | null = null;
+
   constructor(face: MirrorFace, tint: Color, target: WebGLRenderTarget, surroundings: Surroundings, all: Object3D) {
     const textureMatrix = new Matrix4();
     super(new PlaneGeometry(face.width, face.height), new ShaderMaterial({
@@ -135,7 +138,9 @@ export class Mirror extends Mesh {
       renderer.clear();
       surroundings.render(renderer, eye);
       renderer.clearDepth();
-      renderer.render(scene, eye);
+      const reflect = () => renderer.render(scene, eye);
+      if (this.seenFrom) this.seenFrom(reflect);
+      else reflect();
       renderer.setRenderTarget(previous);
       all.visible = true;
     };

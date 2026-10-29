@@ -1,6 +1,6 @@
-import { Color, MeshStandardMaterial, ShaderLib, Texture } from 'three';
+import { Color, MeshStandardMaterial, ShaderLib, Texture, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { applyLightmap, fadeToward, LightGroups, packBinding, patchFragment, patchVertex, setLightTexture, updatePacks } from '../src/lightmaps';
+import { applyLightmap, fadeToward, type ProbeBinding, LightGroups, packBinding, patchFragment, patchVertex, setLightTexture, updatePacks } from '../src/lightmaps';
 
 const base = () => ({ day: new Texture(), dayRange: 4, light: new Texture(), lightRange: 2, intensity: { value: 0.25 }, sky: { value: 0.8 }, fill: { value: new Color(0.1, 0.05, 0) } });
 
@@ -12,13 +12,13 @@ describe('shader patches', () => {
     expect(v).toMatch(/#ifndef USE_UV1\s+attribute vec2 uv1;\s+#endif/);
     const f = patchFragment(ShaderLib.standard.fragmentShader);
     expect(f).toContain('uniform sampler2D lmDay;');
-    expect(f).toContain('irradiance += ');
+    expect(f).toContain('irradiance += lmLocal;');
     expect(f).toContain('max( lmLightIntensity, lmLightSpill )');
     expect(f).toContain('uniform float lmSkyScale;');
     expect(f).toContain('uniform vec3 lmFill;');
     expect(f).toContain('+ lmFill');
     expect(f).not.toContain('lmPack0');
-    expect(f.indexOf('irradiance += (')).toBeGreaterThan(f.indexOf('#include <lights_fragment_maps>'));
+    expect(f.indexOf('irradiance += lmLocal;')).toBeGreaterThan(f.indexOf('#include <lights_fragment_maps>'));
   });
 
   it('adds one block per pack', () => {
@@ -27,6 +27,17 @@ describe('shader patches', () => {
     expect(f).toContain('uniform vec3 lmPackTint1[3];');
     expect(f).toContain('pow( texture( lmPack0, vLmUv ).rgb, vec3( 2.2 ) ) * lmPackGain0');
     expect(f).not.toContain('lmPack2');
+  });
+
+  it('swaps three\'s environment lookups for the probes only where LM_PROBE is defined', () => {
+    const f = patchFragment(ShaderLib.standard.fragmentShader);
+    expect(f).toContain('#ifdef LM_PROBE');
+    expect(f).toContain('vec3 lmBoxProject(');
+    expect(f).toContain('#include <envmap_physical_pars_fragment>'); // still there for everything else
+    expect(f).toContain('radiance *= clamp( luminance( lmLocal )');
+    expect(f.indexOf('radiance *= clamp')).toBeGreaterThan(f.indexOf('irradiance += lmLocal;'));
+    const v = patchVertex(ShaderLib.standard.vertexShader);
+    expect(v).toContain('vLmWorld = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
   });
 
   it('fails loudly if three.js changes its includes', () => {
@@ -50,7 +61,7 @@ describe('applyLightmap', () => {
     expect(shader.uniforms.lmFill).toBe(b.fill);
     expect(shader.uniforms.lmScale.value).toBe(3);
     expect(shader.uniforms.lmDayRange.value).toBe(4);
-    expect(m.customProgramCacheKey()).toBe('room-lightmap-v6-0');
+    expect(m.customProgramCacheKey()).toBe('room-lightmap-v7-0');
     const tex = new Texture();
     setLightTexture(m, tex, 5);
     expect(m.userData.lightmapUniforms.lmLight.value).toBe(tex);
@@ -63,7 +74,7 @@ describe('applyLightmap', () => {
     const m2 = new MeshStandardMaterial();
     applyLightmap(m1, { ...base(), packs: [pack] });
     applyLightmap(m2, { ...base(), packs: [pack] });
-    expect(m1.customProgramCacheKey()).toBe('room-lightmap-v6-1');
+    expect(m1.customProgramCacheKey()).toBe('room-lightmap-v7-1');
     expect(m1.userData.lightmapUniforms.lmPack0).toBe(m2.userData.lightmapUniforms.lmPack0);
     expect(pack.tints.value[0].toArray()).toEqual([1.2, 1, 0.8]);
     expect(pack.tints.value[2].toArray()).toEqual([0, 0, 0]);
@@ -123,5 +134,45 @@ describe('fading', () => {
     lights.setTone('alpha', 0);
     lights.update(5);
     expect(lights.color('alpha').value.r).toBeCloseTo(1);
+  });
+});
+
+describe('probes', () => {
+  const probe = (): ProbeBinding => ({
+    day: new Texture(), light: { value: new Texture() }, dayIrradiance: { value: new Color(1, 1, 1) }, lightIrradiance: { value: new Color(2, 2, 2) },
+    boxMin: { value: new Vector3(-1, 0, -1) }, boxMax: { value: new Vector3(1, 3, 1) }, at: { value: new Vector3(0, 1.6, 0) }, boxed: { value: 1 },
+  });
+
+  it('reflect the probe: its sky map as the environment, the switch map and the box as shared uniforms', () => {
+    const p = probe();
+    const m = new MeshStandardMaterial();
+    applyLightmap(m, { ...base(), probe: p });
+    expect(m.envMap).toBe(p.day);
+    expect(m.defines).toHaveProperty('LM_PROBE');
+    const u = m.userData.lightmapUniforms;
+    expect(u.lmProbeLight).toBe(p.light);
+    expect(u.lmBoxMin).toBe(p.boxMin);
+    expect(u.lmBoxed).toBe(p.boxed);
+    expect(m.customProgramCacheKey()).toBe('room-lightmap-v7-0-probe');
+  });
+
+  it('reflect the probe room\'s switch light, a door or drawer too (it has no switch layer of its own)', () => {
+    const lamp = { value: 0.7 };
+    const colour = { value: new Color(1, 0.9, 0.8) };
+    const m = new MeshStandardMaterial();
+    applyLightmap(m, { ...base(), probe: probe(), probeLamp: lamp, probeLampColor: colour });
+    expect(m.userData.lightmapUniforms.lmProbeLamp).toBe(lamp);
+    expect(m.userData.lightmapUniforms.lmProbeLampColor).toBe(colour);
+    const own = new MeshStandardMaterial();
+    const b = { ...base(), probe: probe() };
+    applyLightmap(own, b);
+    expect(own.userData.lightmapUniforms.lmProbeLamp).toBe(b.intensity);
+  });
+
+  it('leave a material without one to three\'s own environment', () => {
+    const m = new MeshStandardMaterial();
+    applyLightmap(m, base());
+    expect(m.envMap).toBeNull();
+    expect(m.defines ?? {}).not.toHaveProperty('LM_PROBE');
   });
 });

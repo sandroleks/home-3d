@@ -1,5 +1,6 @@
 import { Box3, Color, FrontSide, Group, Matrix4, Mesh, MeshMatcapMaterial, type Object3D, Quaternion, Vector3 } from 'three';
 import { CONFIG } from './config';
+import { ContactShadow } from './contact-shadow';
 import type { Matcaps } from './creatures';
 import { KINDS, type KindInfo } from './prop-models';
 import type { PlacedProp } from './prop-places';
@@ -90,6 +91,8 @@ export class Prop {
   over: Prop[] = [];
   under: Prop | null = null;
   readonly shape: Shape;
+  /** The soft dark patch under it while it rests. */
+  readonly shadow = new ContactShadow();
   private materials: { material: MeshMatcapMaterial; base: Color }[] = [];
   private level = -1;
 
@@ -242,6 +245,8 @@ export class Props {
           }
         }
       }
+      if (p.state === 'rest' && p.root.visible && p.root.parent) p.shadow.place(p.root, p.root.parent);
+      else p.shadow.hide();
       p.root.getWorldPosition(pos);
       p.setLevel(this.world.light(pos.x, pos.z) * (p.state === 'rest' && ((p.atHome && p.place.front !== '') || p.root.parent !== this.world.root) ? CONFIG.props.insideLight : 1) * (p === this.lit ? CONFIG.props.highlight : 1));
     }

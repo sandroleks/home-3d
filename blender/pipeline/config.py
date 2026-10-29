@@ -15,13 +15,34 @@ class Quality:
     blur_sigma_px: float
     movable_tile: int  # px per drawer or cupboard door in its room's atlas
     pack_scale: float  # packed lamp layers on a room, relative to its lightmap
+    probe_face: int  # px per cube face of a room's reflection probe
+    probe_samples: int
 
 
 QUALITY = {
-    "test": Quality("test", 16, 64, 8, 32, 64, 32, 4, 0.0, 32, 0.5),
-    "preview": Quality("preview", 64, 1024, 24, 256, 1024, 128, 32, 1.0, 64, 0.5),
-    "final": Quality("final", 256, 2048, 100, 512, 2048, 512, 512, 1.0, 192, 0.5),
+    "test": Quality("test", 16, 64, 8, 32, 64, 32, 4, 0.0, 32, 0.5, 8, 4),
+    "preview": Quality("preview", 64, 1024, 24, 256, 1024, 128, 32, 1.0, 64, 0.5, 32, 16),
+    "final": Quality("final", 256, 2048, 100, 512, 2048, 512, 512, 1.0, 192, 0.5, 64, 128),
 }
+
+# Procedural materials (proc_materials.py). An object with at most FLAT_ALBEDO_MAX_AREA m² of a procedural material
+# (a knob, a hinge: under 64 px at final quality) gets the material's mean colour instead of a bake, unless the
+# material has relief; normal maps go up to NORMAL_MAP_MAX_PX.
+FLAT_ALBEDO_MAX_AREA = 0.0625
+NORMAL_MAP_MAX_PX = 2048
+# Materials used by many objects that get one seamless tile instead of a bake each, box-projected at tile_m metres a
+# tile with the grain along each piece's length: kind (tiles.py), px, contrast around the material's mean colour, and
+# relief (slope scale of its normal map).
+SHARED_TILES = {
+    "Oak": {"kind": "wood", "px": 1024, "tile_m": 0.6, "contrast": 0.35, "relief": 6.0},
+}
+# Reflection probes (probes.py): taken this high (m) over the middle of each room's floor.
+PROBE_HEIGHT = 1.5
+# Which rooms see which (visibility.py): eye points this far apart (m) over each floor, at these heights, each
+# sending this many rays.
+VISIBILITY_SPACING = 0.6
+VISIBILITY_HEIGHTS = (0.5, 1.2, 1.75)
+VISIBILITY_RAYS = 192
 
 EYE_HEIGHT = 1.6
 PLAYER_RADIUS = 0.2

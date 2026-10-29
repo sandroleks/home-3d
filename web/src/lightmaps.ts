@@ -15,6 +15,27 @@ export interface PackBinding {
   layers: PackLayer[];
 }
 
+/**
+ * What a lightmapped surface reflects: the room seen from its middle (two prefiltered environment maps, CubeUV, one lit
+ * by the sky and one by the room's switch, mixed as the lightmaps are), projected onto the room's box so a floor
+ * reflects the window where it is. Without a room's own probe, the stand-in room environment at the local light level.
+ */
+export interface ProbeBinding {
+  /** Lit by the sky layer, at a sky scale of 1. Both maps are the same size (one shader variant). */
+  day: Texture;
+  /** Lit by the room's wall switch, fully on. */
+  light: { value: Texture };
+  /** What each map gives an average surface at the probe (π × its mean radiance): local light against these dims or
+   * brightens the reflection, so a cupboard's inside doesn't mirror the lit room. */
+  dayIrradiance: { value: Color };
+  lightIrradiance: { value: Color };
+  /** The room's box (three.js space) and where the probe was taken; boxed 0 reflects the map at infinity. */
+  boxMin: { value: Vector3 };
+  boxMax: { value: Vector3 };
+  at: { value: Vector3 };
+  boxed: { value: number };
+}
+
 export interface LightmapBinding {
   day: Texture;
   dayRange: number;
@@ -29,6 +50,12 @@ export interface LightmapBinding {
   sky: { value: number };
   /** Per room: flat bounce light from sun entering its windows. */
   fill: { value: Color };
+  /** What the surface reflects; none keeps three's own environment (scene.environment). */
+  probe?: ProbeBinding | null;
+  /** How much of the probe's switch light is on, and its colour: the probe room's switch. A door or drawer has no
+   * switch layer of its own (intensity off) but reflects its room lit; unset, the surface's own. */
+  probeLamp?: { value: number };
+  probeLampColor?: { value: Color };
 }
 
 /** Shared by every lightmapped material: the lamp light that's there with the lights off (CONFIG.lightSpill). */
@@ -54,7 +81,53 @@ const VERTEX_DECL = /* glsl */ `
 #ifndef USE_UV1
 attribute vec2 uv1;
 #endif
-varying vec2 vLmUv;`;
+varying vec2 vLmUv;
+#ifdef LM_PROBE
+varying vec3 vLmWorld;
+#endif`;
+
+const PROBE_DECL = /* glsl */ `
+#ifdef LM_PROBE
+varying vec3 vLmWorld;
+uniform sampler2D lmProbeLight;
+uniform vec3 lmProbeDayIrr;
+uniform vec3 lmProbeLightIrr;
+uniform vec3 lmBoxMin;
+uniform vec3 lmBoxMax;
+uniform vec3 lmProbeAt;
+uniform float lmBoxed;
+uniform float lmReflectMax;
+uniform float lmProbeLamp;
+uniform vec3 lmProbeLampColor;
+#endif`;
+
+/**
+ * three's environment lookups for a lightmapped surface: no diffuse light from the environment (the lightmaps are
+ * that), and the reflection is the room's probes, the sky's and the switch's mixed as the lightmaps are, the ray
+ * meeting the room's box (parallax-corrected) before it looks the probe up.
+ */
+export function probePars(): string {
+  return /* glsl */ `
+#ifdef USE_ENVMAP
+	vec3 getIBLIrradiance( const in vec3 normal ) {
+		return vec3( 0.0 );
+	}
+	vec3 lmBoxProject( const in vec3 dir ) {
+		if ( lmBoxed < 0.5 ) return dir;
+		vec3 far = max( ( lmBoxMax - vLmWorld ) / dir, ( lmBoxMin - vLmWorld ) / dir );
+		float t = min( min( far.x, far.y ), far.z );
+		return t > 0.0 ? normalize( vLmWorld + dir * t - lmProbeAt ) : dir;
+	}
+	vec3 getIBLRadiance( const in vec3 viewDir, const in vec3 normal, const in float roughness ) {
+		vec3 reflectVec = reflect( - viewDir, normal );
+		reflectVec = normalize( mix( reflectVec, normal, roughness * roughness ) );
+		reflectVec = lmBoxProject( inverseTransformDirection( reflectVec, viewMatrix ) );
+		vec3 day = textureCubeUV( envMap, envMapRotation * reflectVec, roughness ).rgb;
+		vec3 lamp = textureCubeUV( lmProbeLight, envMapRotation * reflectVec, roughness ).rgb;
+		return ( lmSkyScale * day + max( lmProbeLamp, lmLightSpill ) * lmProbeLampColor * lamp ) * envMapIntensity;
+	}
+#endif`;
+}
 
 function fragmentDecl(packs: number): string {
   let s = /* glsl */ `
@@ -71,7 +144,7 @@ uniform float lmSkyScale;
 uniform vec3 lmFill;
 ${RGBM_GLSL}`;
   for (let p = 0; p < packs; p++) s += `\nuniform sampler2D lmPack${p};\nuniform vec3 lmPackGain${p};\nuniform vec3 lmPackTint${p}[3];`;
-  return s;
+  return s + PROBE_DECL;
 }
 
 function accumulate(packs: number): string {
@@ -86,7 +159,15 @@ function accumulate(packs: number): string {
   return /* glsl */ `
 #if defined( RE_IndirectDiffuse )
 	vec3 lmLamps = max( lmLightIntensity, lmLightSpill ) * lmLightColor * rgbmDecode( texture( lmLight, vLmUv ), lmLightRange );${lamps}
-	irradiance += ( lmSkyScale * rgbmDecode( texture( lmDay, vLmUv ), lmDayRange ) + lmLamps ) * lmScale + lmFill;
+	vec3 lmLocal = ( lmSkyScale * rgbmDecode( texture( lmDay, vLmUv ), lmDayRange ) + lmLamps ) * lmScale + lmFill;
+	irradiance += lmLocal;
+#endif
+#if defined( LM_PROBE ) && defined( USE_ENVMAP ) && defined( RE_IndirectSpecular )
+	{
+		// The reflection as bright as the light here against the light at the probe: dark corners and insides dim it.
+		vec3 probeIrr = lmSkyScale * lmProbeDayIrr + max( lmProbeLamp, lmLightSpill ) * lmProbeLampColor * lmProbeLightIrr;
+		radiance *= clamp( luminance( lmLocal ) / max( luminance( probeIrr ), 1e-4 ), 0.0, lmReflectMax );
+	}
 #endif`;
 }
 
@@ -96,11 +177,15 @@ function inject(src: string, anchor: string, extra: string): string {
 }
 
 export function patchVertex(src: string): string {
-  return inject(inject(src, '#include <common>', VERTEX_DECL), '#include <uv_vertex>', 'vLmUv = uv1;');
+  const v = inject(inject(src, '#include <common>', VERTEX_DECL), '#include <uv_vertex>', 'vLmUv = uv1;');
+  return inject(v, '#include <worldpos_vertex>', '#ifdef LM_PROBE\n\tvLmWorld = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;\n#endif');
 }
 
 export function patchFragment(src: string, packs = 0): string {
-  return inject(inject(src, '#include <common>', fragmentDecl(packs)), '#include <lights_fragment_maps>', accumulate(packs));
+  const f = inject(inject(src, '#include <common>', fragmentDecl(packs)), '#include <lights_fragment_maps>', accumulate(packs));
+  const pars = '#include <envmap_physical_pars_fragment>';
+  if (!f.includes(pars)) throw new Error(`three.js shader is missing ${pars}; update the lightmap patch`);
+  return f.replace(pars, `#ifdef LM_PROBE\n${probePars()}\n#else\n${pars}\n#endif`);
 }
 
 export function applyLightmap(material: MeshStandardMaterial, b: LightmapBinding, scale = CONFIG.lightmapScale): void {
@@ -123,13 +208,25 @@ export function applyLightmap(material: MeshStandardMaterial, b: LightmapBinding
     uniforms[`lmPackGain${i}`] = p.gains;
     uniforms[`lmPackTint${i}`] = p.tints;
   });
+  const probe = b.probe ?? null;
+  if (probe) {
+    Object.assign(uniforms, {
+      lmProbeLight: probe.light, lmProbeDayIrr: probe.dayIrradiance, lmProbeLightIrr: probe.lightIrradiance,
+      lmBoxMin: probe.boxMin, lmBoxMax: probe.boxMax, lmProbeAt: probe.at, lmBoxed: probe.boxed,
+      lmReflectMax: { value: CONFIG.reflections.maxGain },
+      lmProbeLamp: b.probeLamp ?? b.intensity, lmProbeLampColor: b.probeLampColor ?? uniforms.lmLightColor,
+    });
+    material.envMap = probe.day;
+    material.envMapIntensity = CONFIG.reflections.intensity;
+    material.defines = { ...material.defines, LM_PROBE: '' };
+  }
   material.userData.lightmapUniforms = uniforms;
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = patchVertex(shader.vertexShader);
     shader.fragmentShader = patchFragment(shader.fragmentShader, packs.length);
   };
-  material.customProgramCacheKey = () => `room-lightmap-v6-${packs.length}`;
+  material.customProgramCacheKey = () => `room-lightmap-v7-${packs.length}${probe ? '-probe' : ''}`;
   material.needsUpdate = true;
 }
 

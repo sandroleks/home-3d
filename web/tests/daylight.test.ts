@@ -139,8 +139,37 @@ describe('Daylight.update', () => {
     expect(drawn(renderer)).toBe(true);
 
     reset(renderer);
-    daylight.update(SUMMER_EVENING + 60000, 2, false);
+    daylight.update(SUMMER_EVENING + 10 * 60000, 2, false);
     expect(drawn(renderer)).toBe(true);
+  });
+
+  it('redraws the shadows during a time-lapse only once the sun has moved shadowStep degrees', () => {
+    const { daylight, renderer, world } = setup(false);
+    daylight.update(SUMMER_EVENING, 1, false);
+    reset(renderer);
+    world.sky.value = -1;
+    daylight.update(SUMMER_EVENING + 20000, 2, false); // 20 s of sun: about 0.08 degrees
+    expect(drawn(renderer)).toBe(false);
+    expect(world.sky.value).toBeGreaterThan(0); // the light itself still follows the clock
+    daylight.update(SUMMER_EVENING + 3 * 60000, 3, false); // 3 min: about 0.75 degrees
+    expect(drawn(renderer)).toBe(true);
+  });
+
+  it('redraws the shadows at sunrise even if the sun is back where it was (doors may have moved)', () => {
+    const { daylight, renderer } = setup(false);
+    daylight.update(SUMMER_EVENING, 1, false);
+    daylight.update(NIGHT, 2, false);
+    reset(renderer);
+    daylight.update(SUMMER_EVENING, 3, false);
+    expect(drawn(renderer)).toBe(true);
+  });
+
+  it('takes the sun out of the lights while it is down', () => {
+    const { daylight } = setup(false);
+    daylight.update(SUMMER_EVENING, 1, false);
+    expect(daylight.light.visible).toBe(true);
+    daylight.update(NIGHT, 2, false);
+    expect(daylight.light.visible).toBe(false);
   });
 
   it('does not redraw the shadow map while the sun is down', () => {

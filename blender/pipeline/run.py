@@ -6,8 +6,8 @@ import bpy
 from mathutils import Matrix, Vector
 
 from . import (bake, bpyutil, chunks, checks, collision, config, debug_map, doors, export, geom, lamps, layers,
-               instruments, manifest, movables, openings, packs, proc_materials, props, rooms, scene_select, screens, seats, state,
-               surroundings, switches, uvs, variants, windows)
+               instruments, manifest, movables, openings, packs, probes, proc_materials, props, rooms, scene_select,
+               screens, seats, state, surroundings, switches, uvs, variants, visibility, windows)
 
 
 def join_leaf_parts(meshes):
@@ -56,6 +56,21 @@ def movable_atlases(movable_specs, quality):
         atlas[f"movables-{room}"] = {"cols": cols, "tile": tile, "size": cols * tile, "passes": passes}
         print(f"[movables] {room}: {len(ms)} in a {cols}x{cols} atlas, {len(passes)} bake passes", flush=True)
     return atlas
+
+
+def probe_specs(chunk_list, room_list):
+    """Each room's reflection probe: the room's box from its chunk, and where it's taken (three.js space)."""
+    floors = {r["id"]: r["floor"] for r in room_list}
+    out = []
+    for c in chunk_list:
+        if c["room"] is None or c["room"] not in floors:
+            continue
+        obj = bpy.data.objects[c["node"]]
+        corners = [geom.to_three(tuple(obj.matrix_world @ Vector(b))) for b in obj.bound_box]
+        lo = [round(min(p[k] for p in corners), 4) for k in range(3)]
+        hi = [round(max(p[k] for p in corners), 4) for k in range(3)]
+        out.append({"room": c["room"], "box": [lo, hi], "at": probes.room_probe(floors[c["room"]], (lo, hi))})
+    return out
 
 
 def prepare(scene, quality, out_dir, build_dir, stop_after="uvs", variant=None):
@@ -152,7 +167,7 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs", variant=None):
             p["packed"] = p["packed"][:most]
 
     st = {
-        "rooms": room_list, "switches": sw, "doors": door_specs, "chunks": chunk_list,
+        "rooms": room_list, "switches": sw, "doors": door_specs, "chunks": chunk_list, "probes": probe_specs(chunk_list, room_list),
         "door_lightmap_size": quality.door_lightmap,
         "spawn": export.spawn_from(scene, room_list), "viewpoints": export.viewpoints(scene), "day_lights": ctx["day_lights"],
         "groups": groups, "group_emitters": emitters, "fixtures": fixtures, "lost_lamps": lost,
@@ -201,6 +216,7 @@ def export_stage(scene, out_dir, expected_doors, budget):
     names = ([c["node"] for c in st["chunks"]] + [d["node"] for d in st["doors"]] + list(st["switches"].values())
              + [m["node"] for m in st["movables"]] + [s["node"] for s in st["screens"]] + [g["node"] for g in st["glows"]]
              + [p["node"] for p in st.get("props", [])] + list(proxies.values()))
+    st["visibility"] = visibility.compute(st)
     export.export_glb([bpy.data.objects[n] for n in names], os.path.join(out_dir, "apartment.glb"))
     m = manifest.build_manifest(st, st["baked"], config.EYE_HEIGHT, proxies)
     export.write_json(os.path.join(out_dir, "manifest.json"), m)

@@ -41,7 +41,7 @@ def build_manifest(state, baked, eye_height, proxies=None):
         for c in state["chunks"]
     ]
     doors = [
-        {**{k: d[k] for k in ("node", "hinge", "dir", "width", "openAngle", "opening", "slide") if k in d},
+        {**{k: d[k] for k in ("node", "hinge", "dir", "width", "openAngle", "opening", "slide", "rooms") if k in d},
          "lightmap": ref(d["key"], "day"), "packs": packs(d["key"])}
         for d in state["doors"]
     ]
@@ -61,7 +61,24 @@ def build_manifest(state, baked, eye_height, proxies=None):
         "site": dict(config.SITE),
         "sky": {"irradiance": round(state["sky_irradiance"], 5), "wattsToScene": config.WATTS_TO_SCENE},
         "windows": state["windows"],
+        "probes": probe_list(state, baked),
+        "visibility": state.get("visibility", {}),
     }
+
+
+def probe_list(state, baked):
+    """Each room's reflection probes: the sky's and (with a wall switch) the switch's, where taken and the room's box."""
+    out = []
+    done = baked.get("probes", {})
+    for p in state.get("probes", []):
+        layers = done.get(p["room"], {})
+        if "day" not in layers:
+            continue
+        light = layers.get("light")
+        out.append({"room": p["room"], "at": p["at"], "box": p["box"],
+                    "day": layers["day"]["ref"], "dayMean": layers["day"]["mean"],
+                    "light": light["ref"] if light else None, "lightMean": light["mean"] if light else [0.0, 0.0, 0.0]})
+    return out
 
 
 def _check_packs(label, ps, group_ids, room_ids, openings):

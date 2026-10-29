@@ -5,6 +5,8 @@ export const CONFIG = {
   /** The kitchen walled off, as it is now (?kitchen=wall, K): its own export, inside assetsBase. */
   kitchenWallAssets: 'variants/kitchen-wall/',
   dracoPath: 'draco/',
+  /** The Basis transcoder for the models' KTX2 textures (scripts/copy-draco.mjs puts it there). */
+  basisPath: 'basis/',
   walkSpeed: 1.4,
   runSpeed: 2.8,
   mouseSensitivity: 0.0022,
@@ -18,12 +20,33 @@ export const CONFIG = {
   /** Seconds for a drawer or cupboard door to open or close. */
   movableDuration: 0.45,
   lightFadeDuration: 0.4,
+  /** Detail on plain materials (details.ts), matched by name: per kind, the tile's size (m), how much darker its low
+   * parts are (base colour), the normal map's slope scale, and its strength on the surface. */
+  details: {
+    match: {
+      plaster: /plaster|ceiling|paint|concrete|limewash/i,
+      fabric: /fabric|boucle|linen|duvet|curtain|rug|wool|felt|coat|cushion|throw|towel|blanket/i,
+      wood: /birch|plywood|pine|wood/i,
+    },
+    /** Warp and weft threads across a fabric tile. */
+    threads: 48,
+    kinds: {
+      plaster: { tile: 2, depth: 0.16, relief: 3, normalScale: 0.6 },
+      fabric: { tile: 0.3, depth: 0.5, relief: 6, normalScale: 1 },
+      wood: { tile: 0.8, depth: 0.28, relief: 2, normalScale: 0.4 },
+    },
+  },
+  /** Anisotropic filtering on surface textures (capped at what the GPU takes); phones get `touch.anisotropy`. */
+  anisotropy: 8,
   /** Mirrors draw their reflection at this share of the screen's resolution: a whole second view of the flat. */
   mirrorScale: 0.5,
   /** Packed lamp textures one lightmapped material can take (the pipeline's MAX_PACKS). */
   maxPacks: 3,
   /** Share of each room's own baked lamp light that is always there, lights off or not: light spilling in from elsewhere, so unlit rooms keep their shape rather than going flat or black. */
   lightSpill: 0.02,
+  /** The soft dark patch under loose things and the table's pieces (contact-shadow.ts): how dark, how far past the
+   * footprint it reaches (×; boards: less), and how far (m) above the surface it is drawn. */
+  contactShadow: { opacity: 0.55, spread: 1.5, boardSpread: 1.12, lift: 0.002 },
   interactDistance: 2.5,
   /** Sitting and lying (seats.ts): click a seat or the bed, C to sit on the floor; moving stands you up. */
   seats: {
@@ -46,8 +69,13 @@ export const CONFIG = {
   exposure: Math.pow(2, 1.3),
   /** Cycles' diffuse light pass is outgoing/albedo; three.js wants irradiance (×π). */
   lightmapScale: Math.PI,
-  // The room-environment reflections, scaled by the sky; higher values add light Cycles doesn't have.
+  // The room-environment reflections, scaled by the sky; higher values add light Cycles doesn't have. Only for what
+  // isn't lightmapped (glass, a switched-off screen): lightmapped surfaces reflect their room's probes (`reflections`).
   envIntensity: 0.0015,
+  /** Lightmapped surfaces' reflections (lightmaps.ts ProbeBinding): 1 is as the probes were rendered; the reflection
+   * follows the baked light where it is, up to maxGain times the light at the probe. The stand-in room environment
+   * (no probes yet) shows a room this reflective: what surrounds a surface sends back about that share of its light. */
+  reflections: { intensity: 1, maxGain: 2, standInAlbedo: 0.2 },
   /** The daytime sky at the horizon, seen through the windows. */
   skyColor: '#cfdbe6',
   sky: {
@@ -90,6 +118,7 @@ export const CONFIG = {
     /** Phones have far less GPU memory than desktops: lightmaps above this size are halved on load, and the sun's shadow map is smaller. */
     maxLightmapSize: 1024,
     shadowMapSize: 2048,
+    anisotropy: 4,
   },
   sun: {
     /** Seconds of sun per real second while playing: one hour every two seconds. */
@@ -97,6 +126,9 @@ export const CONFIG = {
     nudgeMinutes: 15,
     nudgeDays: 7,
     shadowMapSize: 4096,
+    /** Degrees the sun moves before its shadows are redrawn: while the time-lapse plays the clock changes every frame,
+     * and a full redraw of the shadow map each frame costs more than the rest of the frame. */
+    shadowStep: 0.3,
     /** How far toward the sun (m) shadow casters are collected; a 10 m building's shadow at 3 degrees reaches about 190 m. */
     shadowReach: 200,
     shadowBias: -0.00002,

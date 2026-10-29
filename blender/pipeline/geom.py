@@ -14,6 +14,11 @@ def to_three(p):
     return (x, z, -y)
 
 
+def from_three(p):
+    x, y, z = p
+    return (x, -z, y)
+
+
 def to_three_xz(x, y):
     return (x, -y)
 

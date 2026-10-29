@@ -1,10 +1,12 @@
 import { DataTexture, Group, ImageBitmapLoader, LinearFilter, NoColorSpace, Texture } from 'three';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import type { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { CONFIG } from './config';
 import { type Climate, parseClimate } from './climate';
 import { type CollisionData, type LightmapRef, type Manifest, parseCollision, parseManifest } from './manifest';
 import { parseSeats, type Seat } from './seats';
+import { rememberBytes } from './stats';
 
 export interface LoadedMap { texture: Texture; range: number }
 export interface LoadedAssets {
@@ -15,6 +17,8 @@ export interface LoadedAssets {
   seats: Seat[];
   scene: Group;
   day: Map<string, LoadedMap>;
+  /** Reflection probes' equirectangular RGBM maps, by file (small: loaded with the day maps). */
+  probes: Map<string, LoadedMap>;
   light: Promise<Map<string, LoadedMap>>;
   /** The neighbourhood outside the windows; null when the export has none or it fails to load. */
   surroundings: Promise<Group | null>;
@@ -36,6 +40,7 @@ export const FALLBACK_LIGHTMAP = (() => {
 
 /** Once on the GPU a lightmap's decoded pixels aren't needed again (lightmaps never re-upload), and phones run short of memory holding both. */
 function releaseImage(t: Texture): void {
+  rememberBytes(t);
   if (typeof ImageBitmap !== 'undefined' && t.image instanceof ImageBitmap) t.image.close();
 }
 
@@ -63,9 +68,11 @@ async function fetchJson(url: string): Promise<unknown> {
   return res.json();
 }
 
-/** `prepare` gets each lightmap as it arrives and returns the one to use (phones shrink the large ones). */
+/** `prepare` gets each lightmap as it arrives and returns the one to use (phones shrink the large ones); `ktx2` reads
+ * the models' GPU-compressed textures (KHR_texture_basisu). */
 export async function loadAssets(
   onProgress: (fraction: number) => void, prepare: (m: LoadedMap) => LoadedMap = (m) => m, base = CONFIG.assetsBase,
+  ktx2: KTX2Loader | null = null,
 ): Promise<LoadedAssets> {
   // `base` holds one layout of the flat (layout.ts); the climate and the neighbourhood are the same for every layout.
   const shared = CONFIG.assetsBase;
@@ -79,6 +86,7 @@ export async function loadAssets(
 
   const draco = new DRACOLoader().setDecoderPath(CONFIG.dracoPath);
   const gltfLoader = new GLTFLoader().setDRACOLoader(draco);
+  if (ktx2) gltfLoader.setKTX2Loader(ktx2);
   // ImageBitmapLoader with premultiplyAlpha 'none': browsers may premultiply <img> data (TextureLoader),
   // which destroys the precision of low-alpha RGBM pixels.
   const bitmapLoader = new ImageBitmapLoader().setOptions({
@@ -126,7 +134,19 @@ export async function loadAssets(
       return [ref.file, m] as const;
     }),
   );
-  const [gltf, dayEntries] = await Promise.all([gltfPromise, dayMapsPromise]);
+  // Not shrunk on phones: they're 256 px wide at most.
+  const probeRefs = unique(manifest.probes.flatMap((p) => (p.light ? [p.day, p.light] : [p.day])));
+  const probesPromise = Promise.all(probeRefs.map(async (ref) => {
+    try {
+      const t = new Texture(await bitmapLoader.loadAsync(base + ref.file));
+      configureLightmap(t);
+      return [ref.file, { texture: t, range: ref.range }] as const;
+    } catch (err) {
+      console.warn(`Probe ${ref.file} failed to load; that room reflects the stand-in environment.`, err);
+      return null;
+    }
+  }));
+  const [gltf, dayEntries, probeEntries] = await Promise.all([gltfPromise, dayMapsPromise, probesPromise]);
   glbFraction = 1;
   report();
 
@@ -136,5 +156,6 @@ export async function loadAssets(
   const light = Promise.all(lightRefs.map(async (ref) => [ref.file, await loadMap(ref, !packFiles.has(ref.file))] as const)).then(
     (entries) => new Map(entries),
   );
-  return { manifest, collision, climate, seats: await seats, scene: gltf.scene, day: new Map(dayEntries), light, surroundings };
+  const probes = new Map(probeEntries.filter((e) => e !== null));
+  return { manifest, collision, climate, seats: await seats, scene: gltf.scene, day: new Map(dayEntries), probes, light, surroundings };
 }
