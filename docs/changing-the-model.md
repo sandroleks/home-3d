@@ -12,6 +12,8 @@ The lighting is baked in Blender (Cycles) into lightmaps, and each lightmap fits
 | Change walking speed, mouse sensitivity, door or light-fade timing, how far you can reach | `web/src/config.ts` | No |
 | Rename rooms on screen | `roomNames` in `web/src/config.ts` | No |
 | Change how glass looks | `makeGlass` in `web/src/scene-setup.ts` | No |
+| Change the detail on plain plaster, fabric or wood (strength, scale, which materials) | `CONFIG.details` in `web/src/config.ts` | No |
+| Make reflections stronger or weaker | `CONFIG.reflections` in `web/src/config.ts` | No |
 | Tint or swap one material, as a quick trial | Code in `prepareMeshes` (`web/src/scene-setup.ts`), keyed by material name | No, but see the caveat below |
 | Move, add or remove walls, furniture, doors or windows | Blender | Yes |
 | Change a light, the sun, or a material for real | Blender | Yes |
@@ -52,6 +54,8 @@ cp ~/Documents/Untitled.blend .
 | `make export-final` | about 35 minutes on the GPU | What gets published. |
 | `make export-surroundings` | about 30 seconds | Only the view through the windows changed. |
 | `make export-seats` | seconds | Only where visitors can sit and lie changed. Full exports include it. |
+
+After Blender, the export compresses the `.glb` files' textures for the GPU (KTX2), which needs `basisu` and `dwebp`: `brew install basis_universal webp`, once.
 
 The export never writes to either `.blend`. It runs Blender on a staged copy in `/private/tmp` with factory settings, so your add-ons don't load.
 

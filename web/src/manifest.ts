@@ -42,6 +42,8 @@ export interface DoorInfo {
   lightmap: LightmapRef;
   /** Lamp light from each room the leaf faces. */
   packs: Pack[];
+  /** The rooms on either side (older exports: none). */
+  rooms?: string[];
 }
 /** A drawer (slides `distance` m along `dir`), a cupboard door (turns `angle` about `axis` through `pivot`), or the
  * turntable's platter (turns `rpm` times a minute about `axis` while the record plays). */
@@ -81,6 +83,20 @@ export interface WindowInfo { room: string; center: [number, number, number]; no
 /** A loose thing from the model: its node (origin at the middle of its base), what the prompt calls it, its room, its
  * box (m: width, height, length) and whether it falls over when it lands hard. */
 export interface PropInfo { node: string; name: string; room: string | null; size: [number, number, number]; tips: boolean }
+/** A room's reflection probes (equirectangular RGBM): seen from `at`, lit by the sky layer and by its wall switch,
+ * with the mean radiance of each; `box` is the room's [min, max] in three.js space. */
+export interface ProbeInfo {
+  room: string;
+  at: [number, number, number];
+  box: [[number, number, number], [number, number, number]];
+  day: LightmapRef;
+  dayMean: [number, number, number];
+  light: LightmapRef | null;
+  lightMean: [number, number, number];
+}
+/** For each room, the other rooms it can see, each with the sets of doors (indices into `doors`) one of which must be
+ * all open; a room missing from it sees everything. */
+export type Visibility = Record<string, Record<string, number[][]>>;
 export interface Manifest {
   version: 3;
   eyeHeight: number;
@@ -97,6 +113,8 @@ export interface Manifest {
   sky: SkyInfo;
   windows: WindowInfo[];
   props: PropInfo[];
+  probes: ProbeInfo[];
+  visibility: Visibility;
 }
 export interface CollisionData {
   x0: number;
@@ -226,6 +244,7 @@ export function parseManifest(json: unknown): Manifest {
         })()),
         lightmap: lightmap(d.lightmap, `doors[${i}].lightmap`),
         packs: packs(d.packs, `doors[${i}].packs`),
+        ...(d.rooms === undefined ? {} : { rooms: arr(d.rooms, `doors[${i}].rooms`).map((r, k) => str(r, `doors[${i}].rooms[${k}]`)) }),
       };
     }),
     movables: arr(m.movables, 'movables').map((v, i) => {
@@ -298,6 +317,32 @@ export function parseManifest(json: unknown): Manifest {
         tips: bool(x.tips, `${p}.tips`),
       };
     }),
+    probes: arr(m.probes ?? [], 'probes').map((v, i) => {
+      const p = `probes[${i}]`;
+      const x = obj(v, p);
+      const box = arr(x.box, `${p}.box`);
+      return {
+        room: str(x.room, `${p}.room`),
+        at: vec(x.at, 3, `${p}.at`) as [number, number, number],
+        box: [vec(box[0], 3, `${p}.box[0]`), vec(box[1], 3, `${p}.box[1]`)] as ProbeInfo['box'],
+        day: lightmap(x.day, `${p}.day`),
+        dayMean: vec(x.dayMean, 3, `${p}.dayMean`) as [number, number, number],
+        light: x.light === null ? null : lightmap(x.light, `${p}.light`),
+        lightMean: vec(x.lightMean, 3, `${p}.lightMean`) as [number, number, number],
+      };
+    }),
+    visibility: (() => {
+      const v = obj(m.visibility ?? {}, 'visibility');
+      const out: Visibility = {};
+      for (const [room, seen] of Object.entries(v)) {
+        out[room] = {};
+        for (const [other, sets] of Object.entries(obj(seen, `visibility.${room}`))) {
+          out[room][other] = arr(sets, `visibility.${room}.${other}`).map((d, k) =>
+            arr(d, `visibility.${room}.${other}[${k}]`).map((n, j) => num(n, `visibility.${room}.${other}[${k}][${j}]`)));
+        }
+      }
+      return out;
+    })(),
   };
 }
 

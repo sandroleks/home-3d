@@ -122,6 +122,6 @@ describe('the wine bottle', () => {
     w.root.traverse((o) => { if (o.rotation.x > 0.5) tipped = true; });
     expect(tipped).toBe(true);
     w.update(1, 1, false);
-    w.root.traverse((o) => expect(o.rotation.x).toBe(0));
+    w.root.traverse((o) => { if (o.name !== 'Contact shadow') expect(o.rotation.x).toBe(0); });
   });
 });

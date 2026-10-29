@@ -2,6 +2,7 @@ import { Color, Group, MeshMatcapMaterial, type Object3D, type Texture } from 't
 import { BackgammonSet } from './backgammon-set';
 import { ChessSet } from './chess-set';
 import { CONFIG } from './config';
+import { ContactShadow } from './contact-shadow';
 import { makeMatcaps, type Matcaps } from './creatures';
 import { type GameKind, type GameRules, type SlotGame, SLOTS } from './games';
 import { GoSet } from './go-set';
@@ -70,6 +71,7 @@ export class TableGames {
       if (!set) return null;
       set.root.position.set(slots[i][0], tableTop, slots[i][1]);
       this.root.add(set.root);
+      new ContactShadow().place(set.root, set.root, CONFIG.contactShadow.boardSpread);
       return set;
     });
   }

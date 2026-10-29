@@ -9,7 +9,7 @@ import bpy
 import numpy as np
 from mathutils import Vector
 
-from . import bpyutil, config, geom, lamps, movables, packs, raster
+from . import bpyutil, config, geom, lamps, movables, packs, probes, raster
 from . import layers as layers_mod
 
 BAKE_NODE = "WEB_LIGHTMAP_TARGET"
@@ -300,12 +300,32 @@ def bake_all(scene, state, quality, out_dir):
         layers[key].append((layer, path))
         print(f"[bake] {key} packed {layer} {px.shape[0]}px", flush=True)
 
+    probe_specs = {p["room"]: p for p in state.get("probes", [])}
+    probe_out = {}
+
+    def render_probes(rooms, layer):
+        if not rooms:
+            return
+        renderer = probes.Renderer(scene, quality, tmp)
+        try:
+            for room in rooms:
+                ref, mean = probes.save_probe(renderer.render(probe_specs[room]["at"]), out_dir, f"probe-{room}_{layer}")
+                probe_out.setdefault(room, {})[layer] = {"ref": ref, "mean": mean}
+                print(f"[bake] probe {room} {layer} range {ref['range']}", flush=True)
+        finally:
+            renderer.restore()
+            bpyutil.set_cycles(scene, quality.bake_samples)
+
     try:
         lighting.day()
         for key in surfaces.keys():
             rgbm_layer(key, "day")
+        render_probes(sorted(probe_specs), "day")
         for gid in groups:
             lighting.group(gid)
+            g = groups[gid]
+            if g["kind"] == "switch":
+                render_probes([g["room"]] if g["room"] in probe_specs else [], "light")
             for key in surfaces.keys():
                 if plan.get(key, {}).get("light") == gid:
                     rgbm_layer(key, "light")
@@ -337,7 +357,7 @@ def bake_all(scene, state, quality, out_dir):
             o.hide_render = hidden[n]
     packed = {key: write_packs(key, entries, out_dir, quality.blur_sigma_px) for key, entries in layers.items()}
     shutil.rmtree(tmp, ignore_errors=True)
-    return {"rgbm": rgbm, "packs": packed}
+    return {"rgbm": rgbm, "packs": packed, "probes": probe_out}
 
 
 def write_packs(key, entries, out_dir, blur_sigma):
