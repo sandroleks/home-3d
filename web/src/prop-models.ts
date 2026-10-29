@@ -1,4 +1,4 @@
-import { BoxGeometry, type BufferGeometry, CylinderGeometry, ExtrudeGeometry, LatheGeometry, Shape, type Side, type Texture, TorusGeometry, Vector2 } from 'three';
+import { BoxGeometry, type BufferGeometry, CylinderGeometry, ExtrudeGeometry, LatheGeometry, type Matrix4, Shape, type Side, type Texture, TorusGeometry, Vector2 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /** The things in the drawers and cupboards that visitors can pick up (props.ts). */
@@ -18,6 +18,8 @@ export interface KindInfo {
   tips: boolean;
   /** Its parts; `variant` picks among the looks where there are several (books, spools, lids). Geometry is shared. */
   parts(variant: number): Part[];
+  /** How it is held, from the hand's pose (default: as it rests, upright): a guitar across the body to play. */
+  carry?: Matrix4;
 }
 
 const STEEL: Look = { colour: '#c9cbcd', gloss: true };

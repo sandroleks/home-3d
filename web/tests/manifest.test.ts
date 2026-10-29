@@ -76,6 +76,21 @@ describe('parseManifest', () => {
     expect(m.props).toEqual([{ node: 'Prop_test-mug', name: 'mug', room: 'alpha', size: [0.08, 0.09, 0.08], tips: false }]);
   });
 
+  it('reads the instruments, and none from a manifest without them', () => {
+    expect(parseManifest(sampleManifest()).instruments).toEqual([
+      { name: 'Piano', kind: 'piano', room: 'alpha', min: [1, 0, -2], max: [2.4, 1, -1.6], at: [1.7, 0.5, -1.8], prop: null },
+    ]);
+    const loose = sampleManifest() as { instruments: { prop?: unknown }[] };
+    loose.instruments[0].prop = 'Prop_test-mug';
+    expect(parseManifest(loose).instruments[0].prop).toBe('Prop_test-mug');
+    const raw = sampleManifest() as Record<string, unknown>;
+    delete raw.instruments;
+    expect(parseManifest(raw).instruments).toEqual([]);
+    const bad = sampleManifest() as { instruments: { kind: unknown }[] };
+    bad.instruments[0].kind = 'harp';
+    expect(() => parseManifest(bad)).toThrow('instruments[0].kind');
+  });
+
   it('reads no props from a manifest without them', () => {
     const raw = sampleManifest() as Record<string, unknown>;
     delete raw.props;

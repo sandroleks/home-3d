@@ -21,6 +21,7 @@ export class Sound {
   private effects: GainNode;
   private steps: GainNode;
   private music: GainNode;
+  private instruments: GainNode;
   private ambience = new Map<Ambience, GainNode>();
   private buffers = new Map<string, AudioBuffer>();
   private currentAmbience: Ambience | null = null;
@@ -41,6 +42,7 @@ export class Sound {
     this.effects = this.bus(CONFIG.audio.effects, master);
     this.steps = this.bus(CONFIG.audio.steps, master);
     this.music = this.bus(0, master);
+    this.instruments = this.bus(CONFIG.audio.instruments, master);
     const ambience = this.bus(CONFIG.audio.ambience, master);
     for (const name of AMBIENCES) this.ambience.set(name, this.bus(0, ambience));
   }
@@ -117,6 +119,17 @@ export class Sound {
   /** The audio context, for the voices. */
   get context(): AudioContext {
     return this.ctx;
+  }
+
+  /** Where an instrument at a point (three.js space) is heard from (instrument-sound.ts): a panner there, on the
+   * instruments' bus. */
+  instrumentInput(at: [number, number, number]): AudioNode {
+    const panner = this.ctx.createPanner();
+    panner.panningModel = 'HRTF';
+    panner.refDistance = CONFIG.instruments.reach;
+    [panner.positionX.value, panner.positionY.value, panner.positionZ.value] = at;
+    panner.connect(this.instruments);
+    return panner;
   }
 
   /** A bus for the voices into the master, so mute and pause silence them too. */

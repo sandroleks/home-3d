@@ -265,6 +265,40 @@ body.tv-open #sun-panel, body.tv-open #guests { display: none; } /* they would s
 body.touch #tv-panel { width: calc(100vw - 16px); padding: 10px 10px 12px; }
 body.touch #draw-guess input { font-size: 16px; -webkit-user-select: text; user-select: text; } /* iPhones zoom into smaller text */
 
+/* The instrument panel, low in the middle so the instrument stays in view: chords above, keys below, each key with
+   the computer key that plays it. */
+#instrument-panel {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 11; box-sizing: border-box;
+  width: min(640px, calc(100vw - 32px)); padding: 10px 14px 12px; border-radius: 14px;
+  background: rgba(30, 28, 25, 0.92); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  display: flex; flex-direction: column; gap: 8px; font-size: 13px; text-align: left; user-select: none; -webkit-user-select: none;
+}
+.instrument-head { display: flex; align-items: center; gap: 6px; }
+.instrument-head h2 { margin: 0; font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+#instrument-range { flex: 1; color: var(--muted); font-variant-numeric: tabular-nums; }
+#instrument-panel button { padding: 6px 12px; font-size: 13px; background: rgba(255, 255, 255, 0.12); color: var(--ink); touch-action: none; }
+#instrument-panel button:disabled { opacity: 0.35; }
+#instrument-chords { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+#instrument-chords:empty { display: none; }
+#instrument-panel #instrument-chords button { padding: 6px 0; display: flex; flex-direction: column; align-items: center; gap: 1px; font-weight: 600; }
+#instrument-chords small { font-weight: 400; font-size: 10px; color: var(--muted); }
+#instrument-keys { position: relative; height: 124px; }
+#instrument-panel .ikey {
+  position: absolute; top: 0; box-sizing: border-box; padding: 0 0 6px; border-radius: 0 0 6px 6px;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px; font-size: 11px;
+}
+#instrument-panel .ikey.white { height: 100%; background: #f1ece2; color: #3a352d; border: 1px solid rgba(0, 0, 0, 0.35); }
+#instrument-panel .ikey.black { height: 62%; z-index: 1; background: #1d1b18; color: #d9d2c4; border: 1px solid #000; }
+#instrument-panel .ikey small { font-size: 9px; opacity: 0.6; }
+#instrument-panel .ikey.white.down { background: var(--accent); }
+#instrument-panel .ikey.black.down { background: #7a6232; }
+#instrument-panel #instrument-chords button.down { background: var(--accent); color: #121110; }
+#instrument-panel .ikey:disabled { opacity: 0.3; }
+#instrument-hint { margin: 0; color: var(--muted); font-size: 12px; }
+body.touch #instrument-panel { width: calc(100vw - 16px); bottom: 8px; padding: 8px 8px 10px; }
+body.touch #instrument-hint { display: none; }
+body.touch #instrument-panel.in-hand { top: 8px; bottom: auto; }
+
 /* The sun panel stays on screen, bottom left. While walking the mouse is captured, so it only shows.
    Tab frees the mouse without pausing, so the panel takes clicks while the keys keep walking; with
    the walkthrough paused (Esc) it sits above the pause veil and takes clicks too. */

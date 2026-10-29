@@ -62,6 +62,7 @@ const quat = new Quaternion();
 const box = new Box3();
 const a = new Vector3();
 const b = new Vector3();
+const scale = new Vector3();
 
 /** Sets an object's pose in the world, whatever its parent. */
 function setWorldPose(o: Object3D, position: Vector3, quaternion: Quaternion): void {
@@ -206,6 +207,15 @@ export class Props {
     return this.launchHeld(p, from, velocity, spin);
   }
 
+  /** Puts what this visitor holds back where it was at first (a guitar on its hanger). */
+  putBack(): PropMessage | null {
+    const p = this.held;
+    if (!p) return null;
+    this.bump(p, this.world.selfId());
+    this.goHome(p);
+    return this.made(p, { id: p.id, n: p.n, by: p.by, s: 'home' });
+  }
+
   drop(from: Vector3): PropMessage | null {
     const p = this.held;
     return p ? this.launchHeld(p, from, new Vector3(), new Vector3()) : null;
@@ -217,6 +227,7 @@ export class Props {
     for (const p of this.list) {
       if (p.state === 'held') {
         p.root.visible = !!p.holder && this.world.hand(p.holder, pos, quat);
+        if (p.root.visible && p.info.carry) m4.compose(pos, quat, ONE).multiply(p.info.carry).decompose(pos, quat, scale);
         if (p.root.visible) setWorldPose(p.root, pos, quat);
       } else if (p.state === 'fly' && p.flight) {
         const step = fly(p.flight, dt, this.world.raycast, p.shape);

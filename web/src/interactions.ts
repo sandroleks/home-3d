@@ -1,6 +1,7 @@
 import { Camera, Color, Mesh, MeshStandardMaterial, Object3D, Raycaster, Vector2, type Vector3 } from 'three';
 import { CONFIG } from './config';
 import type { DoorState } from './doors';
+import type { InstrumentInfo } from './instruments';
 import type { LightGroups } from './lightmaps';
 import { movableNoun, type MovableState } from './movables';
 import type { Prop } from './props';
@@ -22,13 +23,17 @@ export type Target =
   | { kind: 'wine'; node: Object3D }
   /** The shooting range's rifle rack and Start button on the Varanda (range-rack.ts): this visitor's own to use. */
   | { kind: 'rack'; range: RangeStatus; node: Object3D }
-  | { kind: 'range-button'; range: RangeStatus; node: Object3D };
+  | { kind: 'range-button'; range: RangeStatus; node: Object3D }
+  /** An instrument in the room's mesh, as a seat is: playing it is main.ts's (its panel). */
+  | { kind: 'instrument'; instrument: InstrumentInfo; node: Object3D }
+  /** Where the instrument in this visitor's hands hangs: a click puts it back there (main.ts). */
+  | { kind: 'hang'; instrument: InstrumentInfo; node: Object3D };
 
 /** What the rack's and the button's prompts need: whether this visitor holds a rifle, whether a round is on
  * (range-game.ts), and whether they may pick one up where they stand (main.ts knows the room and the seat). */
 export interface RangeStatus { readonly armed: boolean; readonly busy: boolean; readonly canArm: boolean }
 
-/** The seat at a point where the crosshair meets the room, if any. */
+/** The seat or instrument at a point where the crosshair meets the room, if any. */
 export type SeatFinder = (point: Vector3) => Target | null;
 
 const HIGHLIGHT = new Color(0.12, 0.12, 0.09);
@@ -50,6 +55,8 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
     case 'seat': return t.spot ? `${verb}: ${t.seat.pose === 'lie' ? 'lie down' : 'sit down'}` : 'Someone is here';
     case 'prop': return `${verb}: pick up ${t.prop.info.name}`;
     case 'wine': return `${verb}: drink some wine`;
+    case 'instrument': return `${verb}: play the ${t.instrument.kind}`;
+    case 'hang': return `${verb}: hang the ${t.instrument.kind} back`;
     case 'rack':
       if (!t.range.armed && !t.range.canArm) return 'Step onto the balcony to pick up the rifle'; // seen through the glass door, or sitting
       return `${verb}: ${t.range.armed ? 'put the rifle back' : 'pick up the rifle'}`;
@@ -65,7 +72,7 @@ export function promptFor(t: Target, lights: LightGroups, verb = 'Click'): strin
 /** `now`: seconds, for the screens' pictures. Sitting down, drinking, the rifle and the TV's panel are the player's (main.ts). */
 export function activate(t: Target, lights: LightGroups, now = 0): void {
   switch (t.kind) {
-    case 'seat': case 'prop': case 'wine': return; // sitting, picking up and drinking are main.ts's
+    case 'seat': case 'prop': case 'wine': case 'instrument': case 'hang': return; // sitting, picking up, drinking and playing are main.ts's
     case 'rack':
     case 'range-button': return; // the rifle and the round are the player's (main.ts)
     case 'door': return t.door.toggle();
@@ -123,7 +130,7 @@ export class Interactions {
 
   /** What's under a point on screen (normalised device coordinates); walls in `pickables` occlude targets behind them,
    * glass doesn't (the record under the turntable's lid, a sliding leaf behind the fixed panel). Where the room itself
-   * is hit, it may be a seat. */
+   * is hit, it may be a seat or an instrument. */
   at(point: Vector2): Target | null {
     this.raycaster.setFromCamera(point, this.camera);
     for (const hit of this.raycaster.intersectObjects(this.pickables, true)) {

@@ -6,7 +6,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 from . import (bake, bpyutil, chunks, checks, collision, config, debug_map, doors, export, geom, lamps, layers,
-               manifest, movables, openings, packs, proc_materials, props, rooms, scene_select, screens, seats, state,
+               instruments, manifest, movables, openings, packs, proc_materials, props, rooms, scene_select, screens, seats, state,
                surroundings, switches, uvs, variants, windows)
 
 
@@ -120,7 +120,10 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs", variant=None):
     for g in groups:
         print(f"[lamps] {g['id']}: {', '.join(g['lights'])}", flush=True)
     movable_specs = movables.prepare_movables(movable_objs, floor_index)
+    # fixed or loose; before props are renamed, and from what's left (preparing the doors may delete some leaves)
+    instrument_specs = instruments.prepare_instruments(instruments.find(static + prop_objs), floor_index)
     prop_specs = props.prepare_props(prop_objs, floor_index)
+    instruments.link_props(instrument_specs, prop_specs)
     glows = glow_specs(glow_objs)
 
     chunk_list = chunks.build_chunks(static, floor_index)
@@ -154,7 +157,7 @@ def prepare(scene, quality, out_dir, build_dir, stop_after="uvs", variant=None):
         "spawn": export.spawn_from(scene, room_list), "viewpoints": export.viewpoints(scene), "day_lights": ctx["day_lights"],
         "groups": groups, "group_emitters": emitters, "fixtures": fixtures, "lost_lamps": lost,
         "movables": movable_specs, "movable_atlas": atlas, "screens": screen_specs, "glows": glows, "props": prop_specs,
-        "layers": plan,
+        "instruments": instrument_specs, "layers": plan,
         "windows": window_list, "sky_irradiance": bake.sky_irradiance(scene),
     }
     state.save(scene, st)

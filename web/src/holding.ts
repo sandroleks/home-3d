@@ -18,6 +18,8 @@ export class Holding {
   private noticeUntil = -Infinity;
   private ghostOf: Prop | null = null;
   private ray = new Raycaster();
+  /** Whether a held thing is played rather than put down (an instrument): no ghost, no placing by a click. */
+  playable: (p: Prop) => boolean = () => false;
   /** The ghost's look, shared by its meshes (compiled with the rest at load). */
   readonly ghostMaterial = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: CONFIG.props.ghostOpacity, depthWrite: false });
 
@@ -42,7 +44,7 @@ export class Holding {
   update(dt: number, aim: Vector2 = CENTRE): void {
     if (this.charge !== null) this.charge += dt;
     const held = this.props.held;
-    this.result = held ? this.find(held, aim) : null;
+    this.result = held && !this.playable(held) ? this.find(held, aim) : null;
     if (!held || !this.result?.ok) {
       this.ghost.visible = false;
       return;
@@ -58,7 +60,7 @@ export class Holding {
   prompt(verb: string, touch: boolean, otherTarget: boolean): string | null {
     if (this.now() < this.noticeUntil) return COPY.taken;
     const held = this.props.held;
-    if (!held) return null;
+    if (!held || this.playable(held)) return null; // main.ts says how to play it
     if (this.result?.ok) return `${verb}: put down ${held.info.name}`;
     if (this.result?.reason === 'room') return otherTarget ? null : COPY.noRoom;
     return otherTarget ? null : touch ? COPY.holdHintTouch : COPY.holdHint;
