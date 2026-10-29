@@ -13,6 +13,9 @@ IN_STAGE = cd $(STAGE) && HOME=$(STAGE)/home "$(BLENDER)"
 VARIANT ?=
 DEST = $(if $(VARIANT),$(OUT)/variants/$(VARIANT),$(OUT))
 BUILD_DEST = $(if $(VARIANT),$(BUILD)/variants/$(VARIANT),$(BUILD))
+# After an export: GPU-compressed textures (KTX2) and merged materials in the .glb files; needs basisu and dwebp
+# (brew install basis_universal webp).
+OPTIMIZE = cd web && node scripts/optimize-glb.mjs
 
 .PHONY: test-blender export-preview export-final export-surroundings export-seats render-refs web-test
 
@@ -24,12 +27,14 @@ export-preview export-final: export-%:
 	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && rm -rf $(STAGE)/out
 	$(IN_STAGE) -b --factory-startup source.blend --python-exit-code 1 --python blender/export_web.py -- --quality $* $(if $(VARIANT),--variant $(VARIANT)) --out out/assets --build out/build
 	mkdir -p $(DEST) $(BUILD_DEST) && rsync -a --delete --exclude audio/ --exclude climate.json --exclude DATA-SOURCES.md --exclude variants/ $(if $(VARIANT),--exclude surroundings.glb) $(STAGE)/out/assets/ $(DEST)/ && rsync -a $(STAGE)/out/build/ $(BUILD_DEST)/
+	$(OPTIMIZE) $(abspath $(DEST))/apartment.glb $(if $(VARIANT),,$(abspath $(OUT))/surroundings.glb)
 
 # Only the neighbourhood seen through the windows: no bake, and the other assets stay as they are.
 export-surroundings:
 	$(SYNC) && cp "$(SOURCE)" $(STAGE)/source.blend && rm -rf $(STAGE)/out
 	$(IN_STAGE) -b --factory-startup source.blend --python-exit-code 1 --python blender/export_web.py -- --quality final --stage surroundings --out out/assets --build out/build
 	mkdir -p $(OUT) && cp $(STAGE)/out/assets/surroundings.glb $(OUT)/
+	$(OPTIMIZE) $(abspath $(OUT))/surroundings.glb
 
 # Only where visitors can sit and lie (seats.json): no bake, and the other assets stay as they are.
 export-seats:

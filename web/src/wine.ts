@@ -1,5 +1,6 @@
 import { CylinderGeometry, DoubleSide, Group, LatheGeometry, Mesh, Vector2 } from 'three';
 import { CONFIG } from './config';
+import { ContactShadow } from './contact-shadow';
 import { makeMatcaps } from './creatures';
 import type { Target } from './interactions';
 import { type CanvasFactory, domCanvas } from './screens';
@@ -65,6 +66,8 @@ export class WineBottle {
     glassAt.position.set(cfg.glass[0], 0, cfg.glass[1]);
     glassAt.add(pour, glass);
     this.root.add(this.facing, glassAt);
+    new ContactShadow().place(this.bottle, this.root);
+    new ContactShadow().place(glassAt, this.root);
     this.target = { kind: 'wine', node: this.root };
   }
 

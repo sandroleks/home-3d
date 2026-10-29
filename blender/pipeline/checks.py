@@ -28,7 +28,8 @@ def check_outputs(out_dir, m, budget_bytes, expected_doors):
     errors = list(manifest_mod.validate_manifest(m))
     lit = m["chunks"] + m["doors"] + m["movables"]
     refs = [c["day"] for c in m["chunks"]] + [c["light"] for c in m["chunks"]] + [
-        x["lightmap"] for x in m["doors"] + m["movables"]] + [p for x in lit for p in x["packs"]]
+        x["lightmap"] for x in m["doors"] + m["movables"]] + [p for x in lit for p in x["packs"]] + [
+        r for p in m.get("probes", []) for r in (p["day"], p["light"])]
     for ref in refs:
         if ref and not os.path.exists(os.path.join(out_dir, ref["file"])):
             errors.append(f"missing file {ref['file']}")

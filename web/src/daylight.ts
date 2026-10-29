@@ -117,6 +117,10 @@ export class Daylight {
   private raycaster = new Raycaster();
   private seen = -1;
   private dirty = true;
+  /** The sun's direction when its shadows were last drawn and the windows last measured; null: redraw next time. */
+  private shadowDir: Vector3 | null = null;
+  /** Per window, the share of its panes the sun reached at the last measure. */
+  private open = new Map<WindowInfo, number>();
 
   constructor(
     private renderer: WebGLRenderer,
@@ -176,6 +180,7 @@ export class Daylight {
       this.occluders.push(proxy);
     });
     this.dirty = true;
+    this.shadowDir = null;
   }
 
   /** Real sun and sky for the chosen moment, or (off) the same even daylight at any time. */
@@ -196,10 +201,30 @@ export class Daylight {
       this.seen = version;
       this.dirty = false;
       this.apply(utc);
-      if (this.light.intensity > 0) this.renderer.shadowMap.needsUpdate = true; // nothing to draw while the sun is down
-    } else if (doorsMoved && this.light.intensity > 0) {
+    } else if (doorsMoved && this.light.visible) {
       this.renderer.shadowMap.needsUpdate = true;
     }
+  }
+
+  /**
+   * Down, the sun leaves the scene's lights: no surface pays for its light and shadow lookups at night (both shader
+   * variants are compiled at load). Up, its shadows are redrawn once it has moved shadowStep degrees, or when asked.
+   * Returns whether the windows should be measured again.
+   */
+  private placeSun(dir: Vec3, strength: number): boolean {
+    const l = this.light;
+    l.intensity = strength;
+    l.visible = strength > 0;
+    l.position.set(this.centre.x + dir[0] * this.distance, this.centre.y + dir[1] * this.distance, this.centre.z + dir[2] * this.distance);
+    if (!l.visible) {
+      this.shadowDir = null; // doors may move in the night: redraw at sunrise
+      return false;
+    }
+    const d = new Vector3(dir[0], dir[1], dir[2]);
+    if (this.shadowDir && this.shadowDir.angleTo(d) < (CONFIG.sun.shadowStep * Math.PI) / 180) return false;
+    this.shadowDir = d;
+    this.renderer.shadowMap.needsUpdate = true;
+    return true;
   }
 
   private apply(utc: number): void {
@@ -211,10 +236,8 @@ export class Daylight {
     const dir = sunVector(sun, site.yBearing);
     const color = sunColor(sun.elevation);
 
-    const l = this.light;
-    l.color.copy(color);
-    l.intensity = strength;
-    l.position.set(this.centre.x + dir[0] * this.distance, this.centre.y + dir[1] * this.distance, this.centre.z + dir[2] * this.distance);
+    this.light.color.copy(color);
+    const remeasure = this.placeSun(dir, strength);
 
     const d = skyDiffuse(this.climate, utc, sun.elevation, diffuse);
     const scale = gainedSkyScale(skyScale(d, sky.wattsToScene, sky.irradiance));
@@ -229,6 +252,7 @@ export class Daylight {
     s.sunLight.value.copy(color).multiplyScalar(strength);
     s.skyLight.value = d * sky.wattsToScene;
 
+    if (remeasure) this.measureWindows(dir);
     this.updateFills(dir, strength, color);
   }
 
@@ -237,6 +261,8 @@ export class Daylight {
     const f = CONFIG.flatLighting;
     const { site, sky } = this.manifest;
     this.light.intensity = 0;
+    this.light.visible = false;
+    this.shadowDir = null;
     this.world.sky.value = f.sky;
     this.scene.environmentIntensity = envIntensityFor(f.sky);
     this.ambient.intensity = f.ambient;
@@ -249,27 +275,34 @@ export class Daylight {
     for (const fill of this.world.fills.values()) fill.value.setRGB(0, 0, 0);
   }
 
+  /** How much of each window the sun reaches, through the neighbourhood and the flat's own walls (raycasts). */
+  private measureWindows(dir: Vec3): void {
+    this.open.clear();
+    const toSun = new Vector3(dir[0], dir[1], dir[2]);
+    const origin = new Vector3();
+    this.raycaster.far = this.distance;
+    for (const w of this.manifest.windows) {
+      if (enteringLight(w, dir, 1, 1) === 0) continue;
+      const samples = paneSamples(w);
+      let open = 0;
+      for (const p of samples) {
+        origin.set(p[0] + w.normal[0] * 0.05, p[1], p[2] + w.normal[2] * 0.05);
+        this.raycaster.set(origin, toSun);
+        if (this.raycaster.intersectObjects(this.occluders, false).length === 0) open++;
+      }
+      this.open.set(w, open / samples.length);
+    }
+  }
+
   private updateFills(dir: Vec3, strength: number, color: Color): void {
     const entering = new Map<string, number>();
     if (strength > 0) {
-      const toSun = new Vector3(dir[0], dir[1], dir[2]);
-      const origin = new Vector3();
-      this.raycaster.far = this.distance;
-      for (const w of this.manifest.windows) {
-        if (enteringLight(w, dir, 1, 1) === 0) continue;
-        const samples = paneSamples(w);
-        let open = 0;
-        for (const p of samples) {
-          origin.set(p[0] + w.normal[0] * 0.05, p[1], p[2] + w.normal[2] * 0.05);
-          this.raycaster.set(origin, toSun);
-          if (this.raycaster.intersectObjects(this.occluders, false).length === 0) open++;
-        }
-        entering.set(w.room, (entering.get(w.room) ?? 0) + enteringLight(w, dir, open / samples.length, strength));
-      }
+      for (const [w, open] of this.open) entering.set(w.room, (entering.get(w.room) ?? 0) + enteringLight(w, dir, open, strength));
     }
     for (const room of this.manifest.rooms) {
       const fill = this.world.fills.get(room.id);
       if (fill) fill.value.copy(color).multiplyScalar(roomFill(entering.get(room.id) ?? 0, room.area));
     }
   }
+
 }

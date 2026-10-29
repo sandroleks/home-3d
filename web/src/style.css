@@ -368,3 +368,9 @@ body.touch .sun-buttons { flex-wrap: nowrap; gap: 6px; }
 body.touch .sun-buttons button { flex: 1; padding: 7px 0; font-size: 13px; } /* bigger targets, one row */
 body.touch .sun-row input { height: 28px; }
 body.touch .scene-pick select { padding-top: 7px; padding-bottom: 7px; font-size: 13px; }
+/* ?stats and ?bench: frame numbers in a corner. */
+.frame-stats {
+  position: fixed; left: 8px; top: 8px; z-index: 50; pointer-events: none; white-space: pre;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #e8e4dc;
+  background: rgba(18, 17, 16, 0.72); padding: 6px 8px; border-radius: 4px;
+}

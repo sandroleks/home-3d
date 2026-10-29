@@ -2,6 +2,7 @@ build/
 node_modules/
 web/dist/
 web/public/draco/
+web/public/basis/
 .DS_Store
 __pycache__/
 *.blend1

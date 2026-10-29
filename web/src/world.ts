@@ -3,7 +3,7 @@ import { Color, Mesh, MeshStandardMaterial, Object3D, Quaternion, Scene, type Te
 import { Collision } from './collision';
 import { DoorState, easeInOut } from './doors';
 import type { Target } from './interactions';
-import { BLACK_LIGHTMAP, LIGHT_SPILL, LightGroups, packBinding, type PackBinding, setLightTexture, updatePacks } from './lightmaps';
+import { BLACK_LIGHTMAP, LIGHT_SPILL, LightGroups, packBinding, type PackBinding, type ProbeBinding, setLightTexture, updatePacks } from './lightmaps';
 import type { LoadedAssets } from './loader';
 import type { LightmapRef, Pack, PackLayer } from './manifest';
 import { movableRuntime, MovableState, type MovableRuntime } from './movables';
@@ -66,7 +66,10 @@ export function glowGroup(materialName: string): string | null {
   return GROUP_SUFFIX.exec(materialName)?.[1] ?? null;
 }
 
-export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFactory = domCanvas): World {
+/** `probeFor`: what a room's surfaces reflect (null: three's own scene environment). */
+export function buildWorld(
+  assets: LoadedAssets, scene: Scene, canvas: CanvasFactory = domCanvas, probeFor: (room: string | null) => ProbeBinding | null = () => null,
+): World {
   const { manifest, day } = assets;
   const root = assets.scene;
   scene.add(root);
@@ -91,6 +94,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
   const noFill = { value: new Color(0, 0, 0) };
   const off = { value: 0 };
   const fills = new Map(manifest.rooms.map((r) => [r.id, { value: new Color(0, 0, 0) }] as const));
+  const locator = new RoomLocator(manifest.rooms);
   const glows: Glow[] = [];
   const collectGlows = (n: Object3D) => n.traverse((o) => {
     const mesh = o as Mesh;
@@ -99,13 +103,14 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
     const group = glowGroup(m.name);
     if (group && lights.has(group) && m.emissive && m.emissive.r + m.emissive.g + m.emissive.b > 0) glows.push({ group, material: m, base: m.emissiveIntensity, baseColor: m.emissive.clone(), mesh });
   });
-  const lightmap = (n: Object3D, dayRef: LightmapRef, packs: Pack[], room: string | null, switched: LightmapRef | null) => {
+  const lightmap = (n: Object3D, dayRef: LightmapRef, packs: Pack[], room: string | null, switched: LightmapRef | null, probeRoom = room) => {
     const d = day.get(dayRef.file)!;
     const hasSwitch = room !== null && switched !== null && lights.has(room);
     const mats = prepareMeshes(n, {
       day: d.texture, dayRange: d.range, light: BLACK_LIGHTMAP, lightRange: 0, intensity: hasSwitch ? lights.uniform(room) : off,
       lightColor: hasSwitch ? lights.color(room) : undefined,
-      packs: bindPacks(packs), sky, fill: (room && fills.get(room)) || noFill,
+      packs: bindPacks(packs), sky, fill: (room && fills.get(room)) || noFill, probe: probeFor(probeRoom),
+      ...(probeRoom && lights.has(probeRoom) ? { probeLamp: lights.uniform(probeRoom), probeLampColor: lights.color(probeRoom) } : {}),
     });
     lightmapped.push(...mats);
     collectGlows(n);
@@ -126,7 +131,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
   const targets = new Map<Object3D, Target>();
   const doors: DoorRuntime[] = manifest.doors.map((info) => {
     const n = node(root, info.node);
-    lightmap(n, info.lightmap, info.packs, null, null);
+    lightmap(n, info.lightmap, info.packs, null, null, locator.locate(info.hinge[0], info.hinge[1], null));
     solids.push(n);
     const state = new DoorState(info);
     targets.set(n, { kind: 'door', door: state, node: n });
@@ -135,7 +140,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
 
   const movables: MovableRuntime[] = manifest.movables.map((info) => {
     const n = node(root, info.node);
-    lightmap(n, info.lightmap, info.packs, null, null);
+    lightmap(n, info.lightmap, info.packs, null, null, info.room);
     solids.push(n);
     const state = new MovableState(info);
     targets.set(n, { kind: 'movable', movable: state, node: n });
@@ -219,7 +224,7 @@ export function buildWorld(assets: LoadedAssets, scene: Scene, canvas: CanvasFac
     return s ? [{ tint: p.tints.value[i], screen: s }] : [];
   }));
   return {
-    root, lights, doors, movables, screens, targets, switches, pickables, solids, rooms: new RoomLocator(manifest.rooms), collision,
+    root, lights, doors, movables, screens, targets, switches, pickables, solids, rooms: locator, collision,
     lightmapped, sky, fills, glows, packs: allPacks, layerLevel, screenTints, occluders,
   };
 }

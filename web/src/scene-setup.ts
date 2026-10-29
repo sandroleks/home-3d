@@ -1,4 +1,4 @@
-import { Material, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Object3D } from 'three';
+import { Material, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Object3D, type Texture } from 'three';
 import { applyLightmap, type LightmapBinding } from './lightmaps';
 
 export function isGlass(m: Material): boolean {
@@ -40,4 +40,27 @@ export function prepareMeshes(node: Object3D, binding: LightmapBinding | null): 
     mesh.material = m;
   });
   return lit;
+}
+
+const SURFACE_MAPS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'] as const;
+
+/**
+ * Anisotropic filtering on every surface texture under root (and a ShaderMaterial's `map`): floors and walls seen along
+ * the room stay sharp instead of going to mush. Lightmaps are left alone, they're smooth.
+ */
+export function setAnisotropy(root: Object3D, level: number): void {
+  root.traverse((o) => {
+    const mat = (o as Mesh).material as Material | Material[] | undefined;
+    if (!mat) return;
+    for (const m of Array.isArray(mat) ? mat : [mat]) {
+      const textures = SURFACE_MAPS.map((k) => (m as unknown as Record<string, Texture | null | undefined>)[k]);
+      textures.push((m as { uniforms?: { map?: { value?: Texture | null } } }).uniforms?.map?.value);
+      for (const t of textures) {
+        if (t?.isTexture && t.anisotropy !== level) {
+          t.anisotropy = level;
+          t.needsUpdate = true;
+        }
+      }
+    }
+  });
 }

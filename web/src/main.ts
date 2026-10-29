@@ -4,15 +4,17 @@ import {
 } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { doorSound, loadMuted, saveMuted, StepTimer } from './audio';
 import { CONFIG } from './config';
 import { makeMatcaps } from './creatures';
+import { solidBox } from './contact-shadow';
 import { Holding } from './holding';
 import { Interactions, promptFor, type RangeStatus, type Target } from './interactions';
 import { LIGHT_SPILL } from './lightmaps';
 import { loadAssets, type LoadedAssets, type LoadedMap } from './loader';
-import { addMirrors } from './mirrors';
+import { addMirrors, type Mirror } from './mirrors';
 import { assetsFor, type Kitchen, kitchenFrom, saveCarry, takeCarry, urlFor } from './layout';
 import { lightmapTextures, UploadQueue, warmUpShaders } from './warmup';
 import { applyMovable } from './movables';
@@ -46,6 +48,9 @@ import { Player, screenFov, vfovFromHfov } from './player';
 import { freeSpot, seatAt, seatedOn, seatingCode } from './seats';
 import { shrinkLightmap } from './shrink';
 import { Sound } from './sound';
+import { roomProbes, standInProbe } from './reflections';
+import { RoomCulling } from './visibility';
+import { Bench, type BenchStop, FrameStats } from './stats';
 import { Halos } from './halos';
 import { Nanoleaf } from './nanoleaf';
 import { Daylight, loadRealLighting, saveRealLighting } from './daylight';
@@ -55,6 +60,8 @@ import { dayOfYear, daysInYear, formatClock, formatReadout, parseSunParam, SunCl
 import { TouchControls } from './touch';
 import { COPY, isTouchOnly, type SceneScope, UI } from './ui';
 import { applyDoorPose, applyGlows, applyPacks, buildWorld } from './world';
+import { setAnisotropy } from './scene-setup';
+import { applyDetails } from './details';
 import './style.css';
 
 BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -100,7 +107,8 @@ async function run(): Promise<void> {
   const scene = new Scene();
   const UP = new Vector3(0, 1, 0);
   const surroundings = new Surroundings();
-  scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+  const roomEnvironment = new RoomEnvironment();
+  scene.environment = new PMREMGenerator(renderer).fromScene(roomEnvironment, 0.04).texture;
   scene.environmentIntensity = CONFIG.envIntensity;
 
   const camera = new PerspectiveCamera(CONFIG.verticalFov, 1, 0.05, 60);
@@ -121,13 +129,17 @@ async function run(): Promise<void> {
   ui.setKitchenWall(kitchen === 'wall');
   let assets: LoadedAssets;
   try {
-    assets = await loadAssets((f) => ui.setProgress(f), shrink, assetsFor(kitchen));
+    const ktx2 = new KTX2Loader().setTranscoderPath(CONFIG.basisPath).detectSupport(renderer);
+    assets = await loadAssets((f) => ui.setProgress(f), shrink, assetsFor(kitchen), ktx2);
   } catch (err) {
     if (kitchen !== 'wall') throw err;
     return fail(COPY.noKitchenWall, err, () => location.assign(urlFor(location.href, 'open')));
   }
 
-  const world = buildWorld(assets, scene);
+  // What lightmapped surfaces reflect: their room's probes, or the stand-in room environment at the local light level.
+  const standIn = standInProbe(renderer, scene.environment, roomEnvironment);
+  const probes = roomProbes(renderer, assets.manifest.probes, assets.probes);
+  const world = buildWorld(assets, scene, domCanvas, (room) => (room && probes.get(room)) || standIn);
   // The model's loose things leave the scene now, before anything renders or collects casters; buildWorld already
   // counted their meshes as occluders, so those go too (anything no longer under the world's root).
   const surfaceProps = surfacePlaces(assets.manifest.props, world.root);
@@ -136,6 +148,9 @@ async function run(): Promise<void> {
     while (o && o !== world.root) o = o.parent;
     return o === world.root;
   });
+  const anisotropy = Math.min(touch ? CONFIG.touch.anisotropy : CONFIG.anisotropy, renderer.capabilities.getMaxAnisotropy());
+  applyDetails(world.root);
+  setAnisotropy(world.root, anisotropy);
   const mirrors = addMirrors(world.root, surroundings);
   const nanoleaf = new Nanoleaf(world.glows);
   const halos = new Halos(world.glows.filter((g) => !nanoleaf.has(g)));
@@ -225,7 +240,7 @@ async function run(): Promise<void> {
   }
   const holding = new Holding(props, camera, {
     raycast: solidRay,
-    overlaps: (box) => props.overlaps(box) || inTheWay.some((o) => wayBox.setFromObject(o).intersectsBox(box)),
+    overlaps: (box) => props.overlaps(box) || inTheWay.some((o) => solidBox(o, wayBox).intersectsBox(box)),
     drawerOf: (o) => {
       const node = drawerOf(o);
       return node ? { node, height: heights.get(node.name) ?? null } : null;
@@ -253,6 +268,7 @@ async function run(): Promise<void> {
   const mirrorTarget = mirrors.userData.target as WebGLRenderTarget | undefined;
   assets.surroundings.then((root) => {
     if (!root) return;
+    setAnisotropy(root, anisotropy);
     surroundings.add(root);
     daylight.addCasters(root);
     warmUpShaders(renderer, surroundings.scene, camera, [], mirrorTarget ? [mirrorTarget] : []).catch(() => {});
@@ -266,8 +282,15 @@ async function run(): Promise<void> {
     const size = renderer.getDrawingBufferSize(new Vector2()).multiplyScalar(CONFIG.mirrorScale).round();
     mirrorTarget.setSize(size.x, size.y);
   }
-  warmUpShaders(renderer, scene, camera, [...world.screens.map((s) => s.pictureMaterial), holding.ghostMaterial, ...rangeView.warmMaterials(), ...rifle.materials], mirrorTarget ? [mirrorTarget] : [])
-    .catch((err) => console.warn('Shader warm-up failed; shaders compile when first needed.', err));
+  // Twice: with the sun up and down, as the daylight takes it out of the scene's lights at night.
+  // (warmUpShaders shows what's hidden, so the sun leaves the scene for the night pass).
+  const warmUps = [true, false].map((up) => {
+    if (!up) scene.remove(daylight.light);
+    const job = warmUpShaders(renderer, scene, camera, [...world.screens.map((s) => s.pictureMaterial), holding.ghostMaterial, ...rangeView.warmMaterials(), ...rifle.materials], mirrorTarget ? [mirrorTarget] : []);
+    if (!up) scene.add(daylight.light);
+    return job;
+  });
+  Promise.all(warmUps).catch((err) => console.warn('Shader warm-up failed; shaders compile when first needed.', err));
   const names = new Map(assets.manifest.rooms.map((r) => [r.id, CONFIG.roomNames[r.id] ?? r.name]));
   const player = new Player(camera, world.collision, assets.manifest.spawn, assets.manifest.eyeHeight);
   player.resolve();
@@ -953,6 +976,49 @@ async function run(): Promise<void> {
     if (e.code === 'KeyF') holding.releaseThrow();
   });
 
+  // ?stats: frame numbers in a corner; ?bench (with ?autostart): the same walk every time, measured per stop.
+  const stats = params.has('stats') || params.has('bench') ? new FrameStats(renderer, () => [scene, surroundings.scene], document) : null;
+  const bench = params.has('bench') ? new Bench(benchStops()) : null;
+  function benchStops(): BenchStop[] {
+    const eye = assets.manifest.eyeHeight;
+    const s = assets.manifest.spawn;
+    const stops: BenchStop[] = [{ name: 'spawn', x: s.x, y: eye, z: s.z, pitch: 0 }];
+    for (const v of assets.manifest.viewpoints) stops.push({ name: v.name, x: v.position[0], y: v.position[1], z: v.position[2], pitch: v.pitch });
+    for (const r of assets.manifest.rooms) {
+      let x = 0;
+      let z = 0;
+      for (let k = 0; k < r.floor.length; k += 2) {
+        x += r.floor[k];
+        z += r.floor[k + 1];
+      }
+      const [fx, fz] = world.collision.nearestFree((2 * x) / r.floor.length, (2 * z) / r.floor.length);
+      stops.push({ name: r.id, x: fx, y: eye, z: fz, pitch: 0 });
+    }
+    return stops;
+  }
+  // Only the rooms the visitor can see, through open doors (the export's visibility table): their chunks, doors,
+  // drawers, screens, bulbs, mirrors and the loose things resting in them.
+  const m = assets.manifest;
+  const groupRoom = new Map(m.groups.map((g) => [g.id, g.room]));
+  const mirrorAt = new Vector3();
+  const culling = new RoomCulling(m.visibility, [
+    ...m.chunks.flatMap((c) => (c.room ? [{ object: world.root.getObjectByName(c.node)!, rooms: [c.room] }] : [])),
+    ...world.doors.flatMap((d, i) => (m.doors[i].rooms?.length ? [{ object: d.node, rooms: m.doors[i].rooms! }] : [])),
+    ...world.movables.map((mv) => ({ object: mv.node, rooms: [mv.state.info.room] })),
+    ...world.screens.map((sc) => ({ object: sc.node, rooms: [sc.info.room] })),
+    ...world.glows.flatMap((g) => (groupRoom.has(g.group) ? [{ object: g.mesh as Object3D, rooms: [groupRoom.get(g.group)!] }] : [])),
+    ...mirrors.children.flatMap((mirror) => {
+      mirror.getWorldPosition(mirrorAt);
+      const room = world.rooms.locate(mirrorAt.x, mirrorAt.z, null);
+      if (!room) return [];
+      (mirror as Mirror).seenFrom = (draw) => culling.seenFrom(room, draw);
+      return [{ object: mirror, rooms: [room] }];
+    }),
+  ].filter((c) => c.object), props.list.map((p) => ({
+    objects: [p.root, p.shadow.mesh], resting: () => p.state === 'rest', locate: (x: number, z: number) => world.rooms.locate(x, z, null),
+  })));
+  const doorOpen = (i: number) => world.doors[i].state.progress > 0;
+  let benchShown = false;
   const screenCentre = new Vector3();
   let last = performance.now();
   renderer.setAnimationLoop((now) => {
@@ -962,6 +1028,22 @@ async function run(): Promise<void> {
     // would keep walking with a mouse that neither looks nor clicks, and Tab would free a lock already gone. Lost as
     // with Esc, then: paused, and a click looks again. Not while Tab or a panel is freeing it: that event is coming.
     if (locked && !freeing && document.pointerLockElement !== canvas) lockChanged();
+    stats?.begin(now);
+    if (bench && stats) {
+      const pose = bench.step(dt, stats.latest);
+      if (pose) {
+        player.frozen = true;
+        player.teleport(pose.stop.x, pose.stop.z, pose.yaw, pose.stop.pitch, pose.stop.y);
+        player.update(0);
+      } else if (!benchShown) {
+        benchShown = true;
+        const report = bench.report();
+        console.log(`Walkthrough bench\n${report}`);
+        Object.assign(window, { benchResult: bench.results, benchReport: report });
+        stats.extra = `\n${report}`;
+        player.frozen = vp !== undefined; // a ?view= stays frozen, as without the bench
+      }
+    }
     let doorsMoved = false;
     world.doors.forEach((d, i) => {
       d.state.update(dt);
@@ -1052,14 +1134,18 @@ async function run(): Promise<void> {
     applyPacks(world);
     surroundings.sky.tick(now / 1000);
     uploads.tick();
+    // A frame that redraws the sun's shadows draws everything: what's hidden casts no shadow.
+    culling.apply(renderer.shadowMap.needsUpdate || params.has('nocull') ? null : currentRoom, doorOpen);
     renderer.clear();
     surroundings.render(renderer, camera);
     renderer.clearDepth();
     renderer.render(scene, camera);
+    culling.show();
     if (rifle.shown) { // the rifle in hand over everything, so it never sinks into the railing
       renderer.clearDepth();
       renderer.render(rifle.scene, camera);
     }
+    stats?.end(now);
   });
 }
 

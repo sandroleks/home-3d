@@ -8,7 +8,8 @@ It has two halves: `blender/` turns the .blend into web assets (headless Blender
 
 - Blender 5.1.x at `/Applications/Blender.app` (use another location with `BLENDER=/path/to/Blender make ...`)
 - Node 22.12 or newer
-- Once: `cd web && npm ci` (the postinstall step copies the Draco decoder)
+- `basisu` and `dwebp` for the export's texture compression: `brew install basis_universal webp`
+- Once: `cd web && npm ci` (the postinstall step copies the Draco decoder and the Basis transcoder)
 
 ## Working on the model
 
@@ -45,6 +46,8 @@ Outputs:
 - `build/web-export.blend`: the baked scene, for inspection.
 
 Exports leave `web/public/assets/audio/`, `climate.json` and `DATA-SOURCES.md` in place.
+
+After Blender, the export runs `web/scripts/optimize-glb.mjs` on the `.glb` files: identical materials and textures are merged, a mesh's primitives that share a material are joined, and the images become KTX2 GPU textures (base colours ETC1S, normal maps UASTC). Compressed textures take an eighth of the GPU memory of plain RGBA for base colours, and upload without decoding. The lightmaps stay lossless WebP: RGBM doesn't survive block compression (blocks straddle charts of very different light), so they keep their shrink on phones.
 
 The export checks itself. If something is wrong it prints `EXPORT CHECKS FAILED` with the reasons and leaves the previous assets untouched.
 
@@ -130,6 +133,9 @@ Handy URL options:
 - `?sun=2026-12-21T10:00`: open at that moment (Lisbon time). It combines with `?view=` and `autostart`.
 - `?kitchen=wall`: open with the kitchen wall up, as it is now.
 - `?debug=lightmap`: show the lighting alone, without textures.
+- `?stats`: frame time (and the GPU's own, where the browser can measure it), draw calls, triangles, shader programs and texture memory in the top left corner.
+- `?autostart&bench`: the same walk every time, for before-and-after numbers: the spawn point, each viewpoint and the middle of each room, turning a full circle at each. The report shows in the corner and in the console (`window.benchReport`). Hidden browser tabs slow their frames down, so keep the tab in view; the GPU times are right either way.
+- `?nocull`: draw every room, not only the ones in view (see Lighting, below), to compare.
 
 Tests and comparisons:
 
@@ -199,7 +205,17 @@ Drawers and cupboard doors are baked open, so their insides are lit; the rooms a
 
 Lit bulbs, shades and ceiling diffusers get a soft halo (`src/halos.ts`, `CONFIG.halos`): one depth-tested sprite each, much cheaper than a full-screen bloom. The TV's and monitor's light is baked like a lamp's, for an all-white picture (`SCREEN_LIGHT_WATTS` in `blender/pipeline/config.py`); the viewer scales it by the picture's brightness and tints it with its colour.
 
-Keep the frame cheap: every live light (three.js light) is paid for by every pixel of every lit surface, and a full-screen pass costs about as much as one. Bake what can be baked. And keep it smooth: stutters, not slow frames, are what feel laggy. At load every shader is compiled in the background (`src/warmup.ts`), including the screens' pictures, the halos and the variants a mirror needs, and lightmaps go up to the GPU two per frame instead of when a room first comes into view. Mirrors draw at half resolution (`CONFIG.mirrorScale`). Drawers and cupboards don't redraw the sun's shadow map as they move; doors still do.
+Surfaces:
+
+- Procedural materials are baked per object to a base colour (`blender/pipeline/proc_materials.py`), plus a normal map where the material has relief (a Bump or Normal Map node into its BSDF: the tiles' grout, the floor's plank seams, the brick). A patch under `FLAT_ALBEDO_MAX_AREA` (a knob, a hinge) gets the material's mean colour instead of a texture of its own.
+- A material many objects share gets one seamless tile instead (`SHARED_TILES` in `blender/pipeline/config.py`, made in `tiles.py`): Oak, on about 120 pieces of furniture, is a 1024 px grain at 0.6 m a tile, box-projected with the grain along each piece's length. One material instead of a hundred, and the same grain everywhere.
+- Plain materials (one colour in the model) get a little detail in the viewer (`src/details.ts`, `CONFIG.details`, matched by name): plaster's mottling, fabric's weave and slubs, plain wood's grain, as a base colour multiplier and a normal map, box-projected at real size.
+- Reflections follow the baked light (`src/lightmaps.ts`, `src/reflections.ts`). Each room has two reflection probes, the room seen from its middle, rendered by the export (`probes.py`) once lit by the sky and once by the wall switch, mixed as the lightmaps are and projected onto the room's box, so a floor reflects the window where it is. The reflection is as bright as the baked light where the surface is against the light at the probe, so a cupboard's inside doesn't mirror the lit room. Without probes (an older export) surfaces reflect three's stand-in room environment at the local light level. `CONFIG.reflections` scales them.
+- Loose things, the games on the table and the wine sit on a soft contact shadow (`src/contact-shadow.ts`, `CONFIG.contactShadow`): they're drawn without the baked light, and without it they float.
+
+Only what's in view is drawn: the export works out which rooms each room can see, and through which doors (`visibility.py`, rays from a grid of eye points through glass and door leaves), and the viewer draws a room, with its doors, drawers, screens, bulbs, mirrors and loose things, only while one of those sets of doors is all open (`src/visibility.ts`). A mirror draws what its own room sees. A frame that redraws the sun's shadow map draws everything, since what's hidden casts no shadow.
+
+Keep the frame cheap: every live light (three.js light) is paid for by every pixel of every lit surface, and a full-screen pass costs about as much as one. Bake what can be baked. And keep it smooth: stutters, not slow frames, are what feel laggy. At load every shader is compiled in the background (`src/warmup.ts`), including the screens' pictures, the halos and the variants a mirror needs, and lightmaps go up to the GPU two per frame instead of when a room first comes into view. Mirrors draw at half resolution (`CONFIG.mirrorScale`). Drawers and cupboards don't redraw the sun's shadow map as they move; doors still do. While the time-lapse plays, the shadows are redrawn each time the sun has moved `CONFIG.sun.shadowStep` degrees, not every frame, and at night the sun leaves the scene's lights altogether, so no surface pays for its light and shadow lookups (both shader variants are compiled at load). Textures get anisotropic filtering (`CONFIG.anisotropy`), so floors seen along the room stay sharp.
 
 ## Known limits
 
@@ -210,4 +226,7 @@ Keep the frame cheap: every live light (three.js light) is paid for by every pix
 - No moon or stars at night.
 - The baked sky light comes from below the horizon too, compensated globally by `CONFIG.sun.skyGain`, so ceilings near windows read a little bright and up-facing outdoor surfaces (balcony floor, sills) a little dark.
 - Visitors together see each other whichever kitchen they chose, so with the wall up, someone in the open plan walks through it.
+- Reflections are of the room as seen from its middle, at the room's box: near a wall or in an L-shaped room they're only roughly in the right place, and they don't show doors, drawers or loose things moving, or lamps other than the wall switch.
+- The viewer's detail on plain materials changes their colour and their response to the sun and reflections, not the baked light, so the relief doesn't shade in lamp light.
+- The visibility table is worked out with every door leaf where it hangs closed and drawers taken away; a room seen only through a gap the rays missed can pop in late. Lower `VISIBILITY_SPACING` or raise `VISIBILITY_RAYS` in `blender/pipeline/config.py` if one does.
 - The bounce fill is a flat approximation: rooms without exterior glass of their own (e.g. the kitchen, lit through the glazed doors) get none and read darker than Cycles.
