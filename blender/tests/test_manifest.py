@@ -30,6 +30,8 @@ STATE = {
     "glows": [{"node": "Glow_bulb", "group": "alpha/desk-lamp"}],
     "props": [{"source": "Mug", "node": "Prop_mug", "name": "mug", "room": "alpha", "size": [0.08, 0.09, 0.08],
                "tips": False}],
+    "instruments": [{"name": "Piano", "kind": "piano", "room": "alpha", "min": [0.1, 0.0, -0.9], "max": [0.9, 1.0, -0.5],
+                     "at": [0.5, 0.5, -0.7]}],
     "spawn": {"x": 1.0, "z": -0.8, "yaw": -1.5708},
     "viewpoints": [],
     "windows": [{"room": "alpha", "center": [0.5, 1.5, 0.0], "normal": [0.0, 0.0, 1.0], "width": 1.0, "height": 1.2}],
@@ -140,6 +142,22 @@ class ManifestTests(unittest.TestCase):
         self.assertIn("props[1] (Prop_mug): size must be three positive numbers", errors)
         self.assertIn("props[2] (Prop_mug): size must be three positive numbers", errors)
         self.assertIn("props[3] (Prop_mug): no name", errors)
+
+    def test_instruments(self):
+        self.assertEqual(build()["instruments"], STATE["instruments"])
+        self.assertEqual(build({k: v for k, v in STATE.items() if k != "instruments"})["instruments"], [])
+        self.assertEqual(manifest.validate_manifest(build()), [])
+        ok = STATE["instruments"][0]
+        bad = [dict(ok, room="attic"), dict(ok, name="Harp", kind="harp"), dict(ok, name="Flat", max=[0.9, 0.0, -0.5])]
+        errors = manifest.validate_manifest(build(dict(STATE, instruments=bad)))
+        self.assertIn("instruments[0] (Piano): unknown room attic", errors)
+        self.assertIn("instruments[1] (Harp): unknown kind harp", errors)
+        self.assertIn("instruments[2] (Flat): an empty box", errors)
+        self.assertIn("two instruments share a name", manifest.validate_manifest(build(dict(STATE, instruments=[ok, ok]))))
+        loose = dict(ok, name="Ukulele", kind="ukulele", prop="Prop_mug")
+        self.assertEqual(manifest.validate_manifest(build(dict(STATE, instruments=[ok, loose]))), [])
+        errors = manifest.validate_manifest(build(dict(STATE, instruments=[dict(loose, prop="Prop_harp")])))
+        self.assertIn("instruments[0] (Ukulele): unknown prop Prop_harp", errors)
 
     def test_validate_reports_lit_room_without_switch_and_room_without_chunk(self):
         state = dict(STATE, switches={})

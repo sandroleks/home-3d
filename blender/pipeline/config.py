@@ -96,6 +96,8 @@ LEAF_PROP = "web_leaf"  # a part joined into the named door leaf (French door gl
 # On a small thing on a surface (a mug, a book, a bottle): visitors can pick it up. The value is what the viewer calls
 # it. It becomes its own node (Prop_<slug of the object's name>), out of the bake and the collision (props.py).
 PROP_PROP = "web_prop"
+INSTRUMENT_PROP = "web_instrument"  # on an instrument visitors can play: its kind, one of INSTRUMENT_KINDS (instruments.py)
+INSTRUMENT_KINDS = ("piano", "synth", "electric guitar", "bass guitar", "ukulele")
 TIPS_PROP = "web_tips"  # on a prop: whether it falls over when knocked, overriding the guess from its shape
 SEAT_PROP = "web_seat"  # "sit" | "lie": where visitors can sit down or lie (seats.py); SEATS below covers the model
 # Seats by object name, for furniture without web_seat: (regex, "sit" | "lie"). Toilets are left out on purpose.

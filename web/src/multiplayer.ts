@@ -3,6 +3,7 @@ import type { Avatars } from './avatars';
 import { CONFIG } from './config';
 import { type DrawMessage, isDrawMessage } from './draw-game';
 import { type GameMessage, isGameMessage } from './games';
+import { isMusicMessage, type MusicMessage } from './instruments';
 import { isPropMessage, type PropMessage } from './props';
 import { isRangeMessage, type RangeMessage } from './range-game';
 import {
@@ -10,8 +11,8 @@ import {
   type Seating, shouldSend, type StateMap, type StateWorld, hostOf,
 } from './presence';
 
-export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'prop' | 'draw' | 'range';
-const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'prop', 'draw', 'range'];
+export type MessageKind = 'hello' | 'pose' | 'state' | 'game' | 'prop' | 'draw' | 'range' | 'music';
+const KINDS: MessageKind[] = ['hello', 'pose', 'state', 'game', 'prop', 'draw', 'range', 'music'];
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 /** What the walkthrough needs from a network: Trystero today, a WebSocket server another day. */
@@ -81,6 +82,8 @@ export interface MultiplayerHooks {
   onLeave?: (id: string) => void;
   /** The shooting range: a message from another visitor (well-formed; what to do with it is the range's call). */
   onRange?: (msg: RangeMessage, from: string) => void;
+  /** Notes another visitor played or let go on an instrument (well-formed). */
+  onMusic?: (msg: MusicMessage, from: string) => void;
 }
 
 /**
@@ -162,6 +165,11 @@ export class Multiplayer {
       if (!isRangeMessage(data)) return;
       if (this.arrive(id)) this.greet(id, true);
       hooks.onRange?.(data, id);
+    });
+    room.onMessage('music', (data, id) => {
+      if (!isMusicMessage(data)) return;
+      if (this.arrive(id)) this.greet(id, true);
+      hooks.onMusic?.(data, id);
     });
   }
 
@@ -263,6 +271,11 @@ export class Multiplayer {
   /** Draw and guess: to everyone, or (a guess, a "close!", a newcomer's state) to one visitor. */
   sendDraw(msg: DrawMessage, to?: string): void {
     this.room.send('draw', msg, to);
+  }
+
+  /** Notes played on an instrument, to everyone. */
+  sendMusic(msg: MusicMessage): void {
+    this.room.send('music', msg as unknown as Json);
   }
 
   /** The shooting range: to everyone, or (a newcomer's catch-up) to one visitor. */

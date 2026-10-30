@@ -138,10 +138,12 @@ export function smoothPose(current: Pose, target: Pose, dt: number, tau = CONFIG
 
 /** The target kinds that are each visitor's own: nothing about them is shared. The one list: `SharedTarget` is
  * derived from it, so a new personal kind is added here and nowhere else. */
-const PERSONAL = ['seat', 'prop', 'wine', 'rack', 'range-button'] as const;
+const PERSONAL = ['seat', 'prop', 'wine', 'rack', 'range-button', 'instrument', 'hang'] as const;
 /** What a click changes in the flat: everything but a seat (where a visitor sits travels with their pose), a loose
  * thing (it has its own message), the wine (each visitor drinks alone; how drunk they are travels with their pose
- * too), and the rifle rack and the Start button (each visitor's own; the range's messages carry what others need). */
+ * too), the rifle rack and the Start button (each visitor's own; the range's messages carry what others need), and an
+ * instrument and its hanger (opening its panel is the visitor's own; the notes, and the loose instrument hung back, have
+ * their own messages). */
 export type SharedTarget = Exclude<Target, { kind: (typeof PERSONAL)[number] }>;
 /** Whether a click on the target changes something the others see (it isn't one of the `PERSONAL` kinds). */
 export const isShared = (t: Target): t is SharedTarget => !(PERSONAL as readonly Target['kind'][]).includes(t.kind);

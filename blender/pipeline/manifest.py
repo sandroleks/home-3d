@@ -57,6 +57,7 @@ def build_manifest(state, baked, eye_height, proxies=None):
         "screens": [{k: v for k, v in s.items() if k != "blender"} for s in state.get("screens", [])],
         "glows": state.get("glows", []), "viewpoints": state["viewpoints"],
         "props": [{k: p[k] for k in ("node", "name", "room", "size", "tips")} for p in state.get("props", [])],
+        "instruments": state.get("instruments", []),
         "site": dict(config.SITE),
         "sky": {"irradiance": round(state["sky_irradiance"], 5), "wattsToScene": config.WATTS_TO_SCENE},
         "windows": state["windows"],
@@ -143,6 +144,18 @@ def validate_manifest(m):
             errors.append(f"{label}: size must be three positive numbers")
         if not p["name"]:
             errors.append(f"{label}: no name")
+    for i, ins in enumerate(m["instruments"]):
+        label = f"instruments[{i}] ({ins['name']})"
+        if ins["room"] not in room_ids:
+            errors.append(f"{label}: unknown room {ins['room']}")
+        if ins["kind"] not in config.INSTRUMENT_KINDS:
+            errors.append(f"{label}: unknown kind {ins['kind']}")
+        if not all(ins["min"][k] < ins["max"][k] for k in range(3)):
+            errors.append(f"{label}: an empty box")
+        if ins.get("prop") is not None and ins["prop"] not in {p["node"] for p in m["props"]}:
+            errors.append(f"{label}: unknown prop {ins['prop']}")
+    if len({ins["name"] for ins in m["instruments"]}) != len(m["instruments"]):
+        errors.append("two instruments share a name")
     chunk_rooms = {c["room"] for c in m["chunks"]}
     lit_rooms = {c["room"] for c in m["chunks"] if c["light"]}
     for r in m["rooms"]:

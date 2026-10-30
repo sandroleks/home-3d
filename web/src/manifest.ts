@@ -1,3 +1,4 @@
+import { INSTRUMENT_KINDS, type InstrumentInfo } from './instruments';
 import { rleDecode } from './rle';
 
 export interface LightmapRef { file: string; range: number }
@@ -113,6 +114,8 @@ export interface Manifest {
   sky: SkyInfo;
   windows: WindowInfo[];
   props: PropInfo[];
+  /** The instruments visitors can play (instruments.ts); none in a manifest from before them. */
+  instruments: InstrumentInfo[];
   probes: ProbeInfo[];
   visibility: Visibility;
 }
@@ -315,6 +318,19 @@ export function parseManifest(json: unknown): Manifest {
         room: strOrNull(x.room, `${p}.room`),
         size: vec(x.size, 3, `${p}.size`) as [number, number, number],
         tips: bool(x.tips, `${p}.tips`),
+      };
+    }),
+    instruments: arr(m.instruments ?? [], 'instruments').map((v, i) => {
+      const p = `instruments[${i}]`;
+      const x = obj(v, p);
+      return {
+        name: str(x.name, `${p}.name`),
+        kind: oneOf(x.kind, INSTRUMENT_KINDS, `${p}.kind`),
+        room: str(x.room, `${p}.room`),
+        min: vec(x.min, 3, `${p}.min`) as [number, number, number],
+        max: vec(x.max, 3, `${p}.max`) as [number, number, number],
+        at: vec(x.at, 3, `${p}.at`) as [number, number, number],
+        prop: x.prop === undefined ? null : strOrNull(x.prop, `${p}.prop`),
       };
     }),
     probes: arr(m.probes ?? [], 'probes').map((v, i) => {

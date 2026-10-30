@@ -486,5 +486,28 @@ export const CONFIG = {
     /** The rifle's shot, made in code (sound.ts): a burst of noise this long (s), decaying with this time constant,
      * low-passed at `cutoff` Hz; its level, and the distance (m) it is heard at full level from another shooter. */
     shot: { length: 0.45, decay: 0.07, cutoff: 2400, level: 0.9, reach: 4 },
+    /** The instruments visitors play (instrument-sound.ts). */
+    instruments: 0.7,
+  },
+  /** Playing the studio's instruments (instruments.ts, instrument-sound.ts). */
+  instruments: {
+    /** The C the 18 note keys start on before Z and X shift them, and the notes each instrument has (MIDI). */
+    base: { piano: 60, synth: 48, 'electric guitar': 48, 'bass guitar': 36, ukulele: 60 },
+    range: {
+      piano: [21, 108], synth: [24, 96], 'electric guitar': [40, 86], 'bass guitar': [28, 67], ukulele: [60, 84],
+    } as Record<string, [number, number]>,
+    /** ms from one string to the next in a strum. */
+    strumGap: { piano: 0, synth: 0, 'electric guitar': 14, 'bass guitar': 0, ukulele: 22 },
+    /** Metres from an instrument within which it is heard at full level; it fades beyond, as a voice does. */
+    reach: 1.5,
+    /** Notes sounding at once, all instruments together; past it the oldest stops. */
+    polyphony: 40,
+    /** Seconds a held note sounds at most: a key whose release never came (a visitor gone mid-note). */
+    maxHold: 30,
+    /** A guitar, bass or ukulele in hand (instruments.ts, carryPose), in the hand's frame (x right, y up, -z ahead):
+     * which way its neck points and its strings face, and where its middle is from the hand (m). */
+    carry: { neck: [-1, 0.45, -0.25], face: [0.1, 0.75, 0.6], at: [-0.1, -0.08, -0.05] } as {
+      neck: [number, number, number]; face: [number, number, number]; at: [number, number, number];
+    },
   },
 };

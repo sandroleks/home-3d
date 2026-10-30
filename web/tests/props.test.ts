@@ -1,4 +1,4 @@
-import { Box3, BoxGeometry, DoubleSide, FrontSide, type Mesh, type MeshMatcapMaterial, Object3D, Quaternion, Texture, Vector3 } from 'three';
+import { Box3, BoxGeometry, DoubleSide, FrontSide, Matrix4, type Mesh, type MeshMatcapMaterial, Object3D, Quaternion, Texture, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import type { PlacedProp } from '../src/prop-places';
@@ -61,6 +61,20 @@ describe('Props', () => {
     a.root.traverse((o) => expect(o.layers.isEnabled(0)).toBe(false));
     props.place({ point: new Vector3(0.5, 0.9, 0), yaw: 0, node: null });
     a.root.traverse((o) => expect(o.layers.isEnabled(0)).toBe(true));
+  });
+
+  it('puts what is held back home, and holds a thing with a carry pose that way', () => {
+    const { props } = setup();
+    const [a] = props.list;
+    a.info.carry = new Matrix4().makeTranslation(-0.3, 0, 0).multiply(new Matrix4().makeRotationZ(Math.PI / 2));
+    props.pickUp(a);
+    props.update(1 / 60);
+    expect(world(a.root).x).toBeCloseTo(-0.3);
+    expect(new Vector3(0, 1, 0).applyQuaternion(a.root.getWorldQuaternion(new Quaternion())).x).toBeCloseTo(-1);
+    expect(props.putBack()).toEqual({ id: 'a/tumbler/0', n: 2, by: 'me', s: 'home' });
+    expect(props.held).toBeNull();
+    expect(world(a.root).toArray()).toEqual([0, 0.9, 0]);
+    expect(props.putBack()).toBeNull();
   });
 
   it('takes the top of a stack', () => {

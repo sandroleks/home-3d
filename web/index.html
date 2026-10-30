@@ -164,6 +164,18 @@
           <button type="button" id="draw-start" hidden>Start</button>
         </div>
       </section>
+      <section id="instrument-panel" aria-labelledby="instrument-title" hidden>
+        <div class="instrument-head">
+          <h2 id="instrument-title"></h2>
+          <span id="instrument-range"></span>
+          <button type="button" id="instrument-down" aria-label="Octave down">Z ‹</button>
+          <button type="button" id="instrument-up" aria-label="Octave up">› X</button>
+          <button type="button" id="instrument-close">Close</button>
+        </div>
+        <div id="instrument-chords" aria-label="Chords"></div>
+        <div id="instrument-keys" aria-label="Notes"></div>
+        <p id="instrument-hint"></p>
+      </section>
       <div id="stick" hidden><i id="stick-knob"></i></div>
       <div id="touch-bar">
         <button type="button" id="touch-sun" aria-label="Date and time" aria-expanded="false" aria-controls="sun-panel">

@@ -1,6 +1,6 @@
 import {
   AgXToneMapping, Box3, BufferGeometry, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, PMREMGenerator,
-  Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, type WebGLRenderTarget,
+  Quaternion, Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -23,7 +23,7 @@ import { Multiplayer, trysteroRoom } from './multiplayer';
 import { meshRaycast } from './prop-physics';
 import { drawerHeights, placesFor } from './prop-places';
 import { surfacePlaces } from './surface-props';
-import { CARRIED_LAYER, type PropMessage, Props } from './props';
+import { CARRIED_LAYER, type Prop, type PropMessage, Props } from './props';
 import { domCanvas } from './screens';
 import { guestList } from './guests';
 import { BackgammonBoard } from './backgammon-board';
@@ -37,6 +37,9 @@ import { HeldRifle, RifleRack } from './range-rack';
 import { RangeGame, rangeHud, type RangeOut } from './range-game';
 import { RangeView } from './range-view';
 import { TvPanel, tvPanelView } from './draw-panel';
+import { InstrumentPanel } from './instrument-panel';
+import { InstrumentSound } from './instrument-sound';
+import { carryPose, HAND_KEYS, INSTRUMENT_COPY, instrumentAt, type MusicMessage, notesToPrepare, Playing } from './instruments';
 import { tvView } from './draw-tv';
 import { Drunk, viewFilter, wobbleAt } from './drunk';
 import { WineBottle } from './wine';
@@ -248,6 +251,12 @@ async function run(): Promise<void> {
   }, (m) => sendProp(m));
   scene.add(holding.ghost);
   camera.layers.enable(CARRIED_LAYER);
+  // The loose instruments (the guitar, the bass, the ukuleles) are played in hand, held across the body.
+  const looseInstruments = new Map(assets.manifest.instruments.flatMap((i) => (i.prop ? [[i.prop, i] as const] : [])));
+  const instrumentOf = (p: Prop | null) => (p ? looseInstruments.get(p.place.place) ?? null : null);
+  for (const p of props.list) if (instrumentOf(p)) p.info.carry = carryPose(p.info.size[1]);
+  holding.playable = (p) => instrumentOf(p) !== null;
+  const fixedInstruments = assets.manifest.instruments.filter((i) => !i.prop);
   // Things in shut drawers and cupboards aren't drawn (props.hideShut, each frame).
   const movableAt = new Map(world.movables.map((m) => [m.state.info.node, m.state]));
   const shut = (node: string) => movableAt.get(node)?.progress === 0;
@@ -255,6 +264,18 @@ async function run(): Promise<void> {
     if (m) others?.sendProp(m);
   };
   /** Picks up a loose thing under the crosshair or a tap; false when it wasn't one. */
+  /** A click or tap with an instrument in hand: on its hanger, hangs it back; on nothing, strums. True when it was
+   * one of those (a door or a drawer still opens). */
+  const playInHand = (t: Target | null): boolean => {
+    if (t?.kind === 'hang') {
+      sendProp(props.putBack());
+      sound?.click(instrumentNode);
+      return true;
+    }
+    if (t) return false;
+    handPlaying?.strumAgain();
+    return true;
+  };
   const pickUp = (t: Target | null): boolean => {
     if (t?.kind !== 'prop') return false;
     if (!holding.holding && !player.frozen) sendProp(props.pickUp(t.prop));
@@ -320,9 +341,16 @@ async function run(): Promise<void> {
     }
   }
 
-  // Seats are part of the rooms' meshes: where the crosshair meets one, the free spot on it nearest the crosshair
+  // Seats and instruments are part of the rooms' meshes: where the crosshair meets an instrument's box, that
+  // instrument (or, with a loose one in hand, where it hangs); where it meets a seat, the free spot on it nearest the
+  // crosshair
   const seatNode = new Object3D();
+  const instrumentNode = new Object3D();
   const seatTarget = (p: Vector3): Target | null => {
+    const inHand = instrumentOf(props.held);
+    if (inHand && instrumentAt([inHand], p.x, p.y, p.z, 0.05)) return { kind: 'hang', instrument: inHand, node: instrumentNode };
+    const instrument = instrumentAt(fixedInstruments, p.x, p.y, p.z);
+    if (instrument) return { kind: 'instrument', instrument, node: instrumentNode };
     const seat = seatAt(assets.seats, p.x, p.y, p.z);
     if (!seat) return null;
     const spot = freeSpot(seat, p.x, p.z, (x, z) => avatars.occupied(x, z));
@@ -337,7 +365,7 @@ async function run(): Promise<void> {
   };
   /** C, or the touch bar's button: sit down on the floor where you are, or get up. */
   const toggleSit = () => {
-    if (player.frozen || (tvPanel.isOpen && !atBoard)) return; // the TV panel holds you like a board does
+    if (player.frozen || playing || (tvPanel.isOpen && !atBoard)) return; // the TV panel holds you like a board does, and so does playing
     if (atBoard) return standFromBoard(); // at a game board: asks first while a game runs
     if (player.seat) player.stand();
     else player.sit({ posture: 'sit', x: player.x, y: 0, z: player.z, yaw: player.yaw }, false);
@@ -481,11 +509,12 @@ async function run(): Promise<void> {
     if (!seat || !board) {
       if (boardPanel.isOpen) boardPanel.close();
       atBoard = null;
-      player.held = tvPanel.isOpen;
+      player.held = tvPanel.isOpen || playing !== null;
       return;
     }
     if (!boardPanel.isOpen || atBoard?.slot !== seat.slot) {
       closeTv(false); // one panel at a time: the board's
+      closeInstrument(false);
       boardPanel.open(SLOTS[seat.slot].title, board);
       freeMouse();
     }
@@ -534,7 +563,7 @@ async function run(): Promise<void> {
   });
   /** A click or tap on the TV, or T: the mouse is freed for the panel, and the movement keys don't move you. */
   const openTv = () => {
-    if (!started || autostart || atBoard || tvPanel.isOpen) return;
+    if (!started || autostart || atBoard || tvPanel.isOpen || playing) return;
     tvPanel.open();
     freeMouse();
     player.held = true;
@@ -545,6 +574,77 @@ async function run(): Promise<void> {
     tvPanel.close();
     player.held = atBoard !== null;
     if (look && cursor && !touch) lockPointer();
+  };
+  /** The studio's instruments (instruments.ts): this visitor plays one from its panel and the keys, heard here and by
+   * the others, from the instrument; the others' playing is heard the same way. The sound comes with the first click. */
+  let instrumentSound: InstrumentSound | null = null;
+  let playing: Playing | null = null;
+  let shownPlay = -1;
+  let preparedShift: number | null = null;
+  const hearMusic = (m: MusicMessage, from: string) => instrumentSound?.hear(m, assets.manifest.instruments, from);
+  const instrumentPanel = new InstrumentPanel(document, {
+    key: (code, down) => (playing ?? handPlaying)?.key(code, down),
+    octave: (delta) => (playing ?? handPlaying)?.octave(delta),
+    close: () => (playing ? closeInstrument(true) : holding.drop()), // in hand (touch): Drop
+  });
+  /** A click or tap on an instrument: its panel, the mouse freed for it, and the keys play instead of walking. */
+  const openInstrument = (t: Target | null) => {
+    if (t?.kind !== 'instrument' || !started || autostart || atBoard || playing || player.frozen) return;
+    closeTv(false); // one panel at a time
+    playing = new Playing(t.instrument, (m) => {
+      hearMusic(m, selfId());
+      others?.sendMusic(m);
+    });
+    shownPlay = -1;
+    preparedShift = null;
+    instrumentPanel.open(false);
+    freeMouse();
+    player.held = true;
+  };
+  /** Close, Esc; `look`: the view looks around again (not after Esc, which only frees the mouse). */
+  const closeInstrument = (look: boolean) => {
+    if (!playing) return;
+    playing.releaseAll();
+    playing = null;
+    instrumentPanel.close();
+    player.held = atBoard !== null || tvPanel.isOpen;
+    if (look && cursor && !touch) lockPointer();
+    if (touch && handPlaying) { // back to the one in hand
+      instrumentPanel.open(true);
+      shownPlay = -1;
+    }
+  };
+  /** A loose instrument in this visitor's hands, played with the keys on the right while walking (HAND_KEYS); heard
+   * from the hand, here and by the others. On a touch screen its panel shows, with Drop to let go. */
+  let handPlaying: Playing | null = null;
+  const handAtNow = new Vector3();
+  const handTurn = new Quaternion();
+  const round3 = (v: number) => Math.round(v * 1000) / 1000;
+  const sendFromHand = (m: MusicMessage) => {
+    holding.hand(handAtNow, handTurn);
+    const out: MusicMessage = { ...m, p: [round3(handAtNow.x), round3(handAtNow.y), round3(handAtNow.z)] };
+    hearMusic(out, selfId());
+    others?.sendMusic(out);
+  };
+  /** From the frame loop: the instrument in hand to play, or none; the panel when something changed, and the notes of
+   * a new octave made ahead. */
+  const updateInstrument = () => {
+    const inHand = started && !autostart ? instrumentOf(props.held) : null;
+    if ((handPlaying?.instrument ?? null) !== inHand) {
+      handPlaying?.releaseAll();
+      handPlaying = inHand ? new Playing(inHand, sendFromHand, HAND_KEYS) : null;
+      shownPlay = -1;
+      preparedShift = null;
+      if (touch && handPlaying) instrumentPanel.open(true);
+      else if (!playing && instrumentPanel.isOpen) instrumentPanel.close();
+    }
+    const p = playing ?? handPlaying;
+    if (!p || p.version === shownPlay) return;
+    shownPlay = p.version;
+    if (instrumentPanel.isOpen) instrumentPanel.render(p.view());
+    if (p.shift === preparedShift) return;
+    preparedShift = p.shift;
+    instrumentSound?.prepare(p.kind, notesToPrepare(p.kind, p.shift, p.keys));
   };
   /** From the frame loop (`now` in ms): the game's step, the TV showing it, and the panel while it's open. */
   const updateDraw = (now: number) => {
@@ -657,12 +757,15 @@ async function run(): Promise<void> {
         props: () => props.messages(),
         onDraw: (m, from) => sendDraw(draw.receive(m, from, performance.now())),
         onRange: (m, from) => sendRange(range.receive(m, from, performance.now())),
+        onMusic: (m, from) => hearMusic(m, from),
         onArrive: (id) => {
           sendDraw(draw.greet(id));
           sendRange(range.greet(id, visitors(), performance.now()));
         },
         onLeave: (id) => {
           range.leave(id);
+          instrumentSound?.release(id); // a key they held
+
           const f = avatars.get(id);
           props.leave(id, f?.root.visible ? new Vector3(f.target[0], CONFIG.props.leaveHeight, f.target[1]) : null);
         },
@@ -704,6 +807,8 @@ async function run(): Promise<void> {
     sound.setMusic(turntable?.isOpen ?? false);
     ui.setMuted(muted);
     void sound.load();
+    const s = sound;
+    instrumentSound = new InstrumentSound(s.context, (at) => s.instrumentInput(at));
     if (!params.has('solo')) {
       const v = (voices = new Voices(sound.context, sound.voiceOutput(CONFIG.multiplayer.voice.level)));
       const talk = ui.getVoice();
@@ -775,7 +880,7 @@ async function run(): Promise<void> {
     if (touch) {
       setPausedState(false); // no pointer lock to wait for
       fullscreen();
-    } else if (boardPanel.isOpen || tvPanel.isOpen) { // with a panel open the mouse stays free for it
+    } else if (boardPanel.isOpen || tvPanel.isOpen || playing) { // with a panel open the mouse stays free for it
       cursor = true;
       ui.setCursor(true);
       setPausedState(false);
@@ -848,15 +953,17 @@ async function run(): Promise<void> {
       if (started && !paused && !player.frozen) player.look(dx, dy, CONFIG.touch.lookSensitivity);
     },
     tap: (x, y) => {
-      if (!started || paused || tvPanel.isOpen) return;
+      if (!started || paused || tvPanel.isOpen || playing) return;
       const r = canvas.getBoundingClientRect();
       const aim = new Vector2(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2);
       if (range.armed) return void useRange(interactions.at(aim)); // with the rifle in hand, only the rack and the button take a tap (Fire fires)
+      if (handPlaying && playInHand(interactions.at(aim))) return;
       if (holding.holding && holding.placeAt(aim)) return;
       if (holding.holding && interactions.at(aim)?.kind === 'prop') return;
       const t = interactions.tap(aim);
       if (pickUp(t)) return;
       if (t?.kind === 'screen' && t.screen.isTv) return openTv();
+      if (t?.kind === 'instrument') return openInstrument(t);
       if (useRange(t)) return;
       sitOn(t);
       drinkFrom(t);
@@ -904,7 +1011,7 @@ async function run(): Promise<void> {
   window.addEventListener('mousedown', (e) => {
     if (touch) return; // taps are handled by the touch controls
     if (cursor && e.button === 0 && e.target === canvas) { // a click on the view looks around again, but not in a panel
-      if (!boardPanel.isOpen && !tvPanel.isOpen) lockPointer();
+      if (!boardPanel.isOpen && !tvPanel.isOpen && !playing) lockPointer();
       return;
     }
     if (!(autostart || document.pointerLockElement === canvas)) return;
@@ -916,6 +1023,7 @@ async function run(): Promise<void> {
       else if (!useRange(t)) fire();
       return;
     }
+    if (handPlaying && playInHand(interactions.current)) return;
     if (holding.holding) {
       if (holding.place()) return;
       if (interactions.current?.kind === 'prop') return; // another loose thing: one at a time
@@ -923,6 +1031,7 @@ async function run(): Promise<void> {
     const t = interactions.click();
     if (pickUp(t)) return;
     if (t?.kind === 'screen' && t.screen.isTv) return openTv();
+    if (t?.kind === 'instrument') return openInstrument(t);
     if (useRange(t)) return;
     sitOn(t);
     drinkFrom(t);
@@ -934,6 +1043,19 @@ async function run(): Promise<void> {
   });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // the right button throws
   window.addEventListener('keydown', (e) => {
+    if (playing) { // at an instrument the keys play it; Esc closes the panel, M still mutes
+      e.preventDefault(); // Tab, Space, the quote key: never the page's
+      if (e.code === 'Escape') return closeInstrument(false);
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!playing.key(e.code, true, e.shiftKey) && e.code === 'KeyM') toggleMute();
+      return;
+    }
+    // An instrument in hand takes its keys (the right hand's, the digits, Z X and Space) before the flat's shortcuts
+    // (H, K, L, P); WASD still walk.
+    if (handPlaying && started && !paused && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && handPlaying.key(e.code, true, e.shiftKey)) {
+      e.preventDefault();
+      return;
+    }
     if (e.code === 'Tab') {
       e.preventDefault(); // Tab toggles the free mouse, never focus cycling
       if (touch || !started || paused || autostart || e.repeat || boardPanel.isOpen || tvPanel.isOpen) return;
@@ -971,8 +1093,14 @@ async function run(): Promise<void> {
     if (e.code === 'KeyV' && !e.metaKey && !e.ctrlKey && !e.altKey) toggleMic();
     if (e.code === 'KeyC' && !e.metaKey && !e.ctrlKey && !e.altKey) toggleSit();
   });
-  window.addEventListener('blur', () => holding.cancelThrow());
+  window.addEventListener('blur', () => {
+    holding.cancelThrow();
+    playing?.releaseAll(); // its key-ups go elsewhere
+    handPlaying?.releaseAll();
+  });
   window.addEventListener('keyup', (e) => {
+    if (playing) return void playing.key(e.code, false);
+    handPlaying?.key(e.code, false);
     if (e.code === 'KeyF') holding.releaseThrow();
   });
 
@@ -1090,6 +1218,7 @@ async function run(): Promise<void> {
     holding.update(dt);
     updateGames(dt, now / 1000);
     updateDraw(now);
+    updateInstrument();
     updateRange(dt, now);
     wine.update(dt, avatarLight(CONFIG.wine.at[0], CONFIG.wine.at[1]), interactions.current?.kind === 'wine');
     if (voices) {
@@ -1110,7 +1239,8 @@ async function run(): Promise<void> {
       : holding.holding && (target?.kind === 'prop' || target?.kind === 'rack') ? null : target;
     const handPrompt = started ? holding.prompt(verb, touch, prompted !== null) : null;
     const aimed = prompted ? promptFor(prompted, world.lights, verb) : null;
-    ui.setPrompt(boardPanel.isOpen || tvPanel.isOpen ? null : handPrompt ?? aimed ?? (player.seat && started ? COPY.stand : null));
+    const playPrompt = handPlaying && !touch ? INSTRUMENT_COPY.inHand(handPlaying.chordName) : null;
+    ui.setPrompt(boardPanel.isOpen || tvPanel.isOpen || playing ? null : handPrompt ?? aimed ?? playPrompt ?? (player.seat && started ? COPY.stand : null));
     ui.setHolding(touch && holding.holding);
     ui.setSitting(player.seat !== null);
     ui.setRoomLight(currentRoom && world.lights.has(currentRoom) ? world.lights.isOn(currentRoom) : null);
