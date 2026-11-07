@@ -8,10 +8,12 @@ export interface InstrumentPanelHandlers {
 }
 
 /** The panel for playing an instrument (index.html, #instrument-panel): chords, the keys with the computer keys that
- * play them, the octave buttons. It shows a view (instruments.ts) and passes on what is pressed. */
+ * play them, the octave buttons; on the drums, the kit's pads instead. It shows a view (instruments.ts) and passes on
+ * what is pressed. */
 export class InstrumentPanel {
   private shown = '';
   private keys: HTMLButtonElement[] = [];
+  private pads: HTMLButtonElement[] = [];
   private chords: HTMLButtonElement[] = [];
 
   constructor(private doc: Document, private h: InstrumentPanelHandlers) {
@@ -38,7 +40,7 @@ export class InstrumentPanel {
   }
 
   render(v: InstrumentPanelView): void {
-    const layout = `${v.title}|${v.range}|${v.chords.map((c) => c.label).join()}`;
+    const layout = `${v.title}|${v.range}|${v.chords.map((c) => c.label).join()}|${v.pads.map((p) => p.name).join()}`;
     if (layout !== this.shown) {
       this.shown = layout;
       this.el('instrument-title').textContent = v.title;
@@ -50,12 +52,26 @@ export class InstrumentPanel {
       this.keys[i].classList.toggle('down', k.down);
       this.keys[i].disabled = !k.playable;
     });
+    v.pads.forEach((p, i) => this.pads[i].classList.toggle('down', p.down));
     v.chords.forEach((c, i) => this.chords[i].classList.toggle('down', c.down));
     this.el<HTMLButtonElement>('instrument-down').disabled = !v.canDown;
     this.el<HTMLButtonElement>('instrument-up').disabled = !v.canUp;
   }
 
   private build(v: InstrumentPanelView): void {
+    this.el('instrument-panel').classList.toggle('drums', v.pads.length > 0);
+    this.pads = v.pads.map((p) => {
+      const b = this.button(p.code, `${p.name} (${p.label})`);
+      b.className = 'ipad';
+      const [col, row, span] = p.at;
+      b.style.gridColumn = `${col} / span ${span}`;
+      b.style.gridRow = `${row}`;
+      b.innerHTML = `<span></span><small></small>`;
+      b.querySelector('span')!.textContent = p.name;
+      b.querySelector('small')!.textContent = p.label;
+      return b;
+    });
+    this.el('instrument-pads').replaceChildren(...this.pads);
     const whites = v.keys.filter((k) => !k.black).length;
     const w = 100 / whites;
     let white = 0;

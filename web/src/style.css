@@ -295,6 +295,18 @@ body.touch #draw-guess input { font-size: 16px; -webkit-user-select: text; user-
 #instrument-panel #instrument-chords button.down { background: var(--accent); color: #121110; }
 #instrument-panel .ikey:disabled { opacity: 0.3; }
 #instrument-hint { margin: 0; color: var(--muted); font-size: 12px; }
+/* The drums: no keys or octaves, but the kit's pads as the drummer sees it, each with its computer key. */
+#instrument-pads { display: grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: 44px; gap: 5px; }
+#instrument-pads:empty, #instrument-panel.drums #instrument-keys, #instrument-panel.drums #instrument-down,
+#instrument-panel.drums #instrument-up { display: none; }
+#instrument-panel #instrument-pads .ipad {
+  padding: 4px 2px; border-radius: 22px; display: flex; flex-direction: column; justify-content: center; align-items: center;
+  gap: 1px; font-size: 12px; font-weight: 600; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.14);
+}
+#instrument-pads .ipad small { font-size: 10px; font-weight: 400; color: var(--muted); }
+#instrument-panel #instrument-pads .ipad.down { background: var(--accent); color: #121110; }
+#instrument-panel #instrument-pads .ipad.down small { color: #121110; }
+body.touch #instrument-pads { grid-auto-rows: 52px; }
 body.touch #instrument-panel { width: calc(100vw - 16px); bottom: 8px; padding: 8px 8px 10px; }
 body.touch #instrument-hint { display: none; }
 body.touch #instrument-panel.in-hand { top: 8px; bottom: auto; }

@@ -2,11 +2,11 @@ import { Matrix4, Vector3 } from 'three';
 import { CONFIG } from './config';
 
 /** The instruments visitors can play (`web_instrument` in the model). The sound is made here, in the browser
- * (instrument-sound.ts). The piano and the synth are played from a panel (instrument-panel.ts) with the computer's keys
- * or the panel's own; the guitars, the bass and the ukuleles are loose things (`prop`), played with the keys while held,
- * walking about. */
-export type InstrumentKind = 'piano' | 'synth' | 'electric guitar' | 'bass guitar' | 'ukulele';
-export const INSTRUMENT_KINDS: readonly InstrumentKind[] = ['piano', 'synth', 'electric guitar', 'bass guitar', 'ukulele'];
+ * (instrument-sound.ts). The piano, the synth and the drums are played from a panel (instrument-panel.ts) with the
+ * computer's keys or the panel's own; the guitars, the bass and the ukuleles are loose things (`prop`), played with the
+ * keys while held, walking about. */
+export type InstrumentKind = 'piano' | 'synth' | 'electric guitar' | 'bass guitar' | 'ukulele' | 'drums';
+export const INSTRUMENT_KINDS: readonly InstrumentKind[] = ['piano', 'synth', 'electric guitar', 'bass guitar', 'ukulele', 'drums'];
 /** An instrument from the manifest: its name in the model (it names it to the others too), its box in three.js space
  * (for clicking, or where it hangs), the point it sounds from, and its loose thing's node if it is picked up to play. */
 export interface InstrumentInfo {
@@ -39,10 +39,40 @@ export function carryPose(height: number, c = CONFIG.instruments.carry): Matrix4
   return new Matrix4().makeTranslation(...c.at).multiply(turn).multiply(new Matrix4().makeTranslation(0, -height / 2, 0));
 }
 
-/** Plucked strings ring out by themselves; a key held on the piano or the synth sounds until it is let go. */
-export const isPlucked = (kind: InstrumentKind): boolean => kind !== 'piano' && kind !== 'synth';
-/** How many notes a plucked instrument rings at once: one a string. */
-export const STRINGS: Record<InstrumentKind, number> = { piano: 0, synth: 0, 'electric guitar': 6, 'bass guitar': 4, ukulele: 4 };
+/** Plucked strings and struck drums ring out by themselves; a key held on the piano or the synth sounds until it is
+ * let go. */
+export const ringsOut = (kind: InstrumentKind): boolean => kind !== 'piano' && kind !== 'synth';
+/** The strings: chords are strummed on them, one note a string. */
+export const isPlucked = (kind: InstrumentKind): boolean => ringsOut(kind) && kind !== 'drums';
+/** How many notes an instrument that rings out rings at once: one a string; on the drums, a cymbal's tail and the
+ * hits over it. */
+export const STRINGS: Record<InstrumentKind, number> = { piano: 0, synth: 0, 'electric guitar': 6, 'bass guitar': 4, ukulele: 4, drums: 16 };
+
+/** A pad of the drum kit: what it is, its General MIDI drum note (the note it sends, so a music message carries it
+ * like any other), the computer keys that hit it (the first is shown on the pad) and where it sits in the panel
+ * (grid column and row, and how many columns it spans), as the drummer sees the kit. */
+export interface DrumPad { name: string; midi: number; keys: readonly string[]; at: readonly [number, number, number] }
+/** The keys follow the kit: the left hand plays the snare (F, V for a side stick) and the toms (E R) on the left, the
+ * right hand the hi-hat (J, U open, N pedal), as a drummer crosses over, and the floor tom (I) and ride (O, P the bell)
+ * on the right; the crash is W, the kick Space or B. */
+export const DRUM_PADS: readonly DrumPad[] = [
+  { name: 'Crash', midi: 49, keys: ['KeyW'], at: [1, 1, 2] },
+  { name: 'Tom 1', midi: 50, keys: ['KeyE'], at: [3, 1, 1] },
+  { name: 'Tom 2', midi: 47, keys: ['KeyR'], at: [4, 1, 1] },
+  { name: 'Ride', midi: 51, keys: ['KeyO'], at: [5, 1, 1] },
+  { name: 'Bell', midi: 53, keys: ['KeyP'], at: [6, 1, 1] },
+  { name: 'Hi-hat', midi: 42, keys: ['KeyJ'], at: [1, 2, 1] },
+  { name: 'Open hat', midi: 46, keys: ['KeyU'], at: [2, 2, 1] },
+  { name: 'Snare', midi: 38, keys: ['KeyF'], at: [3, 2, 1] },
+  { name: 'Side stick', midi: 37, keys: ['KeyV'], at: [4, 2, 1] },
+  { name: 'Floor tom', midi: 43, keys: ['KeyI'], at: [5, 2, 2] },
+  { name: 'Hat pedal', midi: 44, keys: ['KeyN'], at: [1, 3, 2] },
+  { name: 'Kick', midi: 36, keys: ['Space', 'KeyB'], at: [3, 3, 2] },
+];
+const HI_HAT = [42, 44, 46];
+/** Whether a hit stops a drum still ringing: the hi-hat closing (or struck again) cuts its open ring; the rest ring
+ * on over each other. */
+export const chokes = (hit: number, ringing: number): boolean => HI_HAT.includes(hit) && HI_HAT.includes(ringing);
 
 /** The keys that play notes, by position (KeyboardEvent.code, so any layout works), as in music apps: the home row
  * the white keys from C, the row above the black ones; 18 keys, C to the F an octave and a half up. */
@@ -106,13 +136,15 @@ const VOICINGS: Record<InstrumentKind, number[][]> = {
     [50, 62, 65, 69], [40, 59, 64, 67], [50, 62, 66, 69], [40, 59, 64, 68],
   ],
   synth: [],
+  drums: [],
 };
 VOICINGS.synth = VOICINGS.piano;
 
 export const chordsFor = (kind: InstrumentKind): Chord[] => VOICINGS[kind].map((notes, i) => ({ name: CHORD_NAMES[i], notes }));
 
-/** The notes worth making ahead (instrument-sound.ts) at an octave: the keys' and the chords'. */
+/** The notes worth making ahead (instrument-sound.ts) at an octave: the keys' and the chords'; the drums' pads. */
 export function notesToPrepare(kind: InstrumentKind, shift: number, keys: readonly string[] = NOTE_KEYS): number[] {
+  if (kind === 'drums') return DRUM_PADS.map((p) => p.midi);
   const notes = keys.map((code) => noteFor(code, kind, shift, keys)).filter((n): n is number => n !== null);
   return [...new Set([...chordsFor(kind).flatMap((c) => c.notes), ...notes])];
 }
@@ -141,12 +173,14 @@ export function isMusicMessage(v: unknown): v is MusicMessage {
     && m.d.every((d) => typeof d === 'number' && d >= 0 && d <= 1000));
 }
 
-/** What the panel shows: the keys with their notes, the chords and what is held down. */
+/** What the panel shows: the keys with their notes, the chords and what is held down; on the drums, the pads. */
 export interface PanelKey { code: string; label: string; note: string; black: boolean; playable: boolean; down: boolean }
+export interface PanelPad { code: string; label: string; name: string; at: readonly [number, number, number]; down: boolean }
 export interface InstrumentPanelView {
   title: string;
   range: string;
   keys: PanelKey[];
+  pads: PanelPad[];
   chords: { label: string; key: string; down: boolean }[];
   canDown: boolean;
   canUp: boolean;
@@ -156,6 +190,7 @@ export interface InstrumentPanelView {
 export const INSTRUMENT_COPY = {
   hintPlucked: 'Letter keys play notes, 1–8 strum chords, Space strums again (Shift+Space up), Z and X change octave',
   hintKeys: 'Letter keys play notes, 1–8 play chords, Z and X change octave',
+  hintDrums: 'Space kick · F snare · J hi-hat (U open, N pedal) · E R I toms · W crash · O ride, P bell',
   /** With an instrument in hand, what the prompt says when the crosshair is on nothing else. */
   inHand: (chord: string) => `${chord} · 1–8 chords · Space or click strums · H J K L ; ' notes (row above: sharps) · Z X octave · Q drops it`,
 };
@@ -189,6 +224,7 @@ export class Playing {
 
   /** A key going down or up (KeyboardEvent.code). True when it was the instrument's. */
   key(code: string, down: boolean, shiftKey = false): boolean {
+    if (this.kind === 'drums') return this.hit(code, down);
     if (code === OCTAVE_DOWN || code === OCTAVE_UP) {
       if (down) this.octave(code === OCTAVE_UP ? 1 : -1);
       return true;
@@ -227,6 +263,14 @@ export class Playing {
   }
 
   view(): InstrumentPanelView {
+    if (this.kind === 'drums') {
+      return {
+        title: this.kind, range: '', keys: [], chords: [], canDown: false, canUp: false, hint: INSTRUMENT_COPY.hintDrums,
+        pads: DRUM_PADS.map((p) => ({
+          code: p.keys[0], label: keyLabel(p.keys[0]), name: p.name, at: p.at, down: p.keys.some((k) => this.held.has(k)),
+        })),
+      };
+    }
     const [lo, hi] = shiftLimits(this.kind, this.keys);
     const c = lowestC(this.kind, this.shift);
     const plucked = isPlucked(this.kind);
@@ -237,11 +281,21 @@ export class Playing {
         code, label: keyLabel(code), note: noteName(c + i), black: isBlack(c + i),
         playable: noteFor(code, this.kind, this.shift, this.keys) !== null, down: this.held.has(code),
       })),
+      pads: [],
       chords: chordsFor(this.kind).map((ch, i) => ({ label: ch.name, key: CHORD_KEYS[i], down: this.held.has(CHORD_KEYS[i]) })),
       canDown: this.shift > lo,
       canUp: this.shift < hi,
       hint: plucked ? INSTRUMENT_COPY.hintPlucked : INSTRUMENT_COPY.hintKeys,
     };
+  }
+
+  /** A pad's key on the drums: a hit going down; nothing to let go of, the drum rings out. */
+  private hit(code: string, down: boolean): boolean {
+    const pad = DRUM_PADS.find((p) => p.keys.includes(code));
+    if (!pad) return false;
+    if (down) this.press(code, [pad.midi]);
+    else this.release(code);
+    return true;
   }
 
   private chordNotes(i: number): number[] {
@@ -261,6 +315,6 @@ export class Playing {
     if (!notes) return;
     this.held.delete(code);
     this.version++;
-    if (!isPlucked(this.kind)) this.send({ i: this.instrument.name, n: notes, on: false }); // strings ring on
+    if (!ringsOut(this.kind)) this.send({ i: this.instrument.name, n: notes, on: false }); // strings and drums ring on
   }
 }

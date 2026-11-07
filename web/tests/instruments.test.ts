@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
-import { InstrumentSound, midiFreq, pianoTone, pluck } from '../src/instrument-sound';
+import { drumTone, InstrumentSound, midiFreq, pianoTone, pluck } from '../src/instrument-sound';
 import { Vector3 } from 'three';
 import {
-  carryPose, chordsFor, HAND_KEYS, type InstrumentInfo, INSTRUMENT_KINDS, instrumentAt, isMusicMessage, keyLabel,
+  carryPose, chokes, chordsFor, DRUM_PADS, HAND_KEYS, type InstrumentInfo, INSTRUMENT_KINDS, instrumentAt, isMusicMessage, keyLabel,
   type MusicMessage, NOTE_KEYS, noteFor, noteName, notesToPrepare, Playing, shiftLimits, strum,
 } from '../src/instruments';
 
@@ -67,8 +67,9 @@ describe('instruments', () => {
     expect(shiftLimits('ukulele')).toEqual([-1, 2]); // C3 up to C6: the ukulele's C4..C6 on part of the keys
   });
 
-  it('has eight chords that fit each instrument, one note a string', () => {
-    for (const kind of INSTRUMENT_KINDS) {
+  it('has eight chords that fit each instrument with notes, one note a string', () => {
+    expect(chordsFor('drums')).toEqual([]);
+    for (const kind of INSTRUMENT_KINDS.filter((k) => k !== 'drums')) {
       const chords = chordsFor(kind);
       expect(chords.map((c) => c.name)).toEqual(['C', 'G', 'Am', 'F', 'Dm', 'Em', 'D', 'E']);
       const [lo, hi] = CONFIG.instruments.range[kind];
@@ -182,6 +183,37 @@ describe('Playing', () => {
     expect(sent).toHaveLength(4);
   });
 
+  it('hits the drums from their keys, Space the kick, and lets each hit ring', () => {
+    const { p, sent } = play('drums');
+    expect(p.key('Space', true)).toBe(true);
+    p.key('Space', true); // a key repeating: one hit
+    p.key('Space', false);
+    expect(p.key('KeyB', true)).toBe(true); // the kick's other key
+    expect(p.key('KeyF', true)).toBe(true);
+    expect(p.view().pads.find((pad) => pad.name === 'Snare')?.down).toBe(true);
+    p.key('KeyF', false);
+    expect(sent).toEqual([
+      { i: 'Studio drums', n: [36], on: true }, { i: 'Studio drums', n: [36], on: true }, { i: 'Studio drums', n: [38], on: true },
+    ]); // no note-offs: a drum rings out
+    expect(p.key('KeyM', true)).toBe(false); // M still mutes
+    expect(p.key('Digit1', true)).toBe(false); // no chords
+    expect(p.key('KeyZ', true)).toBe(false); // no octaves
+    expect(p.shift).toBe(0);
+  });
+
+  it('shows the drums as pads, each with its key, and no keys or chords', () => {
+    const v = play('drums').p.view();
+    expect(v.keys).toEqual([]);
+    expect(v.chords).toEqual([]);
+    expect(v.canDown || v.canUp).toBe(false);
+    expect(v.pads.map((pad) => pad.label)).toEqual(['W', 'E', 'R', 'O', 'P', 'J', 'U', 'F', 'V', 'I', 'N', 'Space']);
+    expect(play('piano').p.view().pads).toEqual([]);
+    const keys = DRUM_PADS.flatMap((pad) => pad.keys);
+    expect(new Set(keys).size).toBe(keys.length); // a key hits one pad
+    expect(new Set(DRUM_PADS.map((pad) => pad.midi)).size).toBe(DRUM_PADS.length);
+    expect(notesToPrepare('drums', 0).sort()).toEqual(DRUM_PADS.map((pad) => pad.midi).sort());
+  });
+
   it('lets go of everything when the panel closes', () => {
     const { p, sent } = play('piano');
     p.key('KeyA', true);
@@ -207,6 +239,24 @@ describe('carryPose', () => {
 });
 
 describe('instrument tones', () => {
+  it('makes every drum: at its loudness, faded out at the end, the kick low and long, the closed hi-hat short', () => {
+    const rate = 48000;
+    for (const { midi } of DRUM_PADS) {
+      const x = drumTone(rate, midi, seeded());
+      expect(x.every(Number.isFinite)).toBe(true);
+      expect(peak(x)).toBeGreaterThan(0.25);
+      expect(peak(x)).toBeLessThanOrEqual(0.95 + 1e-6);
+      expect(Math.abs(x[x.length - 1])).toBe(0);
+    }
+    const kick = drumTone(rate, 36, seeded());
+    const hat = drumTone(rate, 42, seeded());
+    expect(kick.length).toBeGreaterThan(hat.length);
+    const lag = period(kick, 4800, rate / 50); // 0.1 s in: the head has fallen to its pitch
+    expect(Math.abs(lag - rate / 50)).toBeLessThan(rate / 50 * 0.1);
+    expect(drumTone(rate, 49, seeded()).length).toBeGreaterThan(rate * 2); // a crash rings on
+  });
+
+
   it('plucks a string in tune, high and low', () => {
     const rate = 48000;
     for (const midi of [40, 64, 81]) {
@@ -299,6 +349,20 @@ describe('InstrumentSound', () => {
     expect(ctx.stops).toHaveLength(2);
     s.release('me');
     expect(ctx.stops).toHaveLength(3);
+  });
+
+  it('rings drums over each other, but closing the hi-hat stops it ringing open', () => {
+    const { ctx, s } = setup();
+    const kit = info('drums');
+    s.noteOn(kit, 38, 'me');
+    s.noteOn(kit, 38, 'me'); // a snare struck again rings over the first
+    s.noteOn(kit, 46, 'me');
+    expect(ctx.stops).toHaveLength(0);
+    s.noteOn(kit, 42, 'me'); // the hi-hat closes
+    expect(ctx.stops).toHaveLength(1);
+    s.noteOff(kit, 38, 'me'); // nothing held to let go
+    expect(ctx.stops).toHaveLength(1);
+    expect(chokes(44, 46) && chokes(46, 46) && !chokes(38, 46) && !chokes(42, 38)).toBe(true);
   });
 
   it("hears a message on the instrument it names, at each note's delay", () => {

@@ -73,6 +73,8 @@ export class Player {
   stick: Stick = STILL;
   /** Sitting or lying, and where; null standing. */
   seat: Seated | null = null;
+  /** Where the player sat down from, and its walkable area (Collision.regionAt), to get up into. */
+  private sitFrom: { x: number; z: number; region: number } | null = null;
   /** Drunk, the view is thrown off this much on top of where you stand and look (drunk.ts); it never moves you. */
   wobble: Wobble = STEADY;
   /** The camera easing from where it was when the visitor sat down or stood up: its start, and how far along (0..1). */
@@ -129,6 +131,7 @@ export class Player {
    * stays where it was looking. */
   sit(s: Seated, turn = true): void {
     this.startEase();
+    if (!this.seat) this.sitFrom = { x: this.x, z: this.z, region: this.collision.regionAt(this.x, this.z) };
     this.seat = s;
     this.x = s.x;
     this.z = s.z;
@@ -139,13 +142,21 @@ export class Player {
     this.holdingMove = this.moving;
   }
 
-  /** Gets up, a step in front of the seat (or the nearest free spot to it). */
+  /** Gets up, a step in front of the seat, or the nearest free spot to it in the area they sat down from; when that
+   * is far from the seat, where they sat down from. */
   stand(): void {
     if (!this.seat) return;
-    const [x, z] = standPoint(this.seat);
+    const seat = this.seat;
+    const from = this.sitFrom;
+    const [x, z] = standPoint(seat);
     this.startEase();
     this.seat = null;
-    [this.x, this.z] = this.collision.nearestFree(x, z);
+    this.sitFrom = null;
+    const region = from?.region ?? -1;
+    [this.x, this.z] = this.collision.nearestFree(x, z, region);
+    if (from && Math.hypot(this.x - seat.x, this.z - seat.z) > CONFIG.seats.standReach) {
+      [this.x, this.z] = this.collision.nearestFree(from.x, from.z, region);
+    }
   }
 
   private startEase(): void {
