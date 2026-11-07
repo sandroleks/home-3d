@@ -1,10 +1,10 @@
 import { PerspectiveCamera } from 'three';
 import { describe, expect, it } from 'vitest';
-import type { Collision } from '../src/collision';
+import { Collision } from '../src/collision';
 import { Player } from '../src/player';
 import { eyeOf, freeSpot, parseSeats, type Seat, seatAt, seatedOn, seatingCode, standPoint } from '../src/seats';
 
-const cfg = { sitEye: 0.7, lieEye: 0.2, sitBack: 0.1, lieBack: 0.4, liePitch: 0.9, transition: 0.5, standStep: 0.6, takenRadius: 0.3 };
+const cfg = { sitEye: 0.7, lieEye: 0.2, sitBack: 0.1, lieBack: 0.4, liePitch: 0.9, transition: 0.5, standStep: 0.6, standReach: 1.2, takenRadius: 0.3 };
 
 /** A two-seat sofa cushion facing +x (yaw -π/2), its spots 0.6 m apart along z. */
 const sofa: Seat = {
@@ -66,7 +66,10 @@ describe('seats', () => {
 });
 
 describe('Player sitting', () => {
-  const free: Collision = { move: (x: number, z: number, dx: number, dz: number) => [x + dx, z + dz], nearestFree: (x: number, z: number) => [x, z] } as unknown as Collision;
+  const free: Collision = {
+    move: (x: number, z: number, dx: number, dz: number) => [x + dx, z + dz], nearestFree: (x: number, z: number) => [x, z],
+    regionAt: () => 0,
+  } as unknown as Collision;
   const make = () => {
     const camera = new PerspectiveCamera();
     const p = new Player(camera, free, { x: 2, z: 7, yaw: 0 }, 1.6);
@@ -153,5 +156,28 @@ describe('Player sitting', () => {
     p.sit(seatedOn(sofa.spots[0], 'sit'));
     p.teleport(0, 0, 0, 0);
     expect(p.seat).toBeNull();
+  });
+
+  it('gets up into the area it sat down from, not a nearer pocket of floor', () => {
+    // A 1 m strip of 0.1 m cells: free x 0..0.3 (the room), a wall, free x 0.5..0.6 (a pocket), wall to the end.
+    const blocked = new Uint8Array(10 * 10).fill(1);
+    for (let j = 0; j < 10; j++) for (const i of [0, 1, 2, 5]) blocked[j * 10 + i] = 0;
+    const c = new Collision({ x0: 0, z0: 0, cell: 0.1, width: 10, height: 10, radius: 0.1, blocked });
+    const p = new Player(new PerspectiveCamera(), c, { x: 0.15, z: 0.5, yaw: 0 }, 1.6);
+    p.sit({ posture: 'sit', x: 0.75, y: 0.45, z: 0.5, yaw: -Math.PI / 2 }); // facing +x: its step ahead is in the wall
+    p.stand();
+    expect(c.regionAt(p.x, p.z)).toBe(c.regionAt(0.15, 0.5));
+    expect(p.x).toBeCloseTo(0.25); // the room's nearest cell to the seat, not back where it sat down from
+  });
+
+  it('gets up where it sat down from when the nearest free floor is far from the seat', () => {
+    // 3 m of 0.1 m cells, free only at x 0..0.3: a stool at x 2 pulled up to a desk on its +x side.
+    const blocked = new Uint8Array(30 * 10).fill(1);
+    for (let j = 0; j < 10; j++) for (const i of [0, 1, 2]) blocked[j * 30 + i] = 0;
+    const c = new Collision({ x0: 0, z0: 0, cell: 0.1, width: 30, height: 10, radius: 0.1, blocked });
+    const p = new Player(new PerspectiveCamera(), c, { x: 0.15, z: 0.35, yaw: 0 }, 1.6);
+    p.sit({ posture: 'sit', x: 2, y: 0.7, z: 0.5, yaw: -Math.PI / 2 });
+    p.stand();
+    expect([p.x, p.z]).toEqual([0.15, 0.35]);
   });
 });

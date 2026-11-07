@@ -45,4 +45,24 @@ describe('Collision', () => {
     expect(Math.hypot(x - 0.55, z - 0.5)).toBeLessThanOrEqual(0.15);
     expect(c.nearestFree(0.25, 0.25)).toEqual([0.25, 0.25]);
   });
+
+  it('keeps to the area you can walk to, past a nearer pocket', () => {
+    // The wall at column 5, and a pocket on its right: column 7 boxed in by columns 6 and 8 from row 3 down.
+    const g = wallGrid();
+    for (let j = 0; j < 10; j++) for (const i of [6, 8]) g.blocked[j * 10 + i] = 1;
+    for (let i = 6; i <= 8; i++) g.blocked[4 * 10 + i] = 1;
+    for (let j = 5; j < 10; j++) g.blocked[j * 10 + 7] = 1;
+    const c = new Collision(g);
+    const pocket = c.regionAt(0.75, 0.15);
+    const room = c.regionAt(0.25, 0.5);
+    expect(pocket).toBeGreaterThanOrEqual(0);
+    expect(room).not.toBe(pocket);
+    expect(c.regionAt(0.95, 0.9)).toBe(c.regionAt(0.95, 0.1)); // column 9, a free strip of its own
+    expect(c.regionAt(0.55, 0.5)).toBe(-1); // blocked
+    const [nx] = c.nearestFree(0.65, 0.15); // nearest: the pocket
+    expect(nx).toBeCloseTo(0.75);
+    const [x, z] = c.nearestFree(0.65, 0.15, room); // but the room is where they came from
+    expect(c.regionAt(x, z)).toBe(room);
+    expect(c.nearestFree(0.75, 0.15, room)).not.toEqual([0.75, 0.15]); // free, but not theirs
+  });
 });

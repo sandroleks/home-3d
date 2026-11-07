@@ -62,6 +62,9 @@ export const CONFIG = {
     transition: 0.45,
     /** Metres in front of a seat where standing up puts you (or the nearest free spot to it). */
     standStep: 0.6,
+    /** Metres from the seat that spot may be at most; past it (a stool pulled up to a desk, the next free floor through
+     * a wall) you get up where you sat down from instead. */
+    standReach: 1.2,
     /** A spot is taken when another visitor sits or lies within this many metres of it. */
     takenRadius: 0.3,
   },
@@ -491,13 +494,17 @@ export const CONFIG = {
   },
   /** Playing the studio's instruments (instruments.ts, instrument-sound.ts). */
   instruments: {
-    /** The C the 18 note keys start on before Z and X shift them, and the notes each instrument has (MIDI). */
-    base: { piano: 60, synth: 48, 'electric guitar': 48, 'bass guitar': 36, ukulele: 60 },
+    /** The C the 18 note keys start on before Z and X shift them, and the notes each instrument has (MIDI). The drums
+     * have no octaves: their notes are the pads' (instruments.ts, DRUM_PADS), General MIDI's drum notes. */
+    base: { piano: 60, synth: 48, 'electric guitar': 48, 'bass guitar': 36, ukulele: 60, drums: 36 },
     range: {
       piano: [21, 108], synth: [24, 96], 'electric guitar': [40, 86], 'bass guitar': [28, 67], ukulele: [60, 84],
+      drums: [35, 81],
     } as Record<string, [number, number]>,
     /** ms from one string to the next in a strum. */
-    strumGap: { piano: 0, synth: 0, 'electric guitar': 14, 'bass guitar': 0, ukulele: 22 },
+    strumGap: { piano: 0, synth: 0, 'electric guitar': 14, 'bass guitar': 0, ukulele: 22, drums: 0 },
+    /** A drum hit's loudness varies by up to this share either way, as a hand's does. */
+    drumVariation: 0.12,
     /** Metres from an instrument within which it is heard at full level; it fades beyond, as a voice does. */
     reach: 1.5,
     /** Notes sounding at once, all instruments together; past it the oldest stops. */
